@@ -30,12 +30,10 @@ services:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
     networks:
-      - komodo-network
+      - comodo-proxy
       - komodo-internal-network
     depends_on:
       - mongo
-    ports:
-      - 0.0.0.0:9120:9120
     env_file: ./compose.env
     environment:
       KOMODO_DATABASE_ADDRESS: mongo:27017
@@ -50,9 +48,8 @@ services:
           memory: 2g
 
 networks:
-  komodo-network:
-    name: komodo-network
-    driver: bridge
+  caddy-proxy:
+    external: true
 
   komodo-internal-network:
     name: komodo-internal-network
