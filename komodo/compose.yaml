@@ -34,8 +34,6 @@ services:
           aliases:
             - komodo
       komodo-internal-network: {}
-    ports:
-      - 9120:9120
     depends_on:
       - mongo
     env_file: ./compose.env
@@ -82,10 +80,6 @@ networks:
     name: komodo-internal-network
     driver: bridge
     internal: true
-    ipam:
-      config:
-        - subnet: 172.18.0.16/28
-          gateway: 172.18.0.17
 
 volumes:
   # Mongo
