@@ -30,8 +30,12 @@ services:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
     networks:
-      - comodo-proxy
-      - komodo-internal-network
+      caddy-proxy:
+          aliases:
+            - komodo
+      komodo-internal-network: {}
+    ports:
+      - 9120:9120
     depends_on:
       - mongo
     env_file: ./compose.env
