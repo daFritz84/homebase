@@ -3,7 +3,6 @@ homeserver setup centered around komodo
 
 # TODO
 
-- [ ] firewall ufw keeps intefering with forwarding ~maybe a symptom of still having to expose komodo core ports
 - [ ] cleanup and refactor komodo/compose.env. And why isn't it used automatically when the `env-file` is set to `compose.env` in the compose file.
 
 # Podman Cheatsheet
@@ -25,3 +24,14 @@ podman compose --env-file ./compose.env down
 ```
 
 ---
+**Cleanup podman**
+
+WARNING! This command removes:
+        - all stopped containers
+        - all networks not used by at least one container
+        - all dangling images
+        - all dangling build cache
+
+```bash
+podman system prune
+```
