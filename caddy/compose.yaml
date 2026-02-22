@@ -1,6 +1,9 @@
 services:
   caddy:
+    container_name: caddy
     image: caddy:latest
+    labels:
+      komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
     ports:
       - "80:80"
