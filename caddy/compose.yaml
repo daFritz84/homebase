@@ -1,0 +1,25 @@
+services:
+  caddy:
+    container_name: caddy
+    image: caddy:latest
+    labels:
+      komodo.skip: # Prevent Komodo from stopping with StopAllContainers
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - caddy-proxy
+
+networks:
+  caddy-proxy:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

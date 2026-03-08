@@ -1,0 +1,22 @@
+# Serve Komodo on http://<server-ip>/
+:80 {
+    # Optional: add a simple path prefix if you want to keep "/" for something else
+    # handle_path /komodo/* {
+    #   reverse_proxy komodo:9120
+    # }
+
+    # Direct reverse proxy to the Komodo container
+    reverse_proxy komodo:9120
+
+    # Optional: add basic auth (replace user/password hash)
+    # basicauth /* {
+    #   stefan JDJhJDEwJHRo...  # bcrypt hash generated with `caddy hash-password`
+    # }
+
+    # Optional: headers hardening
+    # header {
+    #   X-Content-Type-Options "nosniff"
+    #   X-Frame-Options "SAMEORIGIN"
+    #   Referrer-Policy "no-referrer-when-downgrade"
+    # }
+}
