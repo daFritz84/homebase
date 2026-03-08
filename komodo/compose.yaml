@@ -58,10 +58,11 @@ services:
       - komodo-internal-network
     env_file: ./compose.env
     volumes:
-      ## Mount external docker socket
-      - /var/run/docker.sock:/var/run/docker.sock
+      # ✅ Map the **rootless** Podman socket:
+      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock
+
       ## Allow Periphery to see processes outside of container
-      - /proc:/proc
+      - /proc:/proc:ro
       ## Specify the Periphery agent root directory.
       ## Must be the same inside and outside the container,
       ## or docker will get confused. See https://github.com/moghtech/komodo/discussions/180.
