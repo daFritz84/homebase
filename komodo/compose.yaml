@@ -45,6 +45,9 @@ services:
       KOMODO_DATABASE_PASSWORD_FILE: /run/secrets/komodo_db_password
       KOMODO_INIT_ADMIN_USERNAME_FILE: /run/secrets/komodo_admin_username
       KOMODO_INIT_ADMIN_PASSWORD_FILE: /run/secrets/komodo_admin_password
+      KOMODO_PASSKEY_FILE: /run/secrets/komodo_passkey
+      KOMODO_WEBHOOK_SECRET_FILE: /run/secrets/komodo_webhook_secret
+      KOMODO_JWT_SECRET_FILE: /run/secrets/komodo_jwt_secret
     volumes:
       ## Store dated backups of the database - https://komo.do/docs/setup/backup
       - ${COMPOSE_KOMODO_BACKUPS_PATH}:/backups
@@ -52,6 +55,9 @@ services:
       - ./.secrets/komodo_db_pass:/run/secrets/komodo_db_password:ro
       - ./.secrets/komodo_admin_user:/run/secrets/komodo_admin_username:ro
       - ./.secrets/komodo_admin_pass:/run/secrets/komodo_admin_password:ro
+      - ./.secrets/komodo_passkey:/run/secrets/komodo_passkey:ro
+      - ./.secrets/komodo_webhook_secret:/run/secrets/komodo_webhook_secret:ro
+      - ./.secrets/komodo_jwt_secret:/run/secrets/komodo_jwt_secret:ro
     deploy:
       resources:
         limits:
@@ -65,6 +71,8 @@ services:
     networks:
       - komodo-internal-network
     env_file: ./compose.env
+    environment:
+      PERIPHERY_PASSKEYS_FILE: /run/secrets/komodo_passkey
     volumes:
       # ✅ Map the **rootless** Podman socket:
       - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock
@@ -76,6 +84,7 @@ services:
       ## or docker will get confused. See https://github.com/moghtech/komodo/discussions/180.
       ## Default: /etc/komodo.
       - ${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}:${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}
+      - ./.secrets/komodo_passkey:/run/secrets/komodo_passkey:ro
     deploy:
       resources:
         limits:
