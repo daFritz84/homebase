@@ -15,10 +15,12 @@ services:
     volumes:
       - mongo-data:/data/db
       - mongo-config:/data/configdb
+      - ./.secrets/komodo_db_user:/run/secrets/komodo_db_username:ro
+      - ./.secrets/komodo_db_pass:/run/secrets/komodo_db_password:ro
     env_file: ./compose.env
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/komodo_db_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/komodo_db_password
     deploy:
       resources:
         limits:
@@ -39,11 +41,17 @@ services:
     env_file: ./compose.env
     environment:
       KOMODO_DATABASE_ADDRESS: mongo:27017
-      KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME}
-      KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
+      KOMODO_DATABASE_USERNAME_FILE: /run/secrets/komodo_db_username
+      KOMODO_DATABASE_PASSWORD_FILE: /run/secrets/komodo_db_password
+      KOMODO_INIT_ADMIN_USERNAME_FILE: /run/secrets/komodo_admin_username
+      KOMODO_INIT_ADMIN_PASSWORD_FILE: /run/secrets/komodo_admin_password
     volumes:
       ## Store dated backups of the database - https://komo.do/docs/setup/backup
       - ${COMPOSE_KOMODO_BACKUPS_PATH}:/backups
+      - ./.secrets/komodo_db_user:/run/secrets/komodo_db_username:ro
+      - ./.secrets/komodo_db_pass:/run/secrets/komodo_db_password:ro
+      - ./.secrets/komodo_admin_user:/run/secrets/komodo_admin_username:ro
+      - ./.secrets/komodo_admin_pass:/run/secrets/komodo_admin_password:ro
     deploy:
       resources:
         limits:
