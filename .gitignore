@@ -1,0 +1,4 @@
+
+# Secret files generated from Bitwarden
+.secrets/
+.secrets/*
