@@ -83,7 +83,7 @@ services:
       ## Must be the same inside and outside the container,
       ## or docker will get confused. See https://github.com/moghtech/komodo/discussions/180.
       ## Default: /etc/komodo.
-      - ${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}:${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}
+      - ${PERIPHERY_ROOT_DIRECTORY}:${PERIPHERY_ROOT_DIRECTORY}:Z
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_passkey:/run/secrets/komodo_passkey:ro
     deploy:
       resources:
