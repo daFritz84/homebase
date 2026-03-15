@@ -97,7 +97,6 @@ networks:
   komodo-internal-network:
     name: komodo-internal-network
     driver: bridge
-    internal: true
 
 volumes:
   # Mongo
