@@ -6,7 +6,7 @@ homeserver setup centered around komodo using rootless podman
 **Start a podman compose file**
 
 ```bash
-podman compose --env-file ./compose.env up -d
+podman compose up -d
 ```
 
 ---
@@ -14,7 +14,7 @@ podman compose --env-file ./compose.env up -d
 **Stop a podman compose file**
 
 ```bash
-podman compose --env-file ./compose.env down
+podman compose down
 ```
 
 ---
