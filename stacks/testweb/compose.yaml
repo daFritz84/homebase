@@ -1,0 +1,11 @@
+services:
+  testweb:
+    image: nginx:alpine
+    networks:
+      caddy-proxy:
+        aliases:
+          - testweb
+
+networks:
+  caddy-proxy:
+    external: true
