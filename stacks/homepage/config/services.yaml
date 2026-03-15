@@ -1,0 +1,15 @@
+---
+# For configuration options and examples, please see:
+# https://gethomepage.dev/configs/services/
+
+- Umbrel:
+  - AdGuard Home:
+      icon: adguard-home
+      href: http://umbrel.fritz.box:8095
+      description: Network-wide DNS & ad blocking
+
+      widgets:
+        - type: adguard
+          url: http://umbrel.fritz.box:8095
+          username: {{HOMEPAGE_VAR_ADGUARD_USER}}
+          password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
