@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # --- Docker Compose (compose.yaml) ---
+  - package-ecosystem: "docker-compose"
+    directory: "/stacks/homepage"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/stacks/testweb"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/caddy"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/komodo"
+    schedule:
+      interval: "daily"
