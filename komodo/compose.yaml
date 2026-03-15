@@ -17,7 +17,7 @@ services:
       - mongo-config:/data/configdb
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_db_user:/run/secrets/komodo_db_username:ro
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_db_pass:/run/secrets/komodo_db_password:ro
-    env_file: ${COMPOSE_PROJECT_DIR}/compose.env
+    env_file: ${COMPOSE_PROJECT_DIR}/.env
     environment:
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/komodo_db_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/komodo_db_password
@@ -38,7 +38,7 @@ services:
       komodo-internal-network: {}
     depends_on:
       - mongo
-    env_file: ${COMPOSE_PROJECT_DIR}/compose.env
+    env_file: ${COMPOSE_PROJECT_DIR}/.env
     environment:
       KOMODO_DATABASE_ADDRESS: mongo:27017
       KOMODO_DATABASE_USERNAME_FILE: /run/secrets/komodo_db_username
@@ -70,7 +70,7 @@ services:
     restart: unless-stopped
     networks:
       - komodo-internal-network
-    env_file: ${COMPOSE_PROJECT_DIR}/compose.env
+    env_file: ${COMPOSE_PROJECT_DIR}/.env
     environment:
       PERIPHERY_PASSKEYS_FILE: /run/secrets/komodo_passkey
     volumes:
