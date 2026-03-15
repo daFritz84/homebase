@@ -1,0 +1,3 @@
+# Configuration variables
+- HOMEPAGE_VAR_ADGUARD_USER
+- HOMEPAGE_VAR_ADGUARD_PASS

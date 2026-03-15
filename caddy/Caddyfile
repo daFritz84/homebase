@@ -9,3 +9,8 @@
 http://testweb.home.arpa {
     reverse_proxy testweb:80
 }
+
+# homepage
+http://homepage.home.arpa {
+    reverse_proxy homepage:3000
+}

@@ -1,0 +1,15 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.8.0
+    volumes:
+      - config:/app/config
+      # ✅ Map the **rootless** Podman socket:
+      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock
+    networks:
+      caddy-proxy:
+        aliases:
+          - homepage
+
+networks:
+  caddy-proxy:
+    external: true
