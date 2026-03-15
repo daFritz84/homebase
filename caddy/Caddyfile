@@ -4,3 +4,8 @@
     # Direct reverse proxy to the Komodo container (Docker network DNS name)
     reverse_proxy komodo:9120
 }
+
+# nginx-ping
+http://testweb.home.arpa {
+    reverse_proxy testweb:80
+}
