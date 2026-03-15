@@ -1,6 +1,6 @@
 services:
   homepage:
-    image: ghcr.io/gethomepage/homepage:v1.8.0
+    image: ghcr.io/gethomepage/homepage:v1.11.0
     environment:
       HOMEPAGE_ALLOWED_HOSTS: homepage.home.arpa
     volumes:
