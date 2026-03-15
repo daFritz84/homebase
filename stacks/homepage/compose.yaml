@@ -2,6 +2,11 @@ services:
   homepage:
     image: ghcr.io/gethomepage/homepage:v1.11.0
     env_file: .env
+    environment:
+      HOMEPAGE_VAR_KOMODO_KEY: [[HOMEPAGE_VAR_KOMODO_KEY]]
+      HOMEPAGE_VAR_KOMODO_SECRET: [[HOMEPAGE_VAR_KOMODO_SECRET]]
+      HOMEPAGE_VAR_ADGUARD_USER: [[HOMEPAGE_VAR_ADGUARD_USER]]
+      HOMEPAGE_VAR_ADGUARD_PASS: [[HOMEPAGE_VAR_ADGUARD_PASS]]
     volumes:
       - ./config:/app/config
     networks:
