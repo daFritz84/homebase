@@ -1,7 +1,20 @@
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
+- Homebase:
+  - Komodo:
+      icon: komodo
+      href: http://komodo.home.arpa
+      description: Homelab Container Management
 
+      widgets:
+        - type: komodo
+          url: http://komodo:9120
+          key: {{HOMEPAGE_VAR_KOMODO_KEY}}
+          secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
+          showSummary: true 
+          showStacks: true 
+          
 - Umbrel:
   - AdGuard Home:
       icon: adguard-home
