@@ -1,7 +1,7 @@
 services:
   caddy:
     container_name: caddy
-    image: caddy:latest
+    image: caddy:2.11.2
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
