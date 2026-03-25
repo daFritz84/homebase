@@ -1,6 +1,6 @@
 services:
   testweb:
-    image: nginx:1.29.6-alpine
+    image: nginx:1.29.7-alpine
     networks:
       caddy-proxy:
         aliases:
