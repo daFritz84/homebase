@@ -1,0 +1,27 @@
+services:
+  adguard-home:
+    image: adguard/adguardhome:latest
+    command:
+      - '--no-check-update'
+      - '-c'
+      - /opt/adguardhome/conf/AdGuardHome.yaml
+      - '-w'
+      - /opt/adguardhome/work
+      - '--web-addr'
+      - 0.0.0.0:8095
+    restart: unless-stopped
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./config:/opt/adguardhome/conf
+    # ONLY DNS ports should be exposed
+    ports:
+      - "192.168.178.249:53:53/tcp"
+      - "192.168.178.249:53:53/udp"
+    networks:
+      caddy-proxy:
+        aliases:
+          - adguard-home
+  
+networks:
+  caddy-proxy:
+    external: true
