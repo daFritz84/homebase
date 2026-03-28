@@ -7,19 +7,10 @@ services:
       - /opt/adguardhome/conf/AdGuardHome.yaml
       - '-w'
       - /opt/adguardhome/work
+      - '--web-addr'
+      - 0.0.0.0:8095
     restart: unless-stopped
     volumes:
       - ./work:/opt/adguardhome/work
       - ./config:/opt/adguardhome/conf
-    # ONLY DNS ports should be exposed
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-    networks:
-      caddy-proxy:
-        aliases:
-          - adguard-home
-  
-networks:
-  caddy-proxy:
-    external: true
+    network_mode: host
