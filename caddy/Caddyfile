@@ -17,5 +17,5 @@ http://homepage.home.arpa {
 
 # AdGuard Home
 http://adguard.home.arpa {
-    reverse_proxy localhost:8095
+    reverse_proxy adguard-home:8095
 }
