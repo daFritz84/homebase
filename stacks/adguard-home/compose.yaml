@@ -15,8 +15,8 @@ services:
       - ./config:/opt/adguardhome/conf
     # ONLY DNS ports should be exposed
     ports:
-      - "192.168.178.249:53/tcp"
-      - "192.168.178.249:53/udp"
+      - "192.168.178.249:53:53/tcp"
+      - "192.168.178.249:53:53/udp"
     networks:
       caddy-proxy:
         aliases:
