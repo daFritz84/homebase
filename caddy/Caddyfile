@@ -10,7 +10,12 @@ http://testweb.home.arpa {
     reverse_proxy testweb:80
 }
 
-# homepage
+# Homepage
 http://homepage.home.arpa {
     reverse_proxy homepage:3000
+}
+
+# AdGuard Home
+http://adguard.home.arpa {
+    reverse_proxy adguard-home:80
 }
