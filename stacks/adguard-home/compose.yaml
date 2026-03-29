@@ -13,17 +13,4 @@ services:
     volumes:
       - ./work:/opt/adguardhome/work
       - ./config:/opt/adguardhome/conf
-    # ONLY DNS ports should be exposed
-    ports:
-      - "[fdf9:6940:13f:0:be24:11ff:fec9:4bec]:53:53/tcp"
-      - "[fdf9:6940:13f:0:be24:11ff:fec9:4bec]:53:53/udp"
-      - "192.168.178.249:53:53/tcp"
-      - "192.168.178.249:53:53/udp"
-    networks:
-      caddy-proxy:
-        aliases:
-          - adguard-home
-  
-networks:
-  caddy-proxy:
-    external: true
+    network_mode: host
