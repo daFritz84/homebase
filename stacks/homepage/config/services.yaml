@@ -14,15 +14,14 @@
           secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
           showSummary: true 
           showStacks: true 
-          
-- Umbrel:
+
   - AdGuard Home:
       icon: adguard-home
-      href: http://umbrel.fritz.box:8095
+      href: http://adguard.home.arpa
       description: Network-wide DNS & ad blocking
 
       widgets:
         - type: adguard
-          url: http://umbrel.fritz.box:8095
+          url: http://adguard.home.arpa
           username: {{HOMEPAGE_VAR_ADGUARD_USER}}
           password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
