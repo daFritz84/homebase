@@ -27,7 +27,8 @@ services:
           memory: 2g
   
   core:
-    image: ghcr.io/moghtech/komodo-core:1.19.5
+    image: ghcr.io/moghtech/komodo-core:2.3.3
+    init: true
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
@@ -58,13 +59,15 @@ services:
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_passkey:/run/secrets/komodo_passkey:ro
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_webhook_secret:/run/secrets/komodo_webhook_secret:ro
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_jwt_secret:/run/secrets/komodo_jwt_secret:ro
+      - komodo-keys:/config/keys
     deploy:
       resources:
         limits:
           memory: 2g
           
   periphery:
-    image: ghcr.io/moghtech/komodo-periphery:1.19.5
+    image: ghcr.io/moghtech/komodo-periphery:2.3.3
+    init: true
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
@@ -85,6 +88,7 @@ services:
       ## Default: /etc/komodo.
       - ${PERIPHERY_ROOT_DIRECTORY}:${PERIPHERY_ROOT_DIRECTORY}:Z
       - ${COMPOSE_PROJECT_DIR}/.secrets/komodo_passkey:/run/secrets/komodo_passkey:ro
+      - komodo-keys:/config/keys
     deploy:
       resources:
         limits:
@@ -102,3 +106,4 @@ volumes:
   # Mongo
   mongo-data:
   mongo-config:
+  komodo-keys:
