@@ -2,8 +2,15 @@ http:
   pprof:
     port: 6060
     enabled: false
+  doh:
+    routes:
+      - GET /dns-query
+      - POST /dns-query
+      - GET /dns-query/{ClientID}
+      - POST /dns-query/{ClientID}
+    insecure_enabled: false
   address: 0.0.0.0:8095
-  session_ttl: 720h
+  session_ttl: 30d
 users:
   - name: sseifried
     password: $2a$10$vP7W1REMfOqmZhuy5ZBPvewryGwGHVGd9xLwq/p2/CFDIg6on5qQu
@@ -88,7 +95,6 @@ tls:
   port_dns_over_quic: 853
   port_dnscrypt: 0
   dnscrypt_config_file: ""
-  allow_unencrypted_doh: false
   certificate_chain: ""
   private_key: ""
   certificate_path: ""
@@ -97,7 +103,7 @@ tls:
 querylog:
   dir_path: ""
   ignored: []
-  interval: 2160h
+  interval: 90d
   size_memory: 1000
   enabled: true
   ignored_enabled: false
@@ -105,7 +111,7 @@ querylog:
 statistics:
   dir_path: ""
   ignored: []
-  interval: 24h
+  interval: 1d
   enabled: true
   ignored_enabled: false
 filters:
@@ -169,6 +175,7 @@ filtering:
       enabled: true
   safe_fs_patterns:
     - /opt/adguardhome/work/data/userfilters/*
+  max_http_size: 256MB
   safebrowsing_cache_size: 1048576
   safesearch_cache_size: 1048576
   parental_cache_size: 1048576
@@ -201,4 +208,4 @@ os:
   group: ""
   user: ""
   rlimit_nofile: 0
-schema_version: 33
+schema_version: 34
