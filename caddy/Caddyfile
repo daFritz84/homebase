@@ -2,8 +2,10 @@
 # Requires CF_API_TOKEN and ACME_EMAIL (see .env.example, provision-caddy-secrets.sh).
 {
 	email {env.ACME_EMAIL}
+	# Pin the CA to Let's Encrypt — Caddy's defaults would also try ZeroSSL:
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
 	dns cloudflare {env.CF_API_TOKEN}
-	# During first bring-up, uncomment to avoid Let's Encrypt production rate limits:
+	# During first bring-up, swap the acme_ca URL to the staging CA to avoid production rate limits:
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
