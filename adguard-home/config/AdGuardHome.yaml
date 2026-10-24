@@ -170,9 +170,6 @@ filtering:
   parental_block_host: family-block.dns.adguard.com
   safebrowsing_block_host: standard-block.dns.adguard.com
   rewrites:
-    - domain: '*.home.arpa'
-      answer: homebase.fritz.box
-      enabled: true
     - domain: '*.sseifried.link'
       answer: homebase.fritz.box
       enabled: true
