@@ -2,3 +2,8 @@
 # Secret files generated from Bitwarden
 .secrets/
 .secrets/*
+
+# Environment files with secrets (e.g. stacks/homepage/.env).
+# komodo/.env is a committed config template and stays tracked.
+**/.env
+!.env.example

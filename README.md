@@ -18,9 +18,15 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 ## Quick start
 
 ```bash
+# create the shared proxy network (required by caddy, komodo and all stacks)
+./caddy/ensure_proxy_network.sh
+
+# provision Komodo secret files (requires an unlocked Bitwarden CLI)
+cd komodo && ./provision-komodo-secrets.sh
+
 # pull and start a stack
-cd komodo && podman compose up -d
-cd caddy && podman compose up -d
+cd ../caddy && podman compose up -d
+cd ../komodo && podman compose up -d
 
 # stop a stack
 podman compose down

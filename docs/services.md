@@ -73,9 +73,39 @@ sudo firewall-cmd --add-service=dns --permanent
 sudo firewall-cmd --reload
 ```
 
+### First run
+
+Create the shared external network that Caddy and every proxied stack join
+(`caddy-proxy` is declared `external: true` in all compose files, so a fresh
+`podman-compose up` fails without it):
+
+```bash
+./caddy/ensure_proxy_network.sh
+```
+
+Then deploy with the shared pattern above (unit: `podman-compose@caddy`).
+
 ## Komodo
 
 Deployment & orchestration platform. Compose file: `komodo/compose.yaml`. Unit: `podman-compose@komodo`.
+
+### First run
+
+Core and Periphery mount seven secret files from `komodo/.secrets/` (gitignored).
+Provision them from Bitwarden before the first start:
+
+```bash
+bw login
+export BW_SESSION="$(bw unlock --raw)"
+cd komodo && ./provision-komodo-secrets.sh
+```
+
+The script fetches the `komodo-db` (username + password) and `komodo-admin`
+items and generates the passkey, webhook and JWT secrets. Run it from the
+`komodo/` directory — it writes to `.secrets/` relative to the current
+directory, which is where the compose file expects it.
+
+Then deploy with the shared pattern above.
 
 Create a komodo directory in `/etc` (**unused?**)
 
