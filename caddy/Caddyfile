@@ -8,8 +8,8 @@
 	acme_ca {env.ACME_CA}
 }
 
-# Direct-IP access, container health checks, and legacy LAN names (stays HTTP)
-:80, http://homebase.fritz.box, http://komodo.home.arpa {
+# Direct-IP access and container health checks (stays HTTP)
+:80, http://homebase.fritz.box {
 	reverse_proxy komodo:9120
 }
 
@@ -60,18 +60,5 @@ adguard.sseifried.link {
 			dns cloudflare {env.CF_API_TOKEN}
 		}
 	}
-	reverse_proxy 192.168.178.249:8095
-}
-
-# --- transition: legacy *.home.arpa serving (remove after TLS verification) ---
-http://testweb.home.arpa {
-	reverse_proxy testweb:80
-}
-
-http://homepage.home.arpa {
-	reverse_proxy homepage:3000
-}
-
-http://adguard.home.arpa {
 	reverse_proxy 192.168.178.249:8095
 }
