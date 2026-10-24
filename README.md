@@ -10,7 +10,7 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | Service    | Compose file                       | Purpose                                    |
 | ---------- | ---------------------------------- | ------------------------------------------ |
 | Komodo     | `komodo/compose.yaml`              | Deployment & orchestration platform        |
-| Caddy      | `caddy/compose.yaml`               | Reverse proxy + TLS                        |
+| Caddy      | `caddy/compose.yaml`              | Reverse proxy + TLS (LE DNS-01/Cloudflare) |
 | Adguard Home | `adguard-home/compose.yaml`        | DNS server with blocking & filtering       |
 | Homepage   | `stacks/homepage/compose.yaml`      | Service dashboard                          |
 | Test web   | `stacks/testweb/compose.yaml`       | Example stack for testing                  |
@@ -21,11 +21,12 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 # create the shared proxy network (required by caddy, komodo and all stacks)
 ./caddy/ensure_proxy_network.sh
 
-# provision Komodo secret files (requires an unlocked Bitwarden CLI)
-cd komodo && ./provision-komodo-secrets.sh
+# provision secret files (requires an unlocked Bitwarden CLI)
+cd caddy && ACME_EMAIL="you@example.com" ./provision-caddy-secrets.sh
+cd ../komodo && ./provision-komodo-secrets.sh
 
-# pull and start a stack
-cd ../caddy && podman compose up -d
+# pull and start a stack (caddy is a local build: official builder + Cloudflare DNS plugin)
+cd ../caddy && podman compose build && podman compose up -d
 cd ../komodo && podman compose up -d
 
 # stop a stack

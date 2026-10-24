@@ -4,7 +4,7 @@
 - Homebase:
   - Komodo:
       icon: komodo
-      href: http://komodo.home.arpa
+      href: https://komodo.sseifried.link
       description: Homelab Container Management
 
       widgets:
@@ -17,11 +17,11 @@
 
   - AdGuard Home:
       icon: adguard-home
-      href: http://adguard.home.arpa
+      href: https://adguard.sseifried.link
       description: Network-wide DNS & ad blocking
 
       widgets:
         - type: adguard
-          url: http://adguard.home.arpa
+          url: http://192.168.178.249:8095
           username: {{HOMEPAGE_VAR_ADGUARD_USER}}
           password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
