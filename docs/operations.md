@@ -13,6 +13,7 @@ Day-2 tasks: keeping the stack up to date, backing up Komodo data, and the open 
 ```bash
 systemctl --user status podman-compose@caddy
 systemctl --user status podman-compose@komodo
+systemctl --user status podman-compose@adguard-home
 podman ps
 ```
 
@@ -31,8 +32,14 @@ Replace `<BACKUP_PATH>` with the value of `COMPOSE_KOMODO_BACKUPS_PATH` from you
 
 ```bash
 cd ~/src/homebase
-git pull
+git pull --rebase --autostash
 ```
+
+> **Live config drift:** AdGuard Home rewrites `adguard-home/config/AdGuardHome.yaml` on every
+> UI change, so the server checkout is routinely dirty. Always pull with
+> `git pull --rebase --autostash` — never `git checkout -- .` on the server, that discards live
+> UI changes. The server deploy key is read-only, so commit live config diffs from the
+> workstation (copy the server's `AdGuardHome.yaml` over, review, commit, push).
 
 2. Pull new images
 
@@ -42,6 +49,9 @@ podman-compose pull
 
 cd komodo
 podman-compose pull
+
+cd adguard-home
+podman-compose pull
 ```
 
 3. Restart
@@ -49,6 +59,7 @@ podman-compose pull
 ```bash
 systemctl --user restart podman-compose@caddy
 systemctl --user restart podman-compose@komodo
+systemctl --user restart podman-compose@adguard-home
 ```
 
 4. Verify
@@ -58,6 +69,7 @@ podman ps
 podman logs --tail=50 <caddy-container>
 podman logs --tail=50 <komodo-container>
 podman logs --tail=50 <mongo-container>
+podman logs --tail=50 <adguard-home-container>
 ```
 
 5. Cleanup
