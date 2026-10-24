@@ -1,31 +1,43 @@
 # homebase
-homeserver setup centered around komodo using rootless podman
 
-# Podman Cheatsheet
+Homeserver setup centered around [Komodo](https://komo.do/) using rootless [Podman](https://podman.io/).
 
-**Start a podman compose file**
+This repository contains the compose files and configuration for the services running on `homebase`.
+The full setup guide lives in [`docs/`](docs/) — this README is a quick entry point.
+
+## Services
+
+| Service    | Compose file                       | Purpose                                    |
+| ---------- | ---------------------------------- | ------------------------------------------ |
+| Komodo     | `komodo/compose.yaml`              | Deployment & orchestration platform        |
+| Caddy      | `caddy/compose.yaml`               | Reverse proxy + TLS                        |
+| Adguard Home | `stacks/adguard-home/compose.yaml` | DNS server with blocking & filtering       |
+| Homepage   | `stacks/homepage/compose.yaml`      | Service dashboard                          |
+| Test web   | `stacks/testweb/compose.yaml`       | Example stack for testing                  |
+
+## Quick start
 
 ```bash
-podman compose up -d
-```
+# pull and start a stack
+cd komodo && podman compose up -d
+cd caddy && podman compose up -d
 
----
-
-**Stop a podman compose file**
-
-```bash
+# stop a stack
 podman compose down
 ```
 
----
-**Cleanup podman**
+See [`docs/host-setup.md`](docs/host-setup.md) for the full installation and configuration guide,
+[`docs/services.md`](docs/services.md) for the service setup, and
+[`docs/operations.md`](docs/operations.md) for the update procedure.
 
-WARNING! This command removes:
-        - all stopped containers
-        - all networks not used by at least one container
-        - all dangling images
-        - all dangling build cache
+## Documentation
 
-```bash
-podman system prune
-```
+- [`docs/host-setup.md`](docs/host-setup.md) — provision the host: Proxmox VM & iGPU passthrough, Debian base, packages, firewall, static IP, Podman, Git deploy keys, Bitwarden CLI
+- [`docs/services.md`](docs/services.md) — deploy the stack: shared podman-compose systemd pattern, Caddy, Komodo, Adguard Home
+- [`docs/operations.md`](docs/operations.md) — operate the stack: update procedure, Komodo backups, TODO & inspiration
+- [`stacks/homepage/config/README.md`](stacks/homepage/config/README.md) — Homepage dashboard configuration
+- [`docs/podman.md`](docs/podman.md) — Podman cheatsheet
+
+## License
+
+See [LICENSE](LICENSE).
