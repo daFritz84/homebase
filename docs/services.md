@@ -120,9 +120,10 @@ podman-compose build
 ```
 
 The first certificate issuance takes 1–2 minutes (the plugin polls Cloudflare for TXT-record
-propagation). To avoid Let's Encrypt production rate limits during bring-up, temporarily
-uncomment the `acme_ca` staging line in the `Caddyfile` global options, verify against the
-staging issuer, then remove it and restart.
+propagation). The `Caddyfile` pins the CA to Let's Encrypt via `acme_ca` (Caddy's defaults would
+also try ZeroSSL). To avoid production rate limits during bring-up, temporarily swap the
+`acme_ca` URL to the staging CA (commented alternative in the global options), verify against
+the staging issuer, then swap back and restart.
 
 ## Komodo
 
