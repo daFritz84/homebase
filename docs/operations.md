@@ -103,7 +103,7 @@ Notes:
 
 ## TODO
 
-- FritzBox IPv6 DNS is redirecting to extern
+
 - Authentik Single Sign On
 - Autostart after power outage
 
