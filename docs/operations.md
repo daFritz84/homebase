@@ -96,7 +96,7 @@ openssl s_client -servername homepage.sseifried.link -connect 192.168.178.249:44
 Notes:
 
 - Let's Encrypt allows **5 wildcard certificate issuances per week** per registered domain —
-  avoid repeated forced renewals; use the staging CA (`acme_ca` in the `Caddyfile`) for testing.
+  avoid repeated forced renewals; use the staging CA (`ACME_CA` in `caddy/.env`) for testing.
 - Renewals require the Cloudflare API token in `caddy/.env` (provision via
   `caddy/provision-caddy-secrets.sh`); if the token is rotated in Cloudflare, re-run the script
   and restart `podman-compose@caddy`.

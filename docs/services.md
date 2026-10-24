@@ -120,10 +120,12 @@ podman-compose build
 ```
 
 The first certificate issuance takes 1–2 minutes (the plugin polls Cloudflare for TXT-record
-propagation). The `Caddyfile` pins the CA to Let's Encrypt via `acme_ca` (Caddy's defaults would
-also try ZeroSSL). To avoid production rate limits during bring-up, temporarily swap the
-`acme_ca` URL to the staging CA (commented alternative in the global options), verify against
-the staging issuer, then swap back and restart.
+propagation). The CA is pinned to Let's Encrypt via `ACME_CA` in `caddy/.env` (Caddy's defaults
+would also try ZeroSSL), and DNS-01 is enabled by the `tls issuer acme { dns cloudflare }` block
+on each site — the global `dns` shorthand alone does **not** wire `dns_challenge` into the issuer
+in Caddy 2.11, which silently falls back to http-01/tls-alpn-01. To avoid production rate limits
+during bring-up, set `ACME_CA` to the staging CA (see `.env.example`), verify against the staging
+issuer, then set it back and restart.
 
 ## Komodo
 
