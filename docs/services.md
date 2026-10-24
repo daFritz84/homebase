@@ -206,9 +206,6 @@ on the LAN. Clients that do **not** use AdGuard as their DNS (e.g. Fritzbox DHCP
 Fritzbox, IPv6 DNS leaking to extern) get NXDOMAIN for `sseifried.link` — ensure LAN clients use
 AdGuard (`192.168.178.249`) as their DNS server.
 
-> **Legacy:** the former `*.home.arpa` rewrite (RFC 8375 special-use domain) is kept during the
-> TLS migration as a fallback and removed once the new names are verified.
-
 #### Configure Upstreams in AdGuard Home
 
 Add the following upstreams under Settings → DNS → Upstream DNS servers
