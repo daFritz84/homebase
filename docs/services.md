@@ -55,6 +55,25 @@ this pattern with the project name given in each section.
 
 Reverse proxy + TLS. Compose file: `caddy/compose.yaml`. Unit: `podman-compose@caddy`.
 
+TLS uses Let's Encrypt wildcard certificates (`sseifried.link` + `*.sseifried.link`) issued via the
+**DNS-01 ACME challenge** with the official Cloudflare DNS plugin. No inbound port-forwarding is
+needed: Caddy proves domain control by publishing `_acme-challenge` TXT records through the
+Cloudflare API. LAN clients reach the services through AdGuard Home split DNS
+(see [AdGuard Home](#adguard-home-dns-server)). The image is a **local build** from
+`caddy/Dockerfile` (official `caddy:2.11.7-builder` + `caddy-dns/cloudflare`), because the official
+`caddy` image does not contain the DNS plugin.
+
+### Cloudflare API token
+
+Create the token under **My Profile → API Tokens → Create Custom**:
+
+- Permissions: `Zone / DNS / Edit`
+- Zone Resources: `Specific / sseifried.link`
+- **No IP restriction** — the residential IP is dynamic; restricting it breaks renewals
+
+Store it in Bitwarden as item `caddy-cloudflare-token` (password field). Do **not** create public
+A/AAAA records: DNS-01 does not need them and the homelab stays unadvertised.
+
 ### Firewall
 
 Update firewall rules to allow caddy ports to be accessible
@@ -75,7 +94,16 @@ sudo firewall-cmd --reload
 
 ### First run
 
-Create the shared external network that Caddy and every proxied stack join
+1. Provision the Caddy env file from Bitwarden (requires an unlocked Bitwarden CLI):
+
+```bash
+cd caddy
+ACME_EMAIL="you@example.com" ./provision-caddy-secrets.sh
+```
+
+This writes `caddy/.env` (gitignored, mode `0600`) with `CF_API_TOKEN` and `ACME_EMAIL`.
+
+2. Create the shared external network that Caddy and every proxied stack join
 (`caddy-proxy` is declared `external: true` in all compose files, so a fresh
 `podman-compose up` fails without it):
 
@@ -83,7 +111,18 @@ Create the shared external network that Caddy and every proxied stack join
 ./caddy/ensure_proxy_network.sh
 ```
 
-Then deploy with the shared pattern above (unit: `podman-compose@caddy`).
+3. Build the plugin-enabled image, then deploy with the shared pattern above
+(unit: `podman-compose@caddy`):
+
+```bash
+cd caddy
+podman-compose build
+```
+
+The first certificate issuance takes 1–2 minutes (the plugin polls Cloudflare for TXT-record
+propagation). To avoid Let's Encrypt production rate limits during bring-up, temporarily
+uncomment the `acme_ca` staging line in the `Caddyfile` global options, verify against the
+staging issuer, then remove it and restart.
 
 ## Komodo
 
@@ -150,19 +189,27 @@ No longer managed by Komodo — it runs as a `podman-compose` systemd user unit 
 which requires the unprivileged-port sysctl and the `dns` firewalld service from
 [host-setup.md](host-setup.md).
 
-### Forwarding `*.home.arpa` to (`homebase.fritz.box`)
+### Split DNS for `*.sseifried.link`
 
-`home.arpa` is the **IETF-designated special-use domain** for local, non-unique naming in residential networks. It is meant to be resolved **only by local DNS servers**, not the public DNS. `home.arpa` is defined as a special-use domain according to RFC 8375, designated for non-unique use in residential home networks.
-
-#### DNS strategy
+The public Cloudflare zone for `sseifried.link` intentionally has **no A/AAAA records** — the
+homelab is LAN-only. LAN clients resolve the services through an AdGuard Home rewrite:
 
 ```
-*.home.arpa → homebase.fritz.box → IP address
+*.sseifried.link → homebase.fritz.box → IP address
 ```
+
+The TLS certificates are valid for these names (issued via DNS-01), so browsers show a padlock
+on the LAN. Clients that do **not** use AdGuard as their DNS (e.g. Fritzbox DHCP handing out the
+Fritzbox, IPv6 DNS leaking to extern) get NXDOMAIN for `sseifried.link` — ensure LAN clients use
+AdGuard (`192.168.178.249`) as their DNS server.
+
+> **Legacy:** the former `*.home.arpa` rewrite (RFC 8375 special-use domain) is kept during the
+> TLS migration as a fallback and removed once the new names are verified.
 
 #### Configure Upstreams in AdGuard Home
 
-Add the following upstreams under Settings → DNS → Upstream DNS servers:
+Add the following upstreams under Settings → DNS → Upstream DNS servers
+(still required — `homebase.fritz.box` itself is resolved by the Fritzbox):
 
 ```
 [/fritz.box/]192.168.178.1
@@ -171,23 +218,27 @@ Add the following upstreams under Settings → DNS → Upstream DNS servers:
 
 #### Create DNS Rewrite Rules
 
-Add wildcard rewrite for `*.home.arpa` under Filters → DNS Rewrites.
+Add the wildcard rewrite for `*.sseifried.link` under Filters → DNS Rewrites.
 
 Recommended CNAME approach:
 
 ```
-Domain: *.home.arpa
+Domain: *.sseifried.link
 Target: homebase.fritz.box
 ```
 
 This should automatically resolve to a `CNAME` record.
+
+> **Live config drift:** AdGuard Home rewrites `config/AdGuardHome.yaml` on every UI change.
+> Make rewrite changes in the UI **on the server**, then sync the file back to the workstation,
+> review, commit, push (see [operations.md](operations.md)).
 
 #### Verification
 
 Run from any LAN client:
 
 ```bash
-dig test.home.arpa
+dig komodo.sseifried.link
 dig homebase.fritz.box
-dig +trace test.home.arpa
+dig +trace komodo.sseifried.link   # public resolution: NXDOMAIN is expected
 ```

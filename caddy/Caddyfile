@@ -1,21 +1,48 @@
-# Komodo on :80, homebase.fritz.box, and komodo.home.arpa
-# One site block can serve multiple addresses/hostnames
+# TLS: Let's Encrypt wildcard cert (sseifried.link + *.sseifried.link) via DNS-01 / Cloudflare.
+# Requires CF_API_TOKEN and ACME_EMAIL (see .env.example, provision-caddy-secrets.sh).
+{
+	email {env.ACME_EMAIL}
+	dns cloudflare {env.CF_API_TOKEN}
+	# During first bring-up, uncomment to avoid Let's Encrypt production rate limits:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Direct-IP access, container health checks, and legacy LAN names (stays HTTP)
 :80, http://homebase.fritz.box, http://komodo.home.arpa {
-    # Direct reverse proxy to the Komodo container (Docker network DNS name)
-    reverse_proxy komodo:9120
+	reverse_proxy komodo:9120
+}
+
+# --- TLS services (resolved to this host by AdGuard Home split DNS) ---
+
+# Komodo
+komodo.sseifried.link {
+	reverse_proxy komodo:9120
 }
 
 # nginx-ping
-http://testweb.home.arpa {
-    reverse_proxy testweb:80
+testweb.sseifried.link {
+	reverse_proxy testweb:80
 }
 
 # Homepage
-http://homepage.home.arpa {
-    reverse_proxy homepage:3000
+homepage.sseifried.link {
+	reverse_proxy homepage:3000
 }
 
 # AdGuard Home
+adguard.sseifried.link {
+	reverse_proxy 192.168.178.249:8095
+}
+
+# --- transition: legacy *.home.arpa serving (remove after TLS verification) ---
+http://testweb.home.arpa {
+	reverse_proxy testweb:80
+}
+
+http://homepage.home.arpa {
+	reverse_proxy homepage:3000
+}
+
 http://adguard.home.arpa {
-    reverse_proxy  192.168.178.249:8095
+	reverse_proxy 192.168.178.249:8095
 }

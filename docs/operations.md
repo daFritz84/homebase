@@ -46,6 +46,7 @@ git pull --rebase --autostash
 ```bash
 cd caddy
 podman-compose pull
+podman-compose build   # Caddy is a local build (Cloudflare DNS plugin) — rebuild after image bumps
 
 cd komodo
 podman-compose pull
@@ -79,10 +80,30 @@ podman logs --tail=50 <adguard-home-container>
 podman image prune -a
 ```
 
+## TLS Certificates
+
+Caddy obtains and auto-renews Let's Encrypt wildcard certificates (`sseifried.link` +
+`*.sseifried.link`) via the DNS-01 challenge through the Cloudflare API — no action is needed
+for renewals (Caddy renews at ~1/3 of the certificate lifetime).
+
+Check the current certificate:
+
+```bash
+openssl s_client -servername homepage.sseifried.link -connect 192.168.178.249:443 </dev/null \
+  | openssl x509 -noout -issuer -dates -ext subjectAltName
+```
+
+Notes:
+
+- Let's Encrypt allows **5 wildcard certificate issuances per week** per registered domain —
+  avoid repeated forced renewals; use the staging CA (`acme_ca` in the `Caddyfile`) for testing.
+- Renewals require the Cloudflare API token in `caddy/.env` (provision via
+  `caddy/provision-caddy-secrets.sh`); if the token is rotated in Cloudflare, re-run the script
+  and restart `podman-compose@caddy`.
+
 ## TODO
 
 - FritzBox IPv6 DNS is redirecting to extern
-- CA for Homelab setup
 - Authentik Single Sign On
 - Autostart after power outage
 
