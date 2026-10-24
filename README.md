@@ -11,7 +11,7 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | ---------- | ---------------------------------- | ------------------------------------------ |
 | Komodo     | `komodo/compose.yaml`              | Deployment & orchestration platform        |
 | Caddy      | `caddy/compose.yaml`               | Reverse proxy + TLS                        |
-| Adguard Home | `stacks/adguard-home/compose.yaml` | DNS server with blocking & filtering       |
+| Adguard Home | `adguard-home/compose.yaml`        | DNS server with blocking & filtering       |
 | Homepage   | `stacks/homepage/compose.yaml`      | Service dashboard                          |
 | Test web   | `stacks/testweb/compose.yaml`       | Example stack for testing                  |
 

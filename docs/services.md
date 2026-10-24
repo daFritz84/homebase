@@ -113,7 +113,12 @@ Komodo only manages the runtime. But development can directly happen in VSCode i
 
 ## AdGuard Home (DNS-Server)
 
-DNS server with blocking & filtering. Compose file: `stacks/adguard-home/compose.yaml`.
+DNS server with blocking & filtering. Compose file: `adguard-home/compose.yaml`. Unit: `podman-compose@adguard-home`.
+
+No longer managed by Komodo — it runs as a `podman-compose` systemd user unit like Caddy and Komodo
+(shared pattern above). It uses `network_mode: host` and binds `:53` (DNS) and `:8095` (web UI),
+which requires the unprivileged-port sysctl and the `dns` firewalld service from
+[host-setup.md](host-setup.md).
 
 ### Forwarding `*.home.arpa` to (`homebase.fritz.box`)
 
