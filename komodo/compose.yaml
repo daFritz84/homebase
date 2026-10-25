@@ -20,6 +20,12 @@ services:
     env_file:
       - ${COMPOSE_PROJECT_DIR}/.env
       - ${COMPOSE_PROJECT_DIR}/.env.secret
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -37,7 +43,8 @@ services:
             - komodo
       komodo-internal-network: {}
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     env_file:
       - ${COMPOSE_PROJECT_DIR}/.env
       - ${COMPOSE_PROJECT_DIR}/.env.secret

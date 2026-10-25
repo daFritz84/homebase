@@ -1,6 +1,7 @@
 services:
   homepage:
     image: ghcr.io/gethomepage/homepage:v2.7.0
+    restart: unless-stopped
     env_file: .env
     volumes:
       - ./config:/app/config
