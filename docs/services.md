@@ -133,8 +133,9 @@ Deployment & orchestration platform. Compose file: `komodo/compose.yaml`. Unit: 
 
 ### First run
 
-Core and Periphery mount seven secret files from `komodo/.secrets/` (gitignored).
-Provision them from Bitwarden before the first start:
+Core, Periphery and Mongo read their secrets as plain environment variables from
+`komodo/.env.secret` (gitignored, mode `0600`). Provision it from Bitwarden
+before the first start:
 
 ```bash
 bw login
@@ -143,9 +144,10 @@ cd komodo && ./provision-komodo-secrets.sh
 ```
 
 The script fetches the `komodo-db` (username + password) and `komodo-admin`
-items and generates the passkey, webhook and JWT secrets. Run it from the
-`komodo/` directory — it writes to `.secrets/` relative to the current
-directory, which is where the compose file expects it.
+items and generates the passkey, webhook and JWT secrets into `.env.secret`.
+Run it from the `komodo/` directory — the compose files reference it relative
+to the project directory. Re-running regenerates passkey/webhook/JWT, so
+restart core **and** periphery together afterwards.
 
 Then deploy with the shared pattern above.
 
