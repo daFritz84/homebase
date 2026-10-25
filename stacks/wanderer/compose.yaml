@@ -75,7 +75,7 @@ services:
       BODY_SIZE_LIMIT: "2G"
       PUBLIC_PRIVATE_INSTANCE: "true"
       # Flip to "false" for first boot, create the account, flip back (see docs/services.md).
-      PUBLIC_DISABLE_SIGNUP: "true"
+      PUBLIC_DISABLE_SIGNUP: "false"
     volumes:
       - ./data/uploads:/app/uploads
     networks:
