@@ -8,6 +8,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Caddy](#caddy)
 - [Komodo](#komodo)
 - [AdGuard Home (DNS-Server)](#adguard-home-dns-server)
+- [Wanderer (Trail Database)](#wanderer-trail-database)
 
 For the stack update procedure and backups see [operations.md](operations.md).
 
@@ -265,3 +266,67 @@ dig komodo.sseifried.link
 dig homebase.fritz.box
 dig +trace komodo.sseifried.link   # public resolution: NXDOMAIN is expected
 ```
+
+## Wanderer (Trail Database)
+
+Self-hosted trail database ([wanderer](https://github.com/open-wanderer/wanderer)).
+Compose file: `stacks/wanderer/compose.yaml`. Komodo-managed stack (like Homepage) —
+deployed from the Komodo UI, not a systemd unit.
+
+Three services: `web` (SvelteKit UI — the only one on `caddy-proxy`, alias `wanderer`),
+`db` (PocketBase) and `search` (Meilisearch) on the internal `wanderer-internal` network.
+No host ports: the UI is served through Caddy at `https://wanderer.sseifried.link`.
+The instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`) — users only see their own trails.
+
+### First run
+
+The steps below run in the stack checkout — on the server that is the Komodo periphery
+checkout under `PERIPHERY_ROOT_DIRECTORY`, not the `~/src/homebase` clone.
+
+1. Provision the secrets (requires an unlocked Bitwarden CLI):
+
+```bash
+cd stacks/wanderer
+./provision-wanderer-secrets.sh
+```
+
+The script fetches the three keys from the Bitwarden items `wanderer-meili-key`,
+`wanderer-pb-encryption-key` and `wanderer-pb-proxy-secret` (password field) into
+`.env.secret` (gitignored, mode `0600`). On the first run the items do not exist yet:
+the script generates the keys and prints them — save them to Bitwarden under those
+names. **`POCKETBASE_ENCRYPTION_KEY` encrypts trail data at rest; rotating it after
+data exists makes the database unreadable.**
+
+2. Rootless bind-mount ownership: `meilisearch` and the web app run as container
+uid 1000, which rootless Podman maps into the subuid range — a `data/` directory
+owned by the host user is not writable for them. Pre-create and chown once:
+
+```bash
+mkdir -p data/pb_data data/uploads data/data.ms data/plugins
+podman unshare chown 1000:1000 data/data.ms data/uploads
+```
+
+PocketBase runs as root — container root maps to the host user, so `pb_data` and
+`plugins` need no chown. Skipping this step shows up as permission-denied crashes
+in the search/web containers on first start.
+
+3. First boot with signup enabled: set `PUBLIC_DISABLE_SIGNUP: "false"` in
+`compose.yaml`, deploy, open `https://wanderer.sseifried.link`, create your account,
+then flip it back to `"true"`, commit and redeploy.
+
+4. Register the Komodo stack: **Stacks → Add Stack → git**, repo `homebase`,
+root path `stacks/wanderer`, branch `main` (same as Homepage). Deploy.
+
+5. Verify:
+
+```bash
+podman pod ps
+curl -k https://wanderer.sseifried.link
+podman logs --tail=20 wanderer-search-1   # Meilisearch must come up healthy
+```
+
+### Valhalla (optional, not deployed)
+
+Route planning falls back to the public endpoint `https://valhalla1.openstreetmap.de`
+(`VALHALLA_URL` default). Self-hosting Valhalla (multi-GB OSM extract, extra RAM/disk)
+is a future option — see the commented block in the upstream `docker-compose.yml`.

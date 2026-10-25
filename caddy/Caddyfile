@@ -51,6 +51,12 @@ homepage.sseifried.link {
 	reverse_proxy homepage:3000
 }
 
+# Wanderer (trail database)
+wanderer.sseifried.link {
+	import tls
+	reverse_proxy wanderer:3000
+}
+
 # AdGuard Home
 adguard.sseifried.link {
 	import tls
