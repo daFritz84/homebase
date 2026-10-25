@@ -14,8 +14,9 @@
 # Clients must resolve *.sseifried.link via AdGuard Home split DNS (see docs/services.md).
 :80 {
 	@health path /health /health/*
+	@nothealth not path /health /health/*
 	reverse_proxy @health komodo:9120
-	redir @!health https://komodo.sseifried.link{uri}
+	redir @nothealth https://komodo.sseifried.link{uri}
 }
 
 # --- TLS services (resolved to this host by AdGuard Home split DNS) ---
