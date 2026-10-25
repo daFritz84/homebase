@@ -10,6 +10,8 @@ services:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     command: --quiet --wiredTigerCacheSizeGB 0.25
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
     networks:
       - komodo-internal-network
     # ports:
@@ -37,6 +39,8 @@ services:
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
     networks:
       caddy-proxy:
           aliases:
@@ -65,6 +69,8 @@ services:
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
     networks:
       - komodo-internal-network
     env_file:
