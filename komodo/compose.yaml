@@ -4,6 +4,10 @@
 services:
   mongo:
     image: mongo:9.0.4
+    # Image default user is non-root mongod, which cannot read owner-only (0400)
+    # secret files. Rootless podman maps "root" to the host user, so the entrypoint
+    # reads the secrets, chowns /data/db, then drops to mongod via gosu.
+    user: "root"
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     command: --quiet --wiredTigerCacheSizeGB 0.25
