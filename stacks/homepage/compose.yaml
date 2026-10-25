@@ -9,6 +9,9 @@ services:
     env_file: .env
     volumes:
       - ./config:/app/config
+      # Local custom icons: Homepage serves /app/public/icons at /icons/...
+      # (the config mount is NOT served) — restart needed after adding files.
+      - ./config/icons:/app/public/icons
     networks:
       caddy-proxy:
         aliases:
