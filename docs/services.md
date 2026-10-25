@@ -217,12 +217,11 @@ on the LAN. Clients that do **not** use AdGuard as their DNS (e.g. Fritzbox DHCP
 Fritzbox, IPv6 DNS leaking to extern) get NXDOMAIN for `sseifried.link` — ensure LAN clients use
 AdGuard (`192.168.178.249`) as their DNS server.
 
-> **Host access from containers:** Caddy (`reverse_proxy`) and the Homepage AdGuard
-> widget reach the AdGuard web UI via `host.containers.internal` — Podman's built-in
-> gateway name (pasta resolves it to the host, e.g. `169.254.1.2`), so no host IP is
-> hardcoded in the configs. The LAN IP `192.168.178.249` (Fritzbox static IP, see
-> [host-setup.md](host-setup.md#static-ip-address)) remains only as the DNS server
-> address LAN clients must use (above).
+> **Hardcoded host IP:** `192.168.178.249` (the Fritzbox-assigned static IP, see
+> [host-setup.md](host-setup.md#static-ip-address)) is referenced in `caddy/Caddyfile`
+> (AdGuard `reverse_proxy`) and `stacks/homepage/config/services.yaml` (AdGuard widget).
+> Rootless containers cannot reach host services by name, so the IP is hardcoded — if the
+> static IP ever changes, update both files.
 
 #### Configure Upstreams in AdGuard Home
 
