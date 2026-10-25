@@ -8,9 +8,10 @@
 
 services:
   search:
-    # Pinned to wanderer upstream's tested version. Version changes require a
-    # data.ms migration (format is not forward-compatible) — see dependabot.yml.
-    image: getmeili/meilisearch:v1.36.0
+    # data.ms format is NOT forward-compatible: merging a bump requires wiping
+    # data/data.ms (index is rebuildable from PocketBase) or a dump/restore
+    # migration — see docs/services.md.
+    image: getmeili/meilisearch:v1.55.0
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true

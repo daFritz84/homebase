@@ -11,13 +11,9 @@ updates:
       - "/adguard-home"
     schedule:
       interval: "weekly"
-    ignore:
-      # Meilisearch data.ms is NOT forward-compatible across versions (1.36.0
-      # data + 1.55.0 engine = hard crash). Wanderer upstream pins v1.36.0;
-      # bump manually only together with a wanderer release, migrating data.ms
-      # per https://www.meilisearch.com/docs/learn/update_and_migration/updating
-      - dependency-name: "getmeili/meilisearch"
-        versions: ["*"]
+    # NOTE: merging a getmeili/meilisearch bump requires wiping data/data.ms
+    # (index is rebuildable from PocketBase) BEFORE the first start of the new
+    # engine — the data format is not forward-compatible. See stacks/wanderer.
 
   # --- Dockerfile base images (caddy builder + runtime; the compose image is a local build) ---
   - package-ecosystem: "docker"
