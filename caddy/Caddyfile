@@ -1,11 +1,22 @@
 # TLS: Let's Encrypt wildcard cert (sseifried.link + *.sseifried.link) via DNS-01 / Cloudflare.
 # Requires CF_API_TOKEN, ACME_EMAIL and ACME_CA (see .env.example, provision-caddy-secrets.sh).
-# The dns option lives in each site's "tls issuer acme" block: the global "dns" shorthand
-# alone does NOT wire dns_challenge into the issuer (Caddy 2.11), which falls back to
-# http-01/tls-alpn-01 and fails with NXDOMAIN on this LAN-only setup.
+# The dns option lives in the (tls) snippet's "tls issuer acme" block: the global "dns"
+# shorthand alone does NOT wire dns_challenge into the issuer (Caddy 2.11), which falls back
+# to http-01/tls-alpn-01 and fails with NXDOMAIN on this LAN-only setup.
 {
 	email {env.ACME_EMAIL}
 	acme_ca {env.ACME_CA}
+}
+
+# Shared wildcard-cert config for all TLS sites
+(tls) {
+	tls {
+		issuer acme {
+			email {env.ACME_EMAIL}
+			dir {env.ACME_CA}
+			dns cloudflare {env.CF_API_TOKEN}
+		}
+	}
 }
 
 # HTTP: redirect everything to the HTTPS Komodo UI (wildcard cert covers *.sseifried.link).
@@ -23,49 +34,25 @@
 
 # Komodo
 komodo.sseifried.link {
+	import tls
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	tls {
-		issuer acme {
-			email {env.ACME_EMAIL}
-			dir {env.ACME_CA}
-			dns cloudflare {env.CF_API_TOKEN}
-		}
-	}
 	reverse_proxy komodo:9120
 }
 
 # nginx-ping
 testweb.sseifried.link {
-	tls {
-		issuer acme {
-			email {env.ACME_EMAIL}
-			dir {env.ACME_CA}
-			dns cloudflare {env.CF_API_TOKEN}
-		}
-	}
+	import tls
 	reverse_proxy testweb:80
 }
 
 # Homepage
 homepage.sseifried.link {
-	tls {
-		issuer acme {
-			email {env.ACME_EMAIL}
-			dir {env.ACME_CA}
-			dns cloudflare {env.CF_API_TOKEN}
-		}
-	}
+	import tls
 	reverse_proxy homepage:3000
 }
 
 # AdGuard Home
 adguard.sseifried.link {
-	tls {
-		issuer acme {
-			email {env.ACME_EMAIL}
-			dir {env.ACME_CA}
-			dns cloudflare {env.CF_API_TOKEN}
-		}
-	}
+	import tls
 	reverse_proxy 192.168.178.249:8095
 }
