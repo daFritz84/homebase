@@ -10,6 +10,8 @@ services:
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
     env_file: .env
     ports:
       - "80:80"

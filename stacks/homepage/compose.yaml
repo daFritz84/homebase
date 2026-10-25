@@ -2,6 +2,10 @@ services:
   homepage:
     image: ghcr.io/gethomepage/homepage:v2.7.0
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    # Strict on purpose: a missing .env must fail the start — the widgets need
+    # the KOMODO/ADGUARD keys and would silently render degraded otherwise.
     env_file: .env
     volumes:
       - ./config:/app/config
@@ -9,6 +13,10 @@ services:
       caddy-proxy:
         aliases:
           - homepage
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
 networks:
   caddy-proxy:
