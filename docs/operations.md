@@ -116,8 +116,9 @@ Notes:
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
-- **Homepage down after a Komodo restart** — it has no `komodo.skip` label, so Komodo's
-  StopAllContainers stops it; start it from the Komodo UI.
+- **Homepage is stopped after a Komodo restart** — by design: Homepage is a Komodo-managed
+  stack, and Komodo's StopAllContainers stops it (Caddy, Komodo, Mongo and AdGuard carry the
+  `komodo.skip` label to survive exactly that). Start Homepage from the Komodo UI.
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
 
