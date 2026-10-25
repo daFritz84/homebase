@@ -27,6 +27,6 @@
             password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
 
     - Wanderer:
-        icon: mdi/map
+        icon: /icons/wanderer.png
         href: https://wanderer.sseifried.link
         description: Self-hosted trail database
