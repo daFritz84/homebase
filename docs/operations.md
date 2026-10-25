@@ -47,6 +47,23 @@ The script stops the stack, archives `data/` to
 Cadence: after every significant trail import, at least monthly. Restore: stop the
 stack, `rm -rf data && tar xzf <archive>`, start.
 
+### Home Assistant config backups
+
+Home Assistant's `stacks/homeassistant/config/` holds the irreplaceable
+UI-managed state — `.storage/` (integrations, dashboards, users, long-lived
+access tokens) and `secrets.yaml` are gitignored, Komodo's built-in backups do
+not cover them. Run from the stack checkout on the server:
+
+```bash
+cd stacks/homeassistant && ./backup-ha-config.sh
+```
+
+The script stops the stack, archives `config/` (owner-only, mode `0600`) to
+`~/.local/share/homeassistant/backups/ha-config-<date>.tar.gz`, and restarts
+it. Cadence: after significant automation/integration changes, at least
+monthly — take one right after onboarding. Restore: stop the stack,
+`rm -rf config && tar xzf <archive>`, start.
+
 ### Update the stack
 
 1. Update the repository
@@ -147,6 +164,13 @@ Notes:
   `komodo.skip` label to survive exactly that). Start Homepage from the Komodo UI.
 - **Wanderer is stopped after a Komodo restart** — same by design as Homepage (Komodo-managed
   stack, no `komodo.skip` label). Start it from the Komodo UI.
+- **Home Assistant is stopped after a Komodo restart** — same by design (Komodo-managed
+  stack, no `komodo.skip` label). Start it from the Komodo UI.
+- **HA login fails / 401 through the proxy after network recreation** — the
+  `caddy-proxy` subnet drifted and `trusted_proxies` in
+  `stacks/homeassistant/config/configuration.yaml` is stale. Check
+  `podman network inspect caddy-proxy`, update the CIDR, redeploy (see
+  [services.md](services.md), "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
 
@@ -155,8 +179,8 @@ Notes:
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
 [host-setup.md](host-setup.md)) starts the user units `podman-compose@caddy`,
-`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage and Wanderer are
-Komodo-managed stacks and are started from the Komodo UI (see
+`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage, Wanderer and
+Home Assistant are Komodo-managed stacks and are started from the Komodo UI (see
 [Troubleshooting](#troubleshooting)).
 
 ## TODO

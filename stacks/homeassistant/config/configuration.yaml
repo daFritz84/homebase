@@ -1,0 +1,16 @@
+# Home Assistant base config. UI-managed state lives in .storage/ (gitignored);
+# put credentials in secrets.yaml (gitignored) and reference via !secret.
+default_config:
+
+homeassistant:
+  external_url: https://homeassistant.sseifried.link
+  internal_url: http://192.168.178.249:8123
+
+http:
+  # Caddy runs in the caddy-proxy bridge and connects from that subnet —
+  # verify it with `podman network inspect caddy-proxy` (the network is
+  # created unpinned and changed once: 10.88.0.0/16 -> 10.89.0.0/24,
+  # see docs/operations.md troubleshooting).
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.89.0.0/24

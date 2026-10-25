@@ -9,6 +9,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Komodo](#komodo)
 - [AdGuard Home (DNS-Server)](#adguard-home-dns-server)
 - [Wanderer (Trail Database)](#wanderer-trail-database)
+- [Home Assistant (Home Automation)](#home-assistant-home-automation)
 
 For the stack update procedure and backups see [operations.md](operations.md).
 
@@ -345,3 +346,81 @@ this procedure.
 Route planning falls back to the public endpoint `https://valhalla1.openstreetmap.de`
 (`VALHALLA_URL` default). Self-hosting Valhalla (multi-GB OSM extract, extra RAM/disk)
 is a future option — see the commented block in the upstream `docker-compose.yml`.
+
+## Home Assistant (Home Automation)
+
+Home automation platform ([home-assistant](https://www.home-assistant.io/)).
+Compose file: `stacks/homeassistant/compose.yaml`. Komodo-managed stack (like
+Homepage/Wanderer) — deployed from the Komodo UI, not a systemd unit.
+
+Single service in **Container** install mode — the only mode viable under
+Komodo/Podman (no Supervisor, no add-ons; MQTT, ZHA etc. come as integrations).
+`network_mode: host` (like AdGuard Home) — required for local device discovery
+(mDNS/SSDP/UPnP, HomeKit, inbound integrations). No host ports are opened for
+LAN access: clients reach the UI only through Caddy at
+`https://homeassistant.sseifried.link` (Caddy proxies the hardcoded host IP
+`192.168.178.249:8123` — rootless containers cannot reach host services by
+name, see the AdGuard note above); `:8123` stays closed to the LAN (no
+firewalld rule — by design).
+
+### First run
+
+The steps below run in the stack checkout — on the server that is the Komodo periphery
+checkout under `PERIPHERY_ROOT_DIRECTORY`, not the `~/src/homebase` clone.
+
+1. Register the Komodo stack: **Stacks → Add Stack → git**, repo `homebase`,
+   root path `stacks/homeassistant`, branch `main`. Deploy.
+
+2. Open `https://homeassistant.sseifried.link` and complete the onboarding
+   wizard — create the owner account, set the location to Vienna
+   (lat 48.1680783, lon 16.3197505, `Europe/Vienna` — matches the dashboard).
+
+3. Verify:
+
+```bash
+podman ps
+curl -k https://homeassistant.sseifried.link/   # onboarding HTML
+podman logs --tail=20 homeassistant-homeassistant-1
+```
+
+Logging in **through Caddy** must work — that proves `trusted_proxies` in
+`config/configuration.yaml` matches the live caddy-proxy subnet (see below).
+
+### Reverse proxy (trusted_proxies)
+
+HA sits behind Caddy: `http: use_x_forwarded_for: true` plus
+`trusted_proxies: [10.89.0.0/24]` in `config/configuration.yaml`. Caddy
+connects from the `caddy-proxy` bridge subnet; that network is created
+**unpinned** (`caddy/ensure_proxy_network.sh`) and its subnet has changed
+before (10.88.0.0/16 → 10.89.0.0/24). After any network recreation, verify
+with `podman network inspect caddy-proxy` and update the entry — symptom of a
+stale entry is login failures via the proxy (see
+[operations.md](operations.md) troubleshooting).
+
+### Config drift (committed YAML, gitignored state)
+
+`config/` is committed to git (AdGuard drift pattern) — **YAML files only**:
+
+- committed: `configuration.yaml`, `automations.yaml`, `scripts.yaml`, `scenes.yaml`
+- gitignored: `.storage/` (UI-managed state: integrations, dashboards, users,
+  long-lived access tokens) and `secrets.yaml` (credentials, referenced via `!secret`)
+
+UI changes to the YAML files (YAML-mode automations, YAML dashboards) rewrite
+them on the server — sync the server files back to the workstation, review,
+commit, push (same ritual as `AdGuardHome.yaml`, see
+[operations.md](operations.md)). `.storage/` and `secrets.yaml` are data, not
+code: they are covered by `./backup-ha-config.sh` (see
+[operations.md](operations.md)).
+
+### USB radios (future toggle)
+
+ZHA / Zigbee2MQTT via a USB dongle needs privileged mode + device passthrough —
+intentionally **not** set in the initial setup (keeps `no-new-privileges`).
+To enable: attach the dongle to the VM (Proxmox USB passthrough), add
+`privileged: true` and `devices: [/dev/ttyUSB0]` to the service, redeploy.
+
+### Ownership
+
+HA runs as root inside the container; rootless Podman maps it to the host user,
+so a host-user-owned `config/` is writable — no `podman unshare chown` needed
+(unlike Wanderer's uid-1000 services).
