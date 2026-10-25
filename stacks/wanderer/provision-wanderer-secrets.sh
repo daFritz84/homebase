@@ -30,7 +30,9 @@ ENV_FILE=".env.secret"
 # Secrets -> owner-only from the start (tmp file included)
 umask 077
 
-gen() { openssl rand -base64 32 | tr -d '\n'; }
+# 24 random bytes -> exactly 32 base64 chars (no padding): wanderer requires
+# POCKETBASE_ENCRYPTION_KEY to be exactly 32 bytes long.
+gen() { openssl rand -base64 24 | tr -d '\n'; }
 
 # resolve <item> — fetch the Bitwarden password field; generate + print a save
 # hint if the item does not exist. Progress on stderr, value on stdout.
