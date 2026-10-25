@@ -105,7 +105,7 @@ Enable the service
 
 ```bash
 systemctl enable qemu-guest-agent
-systemctl start qemu-guest
+systemctl start qemu-guest-agent
 ```
 
 ## Basic packages
@@ -256,24 +256,25 @@ systemctl --user enable --now podman.socket
 systemctl --user status podman.socket
 ```
 
-Do the same with sudo to enable rootful podman socket
+Do the same **without** `--user` to enable the rootful podman socket
 
 ```bash
-sudo systemctl --user enable --now podman.socket
-sudo systemctl --user status podman.socket
+sudo systemctl enable --now podman.socket
+sudo systemctl status podman.socket
 ```
 
-Allow low unprivileged ports for e.g. `caddy`, `adguard-home`
+Allow low unprivileged ports for e.g. `caddy`, `adguard-home` (IPv4 **and** IPv6 —
+AdGuard binds `0.0.0.0:53` and `::`)
 
 ```bash
-echo "net.ipv4.ip_unprivileged_port_start = 53" | \
+printf 'net.ipv4.ip_unprivileged_port_start = 53\nnet.ipv6.ip_unprivileged_port_start = 53\n' | \
   sudo tee /etc/sysctl.d/90-unprivileged-ports.conf
 ```
 Reboot and verify:
 
 ```bash
-sysctl net.ipv4.ip_unprivileged_port_start
-# expected: 80
+sysctl net.ipv4.ip_unprivileged_port_start net.ipv6.ip_unprivileged_port_start
+# expected: 53
 ```
 
 For everyday commands see the [Podman cheatsheet](podman.md).
