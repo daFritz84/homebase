@@ -31,20 +31,35 @@ dns:
   ratelimit_whitelist: []
   refuse_any: true
   upstream_dns:
-    - 9.9.9.9
-    - 149.112.112.112
+    - '## Plain DNS'
+    - '## quad9'
+    - '# 9.9.9.9'
+    - '# 149.112.112.112'
+    - '# 2620:fe::fe'
+    - '# 2620:fe::9'
+    - '## Cloudlflare'
+    - '# 1.1.1.2'
+    - '# 1.0.0.2'
+    - '# 2606:4700:4700::1112'
+    - '# 2606:4700:4700::1002'
+    - '## DNSSEC'
+    - https://dns.quad9.net/dns-query
+    - tls://dns.quad9.net
+    - https://security.cloudflare-dns.com/dns-query
+    - security.cloudflare-dns.com
+    - '## Internal Reverse DNS Lookup'
     - '[/fritz.box/]192.168.178.1'
     - '[/178.168.192.in-addr.arpa/]192.168.178.1'
   upstream_dns_file: ""
   bootstrap_dns:
-    - 9.9.9.10
-    - 149.112.112.10
-    - 2620:fe::10
-    - 2620:fe::fe:10
+    - 9.9.9.11
+    - 149.112.112.11
+    - 2620:fe::11
+    - 2620:fe::fe:11
   fallback_dns:
     - 208.67.222.222
     - 208.67.220.220
-  upstream_mode: load_balance
+  upstream_mode: parallel
   fastest_timeout: 1s
   allowed_clients: []
   disallowed_clients: []
@@ -59,7 +74,7 @@ dns:
   cache_size: 4194304
   cache_ttl_min: 0
   cache_ttl_max: 0
-  cache_optimistic: false
+  cache_optimistic: true
   cache_optimistic_answer_ttl: 30s
   cache_optimistic_max_age: 12h
   bogus_nxdomain: []
