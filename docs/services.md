@@ -222,6 +222,12 @@ AdGuard (`192.168.178.249`) as their DNS server.
 > (AdGuard `reverse_proxy`) and `stacks/homepage/config/services.yaml` (AdGuard widget).
 > Rootless containers cannot reach host services by name, so the IP is hardcoded — if the
 > static IP ever changes, update both files.
+>
+> **Do not use `host.containers.internal` here:** the name lives only in the container's
+> `/etc/hosts` (so `getent` resolves it), Caddy's `reverse_proxy` resolves upstreams via
+> DNS and gets NXDOMAIN, and the pasta gateway (`169.254.1.2`) refuses forwarded
+> connections to host services (tested: `Connection refused`). The LAN IP is the only
+> working target — verified 2026-10-25.
 
 #### Configure Upstreams in AdGuard Home
 
