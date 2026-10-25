@@ -5,6 +5,8 @@ set -euo pipefail
 # bw login
 # export BW_SESSION=$(bw unlock --raw)
 
+command -v bw >/dev/null || { echo "[ERR] bw (Bitwarden CLI) not found — see docs/host-setup.md"; exit 1; }
+
 # --- CONFIG: Bitwarden item names ---
 BW_ITEM_TOKEN="caddy-cloudflare-token" # password field holds the Cloudflare API token
 
