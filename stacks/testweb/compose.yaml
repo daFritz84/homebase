@@ -1,5 +1,6 @@
 services:
   testweb:
+    # Intentionally no restart policy: test stack, not part of the boot path.
     image: nginx:1.31.7-alpine
     security_opt:
       - no-new-privileges=true
