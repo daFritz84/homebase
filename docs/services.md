@@ -330,13 +330,15 @@ podman logs --tail=20 wanderer-search-1   # Meilisearch must come up healthy
 ### Meilisearch upgrades
 
 The `data.ms` format is **not forward-compatible** — a newer engine refuses to
-open an older index directory and crash-loops. On a version bump: stop the stack,
-`rm -rf data/data.ms`, recreate + chown it (`mkdir -p data/data.ms && podman unshare
-chown 1000:1000 data/data.ms`), start. The index is rebuilt from PocketBase. If
-PocketBase's `init_meilisearch` migration is already recorded as applied, wipe all
-of `data/` (fresh start, re-create the account) — the index creation runs with it.
-Dependabot bumps for Meilisearch are allowed; merge them only together with this
-procedure.
+open an older index directory and crash-loops. On a version bump: set
+`MEILI_UPGRADE_DB: "true"` on the search service, deploy once (the engine
+upgrades `data.ms` in place), then remove the flag and deploy again.
+Fallback if the in-place upgrade fails: wipe `data/data.ms` (recreate +
+`podman unshare chown 1000:1000 data/data.ms`) — the index rebuilds from
+PocketBase; if PocketBase's `init_meilisearch` migration is already recorded
+as applied, wipe all of `data/` (fresh start, re-create the account).
+Dependabot bumps for Meilisearch are allowed; merge them only together with
+this procedure.
 
 ### Valhalla (optional, not deployed)
 
