@@ -21,16 +21,20 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 # create the shared proxy network (required by caddy, komodo and all stacks)
 ./caddy/ensure_proxy_network.sh
 
-# provision secret files (requires an unlocked Bitwarden CLI)
+# unlock Bitwarden CLI (both provisioning scripts read from it)
+bw login
+export BW_SESSION="$(bw unlock --raw)"
+
+# provision secret files
 cd caddy && ACME_EMAIL="you@example.com" ./provision-caddy-secrets.sh
 cd ../komodo && ./provision-komodo-secrets.sh
 
 # pull and start a stack (caddy is a local build: official builder + Cloudflare DNS plugin)
-cd ../caddy && podman compose build && podman compose up -d
-cd ../komodo && podman compose up -d
+cd ../caddy && podman-compose build && podman-compose up -d
+cd ../komodo && podman-compose up -d
 
 # stop a stack
-podman compose down
+podman-compose down
 ```
 
 See [`docs/host-setup.md`](docs/host-setup.md) for the full installation and configuration guide,
