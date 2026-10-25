@@ -8,15 +8,21 @@
 	acme_ca {env.ACME_CA}
 }
 
-# Direct-IP access and container health checks (stays HTTP)
-:80, http://homebase.fritz.box {
-	reverse_proxy komodo:9120
+# HTTP: redirect everything to the HTTPS Komodo UI (wildcard cert covers *.sseifried.link).
+# /health stays proxied in plaintext for container health checks and LAN monitoring.
+# Temporary (302) redirect: switch to `permanent` once HSTS is proven in production.
+# Clients must resolve *.sseifried.link via AdGuard Home split DNS (see docs/services.md).
+:80 {
+	@health path /health /health/*
+	reverse_proxy @health komodo:9120
+	redir @!health https://komodo.sseifried.link{uri}
 }
 
 # --- TLS services (resolved to this host by AdGuard Home split DNS) ---
 
 # Komodo
 komodo.sseifried.link {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	tls {
 		issuer acme {
 			email {env.ACME_EMAIL}
