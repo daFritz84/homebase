@@ -32,6 +32,21 @@ variables) — no irreplaceable data. After a total loss:
    key and update `stacks/homepage/.env`.
 2. Mongo credentials come from Bitwarden (`komodo-db`) via `komodo/.env.secret`.
 
+### Wanderer data backups
+
+Wanderer's `stacks/wanderer/data/` (PocketBase db, GPX uploads, Meili index) is
+irreplaceable user data — Komodo's built-in backups do not cover it. Run from the
+stack checkout on the server:
+
+```bash
+cd stacks/wanderer && ./backup-wanderer-data.sh
+```
+
+The script stops the stack, archives `data/` to
+`~/.local/share/wanderer/backups/wanderer-data-<date>.tar.gz`, and restarts it.
+Cadence: after every significant trail import, at least monthly. Restore: stop the
+stack, `rm -rf data && tar xzf <archive>`, start.
+
 ### Update the stack
 
 1. Update the repository
@@ -130,6 +145,8 @@ Notes:
 - **Homepage is stopped after a Komodo restart** — by design: Homepage is a Komodo-managed
   stack, and Komodo's StopAllContainers stops it (Caddy, Komodo, Mongo and AdGuard carry the
   `komodo.skip` label to survive exactly that). Start Homepage from the Komodo UI.
+- **Wanderer is stopped after a Komodo restart** — same by design as Homepage (Komodo-managed
+  stack, no `komodo.skip` label). Start it from the Komodo UI.
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
 
@@ -138,8 +155,9 @@ Notes:
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
 [host-setup.md](host-setup.md)) starts the user units `podman-compose@caddy`,
-`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage is a Komodo-managed
-stack and is started from the Komodo UI (see [Troubleshooting](#troubleshooting)).
+`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage and Wanderer are
+Komodo-managed stacks and are started from the Komodo UI (see
+[Troubleshooting](#troubleshooting)).
 
 ## TODO
 

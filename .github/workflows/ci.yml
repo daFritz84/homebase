@@ -32,8 +32,8 @@ jobs:
           PERIPHERY_ROOT_DIRECTORY: /srv/komodo
           COMPOSE_KOMODO_BACKUPS_PATH: /srv/komodo/backups
         run: |
-          touch caddy/.env komodo/.env.secret stacks/homepage/.env
-          for f in caddy komodo adguard-home stacks/homepage stacks/testweb; do
+          touch caddy/.env komodo/.env.secret stacks/homepage/.env stacks/wanderer/.env.secret
+          for f in caddy komodo adguard-home stacks/homepage stacks/testweb stacks/wanderer; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

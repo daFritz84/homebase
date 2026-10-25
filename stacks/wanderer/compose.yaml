@@ -1,0 +1,103 @@
+# wanderer — self-hosted trail database (https://github.com/open-wanderer/wanderer)
+# ---
+# Secrets come from .env.secret (gitignored, 0600, provisioned by
+# provision-wanderer-secrets.sh) via env_file — no ${VAR:?} interpolation, so
+# `docker compose config` passes with a touched .env.secret (CI).
+# Topology: only web joins caddy-proxy (alias `wanderer`); db and search stay
+# on the internal network. No host ports — access is via Caddy only.
+
+services:
+  search:
+    image: getmeili/meilisearch:v1.36.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - ./data/data.ms:/meili_data/data.ms
+    networks:
+      - wanderer-internal
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:7700/health"]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  db:
+    image: flomp/wanderer-db:v0.21.2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    volumes:
+      - ./data/pb_data:/pb_data
+      - ./data/plugins:/data/plugins
+    networks:
+      - wanderer-internal
+    depends_on:
+      search:
+        condition: service_healthy
+    healthcheck:
+      # /curl is a static binary shipped in the wanderer-db image.
+      test: ["CMD", "/curl", "--fail", "http://localhost:8090/health"]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  web:
+    image: flomp/wanderer-web:v0.21.2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      # Must match the public URL Caddy serves, or the app hits CORS errors.
+      ORIGIN: https://wanderer.sseifried.link
+      PUBLIC_POCKETBASE_URL: http://db:8090
+      UPLOAD_FOLDER: /app/uploads
+      BODY_SIZE_LIMIT: "2G"
+      PUBLIC_PRIVATE_INSTANCE: "true"
+      # Flip to "false" for first boot, create the account, flip back (see docs/services.md).
+      PUBLIC_DISABLE_SIGNUP: "true"
+    volumes:
+      - ./data/uploads:/app/uploads
+    networks:
+      wanderer-internal: {}
+      caddy-proxy:
+        aliases:
+          - wanderer
+    depends_on:
+      search:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/"]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+networks:
+  caddy-proxy:
+    external: true
+
+  wanderer-internal:
+    name: wanderer-internal
+    driver: bridge

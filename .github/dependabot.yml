@@ -5,6 +5,7 @@ updates:
     directories:
       - "/stacks/homepage"
       - "/stacks/testweb"
+      - "/stacks/wanderer"
       - "/caddy"
       - "/komodo"
       - "/adguard-home"

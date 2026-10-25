@@ -25,3 +25,8 @@
             url: http://192.168.178.249:8095
             username: {{HOMEPAGE_VAR_ADGUARD_USER}}
             password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
+
+    - Wanderer:
+        icon: mdi/map
+        href: https://wanderer.sseifried.link
+        description: Self-hosted trail database

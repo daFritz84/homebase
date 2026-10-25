@@ -13,6 +13,7 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | Caddy      | `caddy/compose.yaml`              | Reverse proxy + TLS (LE DNS-01/Cloudflare) |
 | Adguard Home | `adguard-home/compose.yaml`        | DNS server with blocking & filtering       |
 | Homepage   | `stacks/homepage/compose.yaml`      | Service dashboard                          |
+| Wanderer   | `stacks/wanderer/compose.yaml`      | Self-hosted trail database (Komodo stack)  |
 | Test web   | `stacks/testweb/compose.yaml`       | Example stack for testing                  |
 
 ## Quick start
