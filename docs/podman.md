@@ -1,15 +1,15 @@
 # Podman Cheatsheet
 
-**Start a podman compose file**
+**Start a podman-compose file**
 
 ```bash
-podman compose up -d
+podman-compose up -d
 ```
 
-**Stop a podman compose file**
+**Stop a podman-compose file**
 
 ```bash
-podman compose down
+podman-compose down
 ```
 
 **Cleanup podman**
