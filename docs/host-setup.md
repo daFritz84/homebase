@@ -60,6 +60,22 @@ vmgenid: <VMGENID>
 
 5. **Blacklist the driver** by executing `echo "blacklist i915" >> /etc/modprobe.d/blacklist.conf` and update the initramfs `update-initramfs -u -k all` and reboot
 
+**Guest firmware**
+Inside the VM the passed-through GPU is driven by `i915`, which loads the non-free DMC/GUC firmware from the guest filesystem. Debian does not ship this on the installer images — install the package in the guest:
+
+```bash
+sudo apt install firmware-intel-graphics
+```
+
+Without it the load fails, e.g. `dmesg | grep i915` shows `Direct firmware load for i915/skl_dmc_ver1_27.bin failed with error -2`.
+
+Reboot and verify:
+
+```bash
+dmesg | grep -i dmc
+# expected: i915 0000:01:00.0: [drm] Finished loading DMC firmware i915/skl_dmc_ver1_27.bin (v1.27)
+```
+
 **noVNC**
 Once the real graphics card has been forwarded, noVNC will not work due to the fact that the real graphics card is used. SSH and other remote desktop solutions will work without trouble.
 
@@ -99,7 +115,8 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y \
   curl wget git tmux nvtop btop \
   ca-certificates gnupg lsb-release \
-  jq unzip fastfetch
+  jq unzip fastfetch \
+  firmware-intel-graphics
 ```
 
 ### Base CLI & Developer Utilities
@@ -137,6 +154,11 @@ sudo apt install -y \
     Lightweight and powerful command-line processor for filtering, transforming, and querying JSON data.
 - **unzip**  
     Utility for extracting ZIP archives, commonly for downloaded tools and build artifacts.
+
+### Firmware
+
+- **firmware-intel-graphics**  
+    Non-free firmware for Intel graphics (DMC/GUC/HuC binaries for the `i915` driver), required by the passed-through iGPU — see [iGPU passthrough](#igpu-passthrough).
 
 ### fastfetch MOTD
 
