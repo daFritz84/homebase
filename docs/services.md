@@ -177,7 +177,22 @@ If you want automatic updates on push:
 
 ### Development workflow
 
-Komodo only manages the runtime. But development can directly happen in VSCode in a local repo / branch. Using podman "compose commands".
+Komodo manages only the runtime (deploying stacks); development happens on the
+workstation in a local clone, on a branch, tested with podman-compose directly:
+
+1. **Branch & edit** on the workstation: `git checkout -b <topic>`.
+2. **Validate before pushing** — the same checks CI runs:
+   - Test a stack locally: `podman-compose up -d` / `podman-compose down` in the
+     stack directory (requires the `caddy-proxy` network and the stack's `.env` files)
+   - Caddyfile: `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
+3. **Commit & push** — the server deploy key is read-only; commits always
+   originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
+4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
+   systemd unit (`systemctl --user restart podman-compose@<project>`) for core
+   services, or restart the stack from the Komodo UI for Komodo-managed stacks.
+5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
+   sync the server file back to the workstation, review, commit, push
+   (see [operations.md](operations.md)).
 
 ## AdGuard Home (DNS-Server)
 
