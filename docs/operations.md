@@ -17,14 +17,20 @@ systemctl --user status podman-compose@adguard-home
 podman ps
 ```
 
-### Mongodb backups
+### Database backups
 
-Komodo stores the Backups according to the `COMPOSE_KOMODO_BACKUPS_PATH=/home/chef/.local/share/komodo/backups` variable in the `.env` file
+Komodo's **built-in scheduled backups** are enabled (Settings → Backups). Dated dumps land
+in `COMPOSE_KOMODO_BACKUPS_PATH` from `komodo/.env` (e.g. `~/.local/share/komodo/backups`),
+which core mounts at `/backups`. Verify a fresh dump exists before updating the stack.
 
-```
-<BACKUP_PATH>
-```
-Replace `<BACKUP_PATH>` with the value of `COMPOSE_KOMODO_BACKUPS_PATH` from your `.env` file (e.g. `~/.local/share/komodo/backups`).
+The database holds only Komodo state (users, API keys, servers, stack definitions,
+variables) — no irreplaceable data. After a total loss:
+
+1. Restore a dump via the Komodo UI, **or** rebuild: redeploy the komodo stack, recreate
+   the admin from Bitwarden (`komodo-admin`), re-add the server with the passkey from
+   `komodo/.env.secret`, re-add stacks from this repository, recreate the Homepage API
+   key and update `stacks/homepage/.env`.
+2. Mongo credentials come from Bitwarden (`komodo-db`) via `komodo/.env.secret`.
 
 ### Update the stack
 
