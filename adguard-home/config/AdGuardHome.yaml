@@ -61,7 +61,9 @@ dns:
     - 208.67.220.220
   upstream_mode: parallel
   fastest_timeout: 1s
-  allowed_clients: []
+  allowed_clients:
+    - 192.168.178.0/24
+    - fdf9:6940:13f::/64
   disallowed_clients: []
   blocked_hosts:
     - version.bind
