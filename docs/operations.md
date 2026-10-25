@@ -47,6 +47,8 @@ git pull --rebase --autostash
 cd caddy
 podman-compose pull
 podman-compose build   # Caddy is a local build (Cloudflare DNS plugin) — rebuild after image bumps
+podman run --rm --env-file .env homebase-caddy:2.11.7 \
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile   # must print "Valid configuration"
 
 cd komodo
 podman-compose pull
@@ -100,6 +102,24 @@ Notes:
 - Renewals require the Cloudflare API token in `caddy/.env` (provision via
   `caddy/provision-caddy-secrets.sh`); if the token is rotated in Cloudflare, re-run the script
   and restart `podman-compose@caddy`.
+
+## Troubleshooting
+
+- **Caddy exits immediately after restart** — config error. Validate before deploying:
+  `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
+  Note: `redir` does not support negated named matchers (`@!name`/`!@name`); use an explicit
+  `not` matcher.
+- **502s / `connection refused` from containers to host services after network changes**
+  (`podman system migrate`, network recreation) — netavark rules/subnets go stale
+  (the `caddy-proxy` subnet changed from 10.88.0.0/16 to 10.89.0.0/24 once). Try
+  `podman network reload --all`; a host reboot is the clean fallback.
+- **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
+  ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
+  one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
+- **Homepage down after a Komodo restart** — it has no `komodo.skip` label, so Komodo's
+  StopAllContainers stops it; start it from the Komodo UI.
+- **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
+  redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
 
 ## TODO
 
