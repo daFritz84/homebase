@@ -22,6 +22,11 @@ FILE_JWT="$SECRETS_DIR/komodo_jwt_secret"
 # Secrets -> owner-only from the start (tmp files included)
 umask 077
 
+# Rootless podman maps the mongo image's mongod user (uid/gid 999) to host
+# 100000+999; the entrypoint reads the db secret files in its non-root pass,
+# so they must be group-readable by that gid (0440, group 100999).
+MONGO_GID=100999
+
 mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
 
@@ -52,7 +57,8 @@ write_secret() {
     local file="$1" val="$2"
     printf %s "$val" > "${file}.tmp"
     mv -f "${file}.tmp" "$file"
-    chmod 0400 "$file"
+    chmod 0440 "$file"
+    sudo chgrp "${MONGO_GID}" "$file"
     echo "[+] Wrote $file"
 }
 
