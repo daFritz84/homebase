@@ -63,6 +63,11 @@ cd adguard-home
 podman-compose pull
 ```
 
+> **Plugin pin not tracked by Dependabot:** the Cloudflare DNS plugin is pinned in
+> `caddy/Dockerfile` (`caddy-dns/cloudflare@vX.Y.Z`). Dependabot bumps the Dockerfile base
+> image and the compose image tag, but not this Go module pin — bump it manually when
+> updating Caddy.
+
 3. Restart
 
 ```bash
