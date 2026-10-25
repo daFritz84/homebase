@@ -12,6 +12,10 @@ services:
       - '--web-addr'
       - 0.0.0.0:8095
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     volumes:
       - ./work:/opt/adguardhome/work
       - ./config:/opt/adguardhome/conf

@@ -1,6 +1,8 @@
 services:
   testweb:
     image: nginx:1.31.7-alpine
+    security_opt:
+      - no-new-privileges=true
     networks:
       caddy-proxy:
         aliases:
