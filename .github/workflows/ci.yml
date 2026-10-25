@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose files
+        env:
+          COMPOSE_PROJECT_DIR: ${{ github.workspace }}/komodo
+          XDG_RUNTIME_DIR: /tmp
+          PERIPHERY_ROOT_DIRECTORY: /srv/komodo
+          COMPOSE_KOMODO_BACKUPS_PATH: /srv/komodo/backups
+        run: |
+          touch caddy/.env komodo/.env.secret stacks/homepage/.env
+          for f in caddy komodo adguard-home stacks/homepage stacks/testweb; do
+            echo "::group::$f"
+            docker compose -f "$f/compose.yaml" config -q
+            echo "::endgroup::"
+          done
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-shellcheck@v1
+        with:
+          path: "."
+          pattern: "*.sh"
+
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.1
+        with:
+          dockerfile: caddy/Dockerfile
+
+  caddy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build caddy image (Cloudflare DNS plugin)
+        run: docker build -t homebase-caddy caddy
+      - name: Validate Caddyfile
+        run: |
+          token="$(openssl rand -base64 48 | tr -d '=+/' | tr -d '\n' | cut -c1-50)"
+          docker run --rm \
+            -e ACME_EMAIL=ci@example.com \
+            -e ACME_CA=https://acme-v02.api.letsencrypt.org/directory \
+            -e CF_API_TOKEN="$token" \
+            -v "$PWD/caddy:/etc/caddy:ro" \
+            homebase-caddy \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
