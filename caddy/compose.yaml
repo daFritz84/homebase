@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CB_VERSION: 2.11.7
     image: homebase-caddy:2.11.7
     labels:
       komodo.skip: # Prevent Komodo from stopping with StopAllContainers
