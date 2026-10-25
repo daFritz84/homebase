@@ -12,8 +12,8 @@
           url: http://komodo:9120
           key: {{HOMEPAGE_VAR_KOMODO_KEY}}
           secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
-          showSummary: true 
-          showStacks: true 
+          showSummary: true
+          showStacks: true
 
   - AdGuard Home:
       icon: adguard-home
