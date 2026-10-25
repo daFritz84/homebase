@@ -21,7 +21,7 @@ services:
       - ${COMPOSE_PROJECT_DIR}/.env
       - ${COMPOSE_PROJECT_DIR}/.env.secret
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"]
       interval: 10s
       timeout: 5s
       retries: 5
