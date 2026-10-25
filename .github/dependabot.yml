@@ -1,27 +1,18 @@
 version: 2
 updates:
-  # --- Docker Compose (compose.yaml) ---
+  # --- Docker Compose (compose.yaml) — all stacks in one weekly PR group ---
   - package-ecosystem: "docker-compose"
-    directory: "/stacks/homepage"
+    directories:
+      - "/stacks/homepage"
+      - "/stacks/testweb"
+      - "/caddy"
+      - "/komodo"
+      - "/adguard-home"
     schedule:
-      interval: "daily"
+      interval: "weekly"
 
-  - package-ecosystem: "docker-compose"
-    directory: "/stacks/testweb"
-    schedule:
-      interval: "daily"
-
-  - package-ecosystem: "docker-compose"
+  # --- Dockerfile base images (caddy builder + runtime; the compose image is a local build) ---
+  - package-ecosystem: "docker"
     directory: "/caddy"
     schedule:
-      interval: "daily"
-
-  - package-ecosystem: "docker-compose"
-    directory: "/komodo"
-    schedule:
-      interval: "daily"
-
-  - package-ecosystem: "docker-compose"
-    directory: "/adguard-home"
-    schedule:
-      interval: "daily"
+      interval: "weekly"
