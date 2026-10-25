@@ -327,6 +327,17 @@ curl -k https://wanderer.sseifried.link
 podman logs --tail=20 wanderer-search-1   # Meilisearch must come up healthy
 ```
 
+### Meilisearch upgrades
+
+The `data.ms` format is **not forward-compatible** — a newer engine refuses to
+open an older index directory and crash-loops. On a version bump: stop the stack,
+`rm -rf data/data.ms`, recreate + chown it (`mkdir -p data/data.ms && podman unshare
+chown 1000:1000 data/data.ms`), start. The index is rebuilt from PocketBase. If
+PocketBase's `init_meilisearch` migration is already recorded as applied, wipe all
+of `data/` (fresh start, re-create the account) — the index creation runs with it.
+Dependabot bumps for Meilisearch are allowed; merge them only together with this
+procedure.
+
 ### Valhalla (optional, not deployed)
 
 Route planning falls back to the public endpoint `https://valhalla1.openstreetmap.de`
