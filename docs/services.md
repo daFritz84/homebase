@@ -151,12 +151,6 @@ restart core **and** periphery together afterwards.
 
 Then deploy with the shared pattern above.
 
-Create a komodo directory in `/etc` (**unused?**)
-
-```
-mkdir -p /etc/komodo
-```
-
 ### Github provider
 
 1. Log in to your **Komodo** instance.

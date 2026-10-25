@@ -122,11 +122,17 @@ Notes:
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
 
+## Power Outage Recovery
+
+Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
+(`qm set <VMID> --onboot 1`). Once the host is back, linger (see
+[host-setup.md](host-setup.md)) starts the user units `podman-compose@caddy`,
+`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage is a Komodo-managed
+stack and is started from the Komodo UI (see [Troubleshooting](#troubleshooting)).
+
 ## TODO
 
-
 - Authentik Single Sign On
-- Autostart after power outage
 
 ## Appstore as Inspiration
 
