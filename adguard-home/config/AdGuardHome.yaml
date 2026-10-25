@@ -37,7 +37,7 @@ dns:
     - '# 149.112.112.112'
     - '# 2620:fe::fe'
     - '# 2620:fe::9'
-    - '## Cloudlflare'
+    - '## Cloudflare'
     - '# 1.1.1.2'
     - '# 1.0.0.2'
     - '# 2606:4700:4700::1112'
@@ -148,7 +148,6 @@ whitelist_filters: []
 user_rules:
   - '@@||kinesis.eu-west-1.amazonaws.com^$client=''192.168.178.22'''
   - '@@||kinesis.eu-west-1.amazonaws.com^$client=''192.168.178.23'''
-  - ""
 dhcp:
   enabled: false
   interface_name: ""
