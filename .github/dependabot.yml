@@ -16,3 +16,9 @@ updates:
     directory: "/caddy"
     schedule:
       interval: "weekly"
+
+  # --- GitHub Actions refs in .github/workflows ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
