@@ -6,6 +6,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   secrets:
     runs-on: ubuntu-latest
@@ -43,6 +47,14 @@ jobs:
         with:
           path: "."
           pattern: "*.sh"
+
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: reviewdog/action-yamllint@v1
+        with:
+          path: "stacks/homepage/config"
 
   hadolint:
     runs-on: ubuntu-latest
