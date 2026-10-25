@@ -19,6 +19,9 @@ FILE_PASSKEY="$SECRETS_DIR/komodo_passkey"
 FILE_WEBHOOK="$SECRETS_DIR/komodo_webhook_secret"
 FILE_JWT="$SECRETS_DIR/komodo_jwt_secret"
 
+# Secrets -> owner-only from the start (tmp files included)
+umask 077
+
 mkdir -p "${SECRETS_DIR}"
 chmod 700 "${SECRETS_DIR}"
 
@@ -49,7 +52,7 @@ write_secret() {
     local file="$1" val="$2"
     printf %s "$val" > "${file}.tmp"
     mv -f "${file}.tmp" "$file"
-    chmod 0444 "$file"
+    chmod 0400 "$file"
     echo "[+] Wrote $file"
 }
 
