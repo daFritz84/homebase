@@ -8,7 +8,7 @@
 
 services:
   search:
-    image: getmeili/meilisearch:v1.36.0
+    image: getmeili/meilisearch:v1.55.0
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
