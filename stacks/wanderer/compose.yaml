@@ -18,9 +18,6 @@ services:
     env_file: .env.secret
     environment:
       MEILI_NO_ANALYTICS: "true"
-      # One-time: migrate data.ms 1.36.0 -> 1.55.0 in place on startup.
-      # Remove after the first healthy start (see docs/services.md).
-      MEILI_UPGRADE_DB: "true"
     volumes:
       - ./data/data.ms:/meili_data/data.ms
     networks:
