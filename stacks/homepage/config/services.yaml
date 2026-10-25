@@ -2,26 +2,26 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
 - Homebase:
-  - Komodo:
-      icon: komodo
-      href: https://komodo.sseifried.link
-      description: Homelab Container Management
+    - Komodo:
+        icon: komodo
+        href: https://komodo.sseifried.link
+        description: Homelab Container Management
 
-      widgets:
-        - type: komodo
-          url: http://komodo:9120
-          key: {{HOMEPAGE_VAR_KOMODO_KEY}}
-          secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
-          showSummary: true
-          showStacks: true
+        widgets:
+          - type: komodo
+            url: http://komodo:9120
+            key: {{HOMEPAGE_VAR_KOMODO_KEY}}
+            secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
+            showSummary: true
+            showStacks: true
 
-  - AdGuard Home:
-      icon: adguard-home
-      href: https://adguard.sseifried.link
-      description: Network-wide DNS & ad blocking
+    - AdGuard Home:
+        icon: adguard-home
+        href: https://adguard.sseifried.link
+        description: Network-wide DNS & ad blocking
 
-      widgets:
-        - type: adguard
-          url: http://192.168.178.249:8095
-          username: {{HOMEPAGE_VAR_ADGUARD_USER}}
-          password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
+        widgets:
+          - type: adguard
+            url: http://192.168.178.249:8095
+            username: {{HOMEPAGE_VAR_ADGUARD_USER}}
+            password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
