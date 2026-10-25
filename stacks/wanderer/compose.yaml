@@ -74,7 +74,8 @@ services:
       UPLOAD_FOLDER: /app/uploads
       BODY_SIZE_LIMIT: "2G"
       PUBLIC_PRIVATE_INSTANCE: "true"
-      # Flip to "false" for first boot, create the account, flip back (see docs/services.md).
+      # Signup enabled by design (private instance: accounts only see their own
+      # trails). Set to "true" to close registration (see docs/services.md).
       PUBLIC_DISABLE_SIGNUP: "false"
     volumes:
       - ./data/uploads:/app/uploads
