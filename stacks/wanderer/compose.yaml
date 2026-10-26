@@ -51,16 +51,11 @@ services:
     depends_on:
       search:
         condition: service_healthy
-    healthcheck:
-      # /curl is a static binary shipped in the wanderer-db image. Use CMD-SHELL:
-      # podman-compose mangles the exec-form list's quoting for the absolute
-      # /curl path (-> "/bin/sh -c /curl' '--fail' ..."), so the check never
-      # parses and the db stays unhealthy.
-      test: ["CMD-SHELL", "/curl --fail http://localhost:8090/health"]
-      interval: 15s
-      retries: 10
-      start_period: 20s
-      timeout: 10s
+    # No healthcheck: the wanderer-db image ships no /bin/sh, and podman-compose
+    # always runs healthchecks as "/bin/sh -c ...", so a shell healthcheck can
+    # never run here (the exec-form list is mangled to the same shell form). The
+    # db serves /health fine (verified via /curl exec); web gates on
+    # service_started instead of service_healthy.
     deploy:
       resources:
         limits:
@@ -94,7 +89,7 @@ services:
       search:
         condition: service_healthy
       db:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3000/"]
       interval: 15s
