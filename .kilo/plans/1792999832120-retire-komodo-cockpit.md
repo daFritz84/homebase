@@ -169,9 +169,12 @@ ls -lh ~/.local/share/wanderer/backups   # verify fresh archive
 systemctl --user disable --now podman-compose@komodo
 cd ~/src/homebase/komodo && podman-compose down && cd ../..
 
-# 3. Stop the stack containers Komodo had started (podman-compose names use underscores;
-#    names per podman ps; testweb has no restart policy and is usually already down)
-podman stop wanderer_web_1 wanderer_search_1 wanderer_db_1 homepage_homepage_1 testweb_testweb_1
+# 3. REMOVE (not just stop) the stack containers Komodo had created — podman-compose adopts
+#    containers labeled com.docker.compose.project=<project>, and the old Komodo ones carry
+#    bind mounts to the periphery checkout; leaving them makes `podman-compose up` start
+#    containers with deleted mount sources. Names per podman ps -a (Komodo = dashes,
+#    podman-compose = underscores). testweb has no restart policy and is usually already down.
+podman rm -f wanderer-web-1 wanderer-search-1 wanderer-db-1 homepage-homepage-1 testweb-testweb-1
 ```
 Verify: `podman ps` shows only caddy + adguard-home; `podman ps -a` shows no komodo/mongo/periphery
 containers. From here on, the `komodo.skip` labels are moot — Komodo can no longer stop anything.
