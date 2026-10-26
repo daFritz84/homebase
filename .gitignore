@@ -18,3 +18,7 @@ stacks/homeassistant/config/.ha_run.lock
 stacks/homeassistant/config/blueprints/
 stacks/homeassistant/config/home-assistant.log*
 stacks/homeassistant/config/home-assistant_v2.db*
+
+# Wanderer runtime data (PocketBase pb_data, uploads, Meilisearch data.ms,
+# plugins) — data, not code; covered by backup-wanderer-data.sh
+stacks/wanderer/data/
