@@ -22,7 +22,9 @@
 # HTTP: redirect everything to the HTTPS Homepage UI (wildcard cert covers *.sseifried.link).
 # /health stays proxied in plaintext for container health checks and LAN monitoring
 # (Homepage's public /api/healthcheck endpoint — v2.x renamed it from /api/health, which
-# now 404s). The matcher is evaluated once at handle-block entry:
+# now 404s). Homepage validates the Host header (HOMEPAGE_ALLOWED_HOSTS), so the health
+# block forwards the allowed hostname — the plain-IP request would otherwise get a 400.
+# The matcher is evaluated once at handle-block entry:
 # a bare `rewrite @health ...` + `reverse_proxy @health` pair breaks because the rewrite
 # mutates the path before reverse_proxy re-evaluates the matcher (then it never matches).
 # Temporary (302) redirect: switch to `permanent` once HSTS is proven in production.
@@ -32,7 +34,9 @@
 	@nothealth not path /health /health/*
 	handle @health {
 		rewrite * /api/healthcheck
-		reverse_proxy homepage:3000
+		reverse_proxy homepage:3000 {
+			header_up Host homepage.sseifried.link
+		}
 	}
 	redir @nothealth https://homepage.sseifried.link{uri}
 }
