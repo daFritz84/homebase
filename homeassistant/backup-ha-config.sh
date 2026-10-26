@@ -7,10 +7,10 @@ set -euo pipefail
 ## irreplaceable, run this after significant changes (see docs/operations.md,
 ## "Home Assistant config backups").
 ##
-## The stack is stopped while archiving for a consistent snapshot and is
+## The service is stopped while archiving for a consistent snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
-## Run from the stack checkout (the directory containing compose.yaml and
+## Run from the service checkout (the directory containing compose.yaml and
 ## config/) — on the server that is the ~/src/homebase checkout of this repo.
 
 cd "$(dirname "$(readlink -f "$0")")"
@@ -18,26 +18,26 @@ cd "$(dirname "$(readlink -f "$0")")"
 BACKUP_DIR="${HOME}/.local/share/homeassistant/backups"
 ARCHIVE="${BACKUP_DIR}/ha-config-$(date +%F-%H%M).tar.gz"
 
-[ -d config ] || { echo "[ERR] No config/ directory next to compose.yaml — run from the stack checkout"; exit 1; }
+[ -d config ] || { echo "[ERR] No config/ directory next to compose.yaml — run from the service checkout"; exit 1; }
 
 # Archive contains secrets (.storage/ tokens, secrets.yaml) — owner-only.
 umask 077
 mkdir -p "${BACKUP_DIR}"
 
-restore_stack() {
-  echo "[*] Starting the stack"
+restore_service() {
+  echo "[*] Starting the service"
   podman-compose up -d
 }
-trap restore_stack EXIT
+trap restore_service EXIT
 
-echo "[*] Stopping the stack"
+echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving config/ -> ${ARCHIVE}"
 tar czf "${ARCHIVE}" config/
 
 trap - EXIT
-restore_stack
+restore_service
 
 echo
 echo "[✓] Backup complete: ${ARCHIVE} ($(du -h "${ARCHIVE}" | cut -f1))"

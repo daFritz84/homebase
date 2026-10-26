@@ -27,33 +27,33 @@ The scripts below cover everything that cannot be rebuilt.
 
 ### Wanderer data backups
 
-Wanderer's `stacks/wanderer/data/` (PocketBase db, GPX uploads, Meili index) is
-irreplaceable user data. Run from the stack checkout on the server:
+Wanderer's `wanderer/data/` (PocketBase db, GPX uploads, Meili index) is
+irreplaceable user data. Run from the service checkout on the server:
 
 ```bash
-cd stacks/wanderer && ./backup-wanderer-data.sh
+cd wanderer && ./backup-wanderer-data.sh
 ```
 
-The script stops the stack, archives `data/` to
+The script stops the service, archives `data/` to
 `~/.local/share/wanderer/backups/wanderer-data-<date>.tar.gz`, and restarts it.
 Cadence: after every significant trail import, at least monthly. Restore: stop the
-stack, `rm -rf data && tar xzf <archive>`, start.
+service, `rm -rf data && tar xzf <archive>`, start.
 
 ### Home Assistant config backups
 
-Home Assistant's `stacks/homeassistant/config/` holds the irreplaceable
+Home Assistant's `homeassistant/config/` holds the irreplaceable
 UI-managed state — `.storage/` (integrations, dashboards, users, long-lived
-access tokens) and `secrets.yaml` are gitignored. Run from the stack checkout
+access tokens) and `secrets.yaml` are gitignored. Run from the service checkout
 on the server:
 
 ```bash
-cd stacks/homeassistant && ./backup-ha-config.sh
+cd homeassistant && ./backup-ha-config.sh
 ```
 
-The script stops the stack, archives `config/` (owner-only, mode `0600`) to
+The script stops the service, archives `config/` (owner-only, mode `0600`) to
 `~/.local/share/homeassistant/backups/ha-config-<date>.tar.gz`, and restarts
 it. Cadence: after significant automation/integration changes, at least
-monthly — take one right after onboarding. Restore: stop the stack,
+monthly — take one right after onboarding. Restore: stop the service,
 `rm -rf config && tar xzf <archive>`, start.
 
 ### Update the stack
@@ -83,7 +83,7 @@ podman run --rm --env-file .env homebase-caddy:2.11.7 \
 cd adguard-home
 podman-compose pull
 
-cd ../stacks/homepage
+cd ../homepage
 podman-compose pull
 
 cd ../wanderer
@@ -162,7 +162,7 @@ Notes:
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
 - **HA login fails / 401 through the proxy after network recreation** — the
   `caddy-proxy` subnet drifted and `trusted_proxies` in
-  `stacks/homeassistant/config/configuration.yaml` is stale. Check
+  `homeassistant/config/configuration.yaml` is stale. Check
   `podman network inspect caddy-proxy`, update the CIDR, redeploy (see
   [services.md](services.md), "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80

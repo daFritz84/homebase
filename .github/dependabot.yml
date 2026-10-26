@@ -1,18 +1,18 @@
 version: 2
 updates:
-  # --- Docker Compose (compose.yaml) — all stacks in one weekly PR group ---
+  # --- Docker Compose (compose.yaml) — all services in one weekly PR group ---
   - package-ecosystem: "docker-compose"
     directories:
-      - "/stacks/homeassistant"
-      - "/stacks/homepage"
-      - "/stacks/wanderer"
+      - "/homeassistant"
+      - "/homepage"
+      - "/wanderer"
       - "/caddy"
       - "/adguard-home"
     schedule:
       interval: "weekly"
     # NOTE: merging a getmeili/meilisearch bump requires wiping data/data.ms
     # (index is rebuildable from PocketBase) BEFORE the first start of the new
-    # engine — the data format is not forward-compatible. See stacks/wanderer.
+    # engine — the data format is not forward-compatible. See wanderer/.
 
   # --- Dockerfile base images (caddy builder + runtime; the compose image is a local build) ---
   - package-ecosystem: "docker"

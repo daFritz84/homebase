@@ -29,8 +29,8 @@ jobs:
         env:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
-          touch caddy/.env stacks/homepage/.env stacks/wanderer/.env.secret
-          for f in caddy adguard-home stacks/homeassistant stacks/homepage stacks/wanderer; do
+          touch caddy/.env homepage/.env wanderer/.env.secret
+          for f in caddy adguard-home homeassistant homepage wanderer; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: reviewdog/action-yamllint@v1
         with:
-          yamllint_flags: "stacks/homepage/config/"
+          yamllint_flags: "homepage/config/"
 
   hadolint:
     runs-on: ubuntu-latest
