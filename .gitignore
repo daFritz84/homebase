@@ -8,3 +8,7 @@
 **/.env
 **/.env.secret
 !.env.example
+
+# Home Assistant: UI-managed state + secrets stay out of git (see stacks/homeassistant)
+stacks/homeassistant/config/.storage/
+stacks/homeassistant/config/secrets.yaml

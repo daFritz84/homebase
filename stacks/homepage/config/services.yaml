@@ -30,3 +30,8 @@
         icon: /icons/wanderer.png
         href: https://wanderer.sseifried.link
         description: Self-hosted trail database
+
+    - Home Assistant:
+        icon: homeassistant
+        href: https://homeassistant.sseifried.link
+        description: Home automation

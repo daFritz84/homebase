@@ -62,3 +62,10 @@ adguard.sseifried.link {
 	import tls
 	reverse_proxy 192.168.178.249:8095
 }
+
+# Home Assistant (host-networked container — AdGuard pattern: hardcoded host IP,
+# rootless containers cannot reach host services by name)
+homeassistant.sseifried.link {
+	import tls
+	reverse_proxy 192.168.178.249:8123
+}
