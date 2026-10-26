@@ -5,7 +5,7 @@ services:
     security_opt:
       - no-new-privileges=true
     # Strict on purpose: a missing .env must fail the start — the widgets need
-    # the KOMODO/ADGUARD keys and would silently render degraded otherwise.
+    # the ADGUARD keys and would silently render degraded otherwise.
     env_file: .env
     volumes:
       - ./config:/app/config
@@ -16,11 +16,41 @@ services:
       caddy-proxy:
         aliases:
           - homepage
+      homepage-internal: {}
+    depends_on:
+      - dockerproxy
     deploy:
       resources:
         limits:
           memory: 512m
 
+  # Read-only gate in front of the rootless Podman socket for Homepage's
+  # container-stats integration (docker.yaml). A :ro socket mount is NOT a
+  # read-only boundary — the full Docker-compatible API (create/start/exec,
+  # arbitrary bind mounts as the mapped host user) stays connectable, so the
+  # socket lives only here; POST=0 denies every mutating endpoint and
+  # Homepage reaches this proxy over the internal network for stats only.
+  dockerproxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      CONTAINERS: "1" # container list + stats endpoints
+      POST: "0" # deny every mutating API call
+    volumes:
+      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro
+    networks:
+      - homepage-internal
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
 networks:
   caddy-proxy:
     external: true
+
+  homepage-internal:
+    name: homepage-internal
+    driver: bridge

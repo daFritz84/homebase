@@ -27,13 +27,10 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate compose files
         env:
-          COMPOSE_PROJECT_DIR: ${{ github.workspace }}/komodo
-          XDG_RUNTIME_DIR: /tmp
-          PERIPHERY_ROOT_DIRECTORY: /srv/komodo
-          COMPOSE_KOMODO_BACKUPS_PATH: /srv/komodo/backups
+          XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
-          touch caddy/.env komodo/.env.secret stacks/homepage/.env stacks/wanderer/.env.secret
-          for f in caddy komodo adguard-home stacks/homeassistant stacks/homepage stacks/testweb stacks/wanderer; do
+          touch caddy/.env stacks/homepage/.env stacks/wanderer/.env.secret
+          for f in caddy adguard-home stacks/homeassistant stacks/homepage stacks/testweb stacks/wanderer; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

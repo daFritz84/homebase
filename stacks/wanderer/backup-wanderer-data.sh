@@ -3,13 +3,13 @@ set -euo pipefail
 
 ## Back up wanderer data (PocketBase db, GPX uploads, Meili index) to a
 ## timestamped tar.gz. The trails are irreplaceable user data — run this
-## regularly (see docs/operations.md, "Database backups").
+## regularly (see docs/operations.md, "Wanderer data backups").
 ##
 ## The stack is stopped while archiving for a consistent snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
 ## Run from the stack checkout (the directory containing compose.yaml and
-## data/) — on the server that is the Komodo periphery checkout of this repo.
+## data/) — on the server that is the ~/src/homebase checkout of this repo.
 
 cd "$(dirname "$(readlink -f "$0")")"
 

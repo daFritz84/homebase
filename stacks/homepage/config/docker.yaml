@@ -1,10 +1,11 @@
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/docker/
+#
+# Podman is supported through its Docker-compatible API, reached read-only via
+# the dockerproxy sidecar in compose.yaml (POST=0) on the shared internal
+# network — the rootless socket itself is mounted only into the proxy.
 
-# my-docker:
-#   host: 127.0.0.1
-#   port: 2375
-
-# my-docker:
-#   socket: /var/run/docker.sock
+homebase-podman:
+  host: dockerproxy
+  port: 2375

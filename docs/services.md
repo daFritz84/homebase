@@ -5,8 +5,9 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 [host-setup.md](host-setup.md).
 
 - [Autostart: podman-compose systemd units (shared pattern)](#autostart-podman-compose-systemd-units-shared-pattern)
+- [Development workflow](#development-workflow)
 - [Caddy](#caddy)
-- [Komodo](#komodo)
+- [Cockpit](#cockpit)
 - [AdGuard Home (DNS-Server)](#adguard-home-dns-server)
 - [Wanderer (Trail Database)](#wanderer-trail-database)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
@@ -52,6 +53,25 @@ podman pod logs --tail=10 -f 'pod_<project>'
 
 The remainder of this document only lists the service-specific steps; autostart always follows
 this pattern with the project name given in each section.
+
+## Development workflow
+
+All runtime management is systemd user units; development happens on the workstation in a local
+clone, on a branch, tested with podman-compose directly:
+
+1. **Branch & edit** on the workstation: `git checkout -b <topic>`.
+2. **Validate before pushing** — the same checks CI runs:
+   - Test a stack locally: `podman-compose up -d` / `podman-compose down` in the
+     stack directory (requires the `caddy-proxy` network and the stack's `.env` files)
+   - Caddyfile: `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
+3. **Commit & push** — the server deploy key is read-only; commits always
+   originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
+4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
+   systemd unit (`systemctl --user restart podman-compose@<project>`) — for every
+   project, core services and stacks alike.
+5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
+   sync the server file back to the workstation, review, commit, push
+   (see [operations.md](operations.md)).
 
 ## Caddy
 
@@ -129,79 +149,61 @@ in Caddy 2.11, which silently falls back to http-01/tls-alpn-01. To avoid produc
 during bring-up, set `ACME_CA` to the staging CA (see `.env.example`), verify against the staging
 issuer, then set it back and restart.
 
-## Komodo
+## Cockpit
 
-Deployment & orchestration platform. Compose file: `komodo/compose.yaml`. Unit: `podman-compose@komodo`.
+Web management UI — host package (apt), not a container. Cockpit gives a human-readable
+overview of system health (Overview/Metrics pages), a journalctl UI (Logs page), and full
+control of systemd units: the Services page has a toggle for **user instances**, which is
+where the `podman-compose@<project>` units appear (start/stop/restart/enable + per-unit
+journal). The `cockpit-podman` extension adds a rootless Podman page for the logged-in
+user: containers, pods, images, volumes, per-container logs and a container terminal
+(`podman exec` in the browser). Cockpit also ships a web terminal for the host.
 
-### First run
-
-Core, Periphery and Mongo read their secrets as plain environment variables from
-`komodo/.env.secret` (gitignored, mode `0600`). Provision it from Bitwarden
-before the first start:
+### Install
 
 ```bash
-bw login
-export BW_SESSION="$(bw unlock --raw)"
-cd komodo && ./provision-komodo-secrets.sh
+sudo apt install -y cockpit cockpit-podman
+sudo systemctl enable --now cockpit.socket
 ```
 
-The script fetches the `komodo-db` (username + password) and `komodo-admin`
-items and generates the passkey, webhook and JWT secrets into `.env.secret`.
-Run it from the `komodo/` directory — the compose files reference it relative
-to the project directory. Re-running regenerates passkey/webhook/JWT, so
-restart core **and** periphery together afterwards.
+Cockpit listens on `:9090` and authenticates against host accounts (PAM) — add TOTP for
+the admin user.
 
-Then deploy with the shared pattern above.
+### Reverse proxy
 
-### Github provider
+Served at `https://cockpit.sseifried.link` through Caddy:
+`reverse_proxy 192.168.178.249:9090` — the AdGuard/HA pattern (rootless containers cannot
+reach host services by name, see the note under [AdGuard Home](#adguard-home-dns-server)).
+Caddy passes WebSocket connections through, which Cockpit requires. Cockpit validates the
+`Origin` header, so the public origin must be allowed in `/etc/cockpit/cockpit.conf`:
 
-1. Log in to your **Komodo** instance.
-2. Navigate to **Settings → Providers → Git Providers**.
-   *(Komodo uses git providers to clone private/public repositories via HTTPS.)*
-3. Click **Add Git Provider**.
-4. Set:
-   - **Domain:** `github.com`  
-     *(Default domain for GitHub.)*
-   - **Use HTTPS:** Enabled  
-     *(Komodo supports cloning only via HTTPS, not SSH.)*
-   - **Username:** Your GitHub username  
-   - **Token:** A GitHub Personal Access Token  
-     *(Required for private repos; token must be provided either in core or periphery config.)*
-5. Save the provider.
+```ini
+[WebService]
+AllowOrigin = https://cockpit.sseifried.link
+```
 
-### (Optional) Enable Webhooks
+### Firewall
 
-If you want automatic updates on push:
+No firewalld rule for `9090` — the port stays closed to the LAN. Caddy reaches Cockpit
+from the podman-managed (firewalld-trusted) bridge, the same path AdGuard `:8095` and
+Home Assistant `:8123` use.
 
-1. Open the resource → **Config → Webhooks** → copy the generated URL.
-2. Add it as a webhook in your GitHub repository under  
-   **Settings → Webhooks → Add webhook** (Content type: `application/json`, Event: `push`).
+### Usage
 
-### Development workflow
-
-Komodo manages only the runtime (deploying stacks); development happens on the
-workstation in a local clone, on a branch, tested with podman-compose directly:
-
-1. **Branch & edit** on the workstation: `git checkout -b <topic>`.
-2. **Validate before pushing** — the same checks CI runs:
-   - Test a stack locally: `podman-compose up -d` / `podman-compose down` in the
-     stack directory (requires the `caddy-proxy` network and the stack's `.env` files)
-   - Caddyfile: `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
-3. **Commit & push** — the server deploy key is read-only; commits always
-   originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
-4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
-   systemd unit (`systemctl --user restart podman-compose@<project>`) for core
-   services, or restart the stack from the Komodo UI for Komodo-managed stacks.
-5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
-   sync the server file back to the workstation, review, commit, push
-   (see [operations.md](operations.md)).
+- **Services** page → toggle *User instances* → control the `podman-compose@<project>` units.
+- **Podman** page (cockpit-podman) → container logs, terminal, start/stop — rootless, the
+  logged-in user's engine (same containers as `podman ps`).
+- **Logs** page → journalctl UI, system and user journal.
+- From the workstation, **Podman Desktop** connects to the same rootless engine over SSH
+  (see [podman.md](podman.md)).
+- Planned: OIDC single sign-on via Authentik (see [operations.md](operations.md) TODO).
 
 ## AdGuard Home (DNS-Server)
 
 DNS server with blocking & filtering. Compose file: `adguard-home/compose.yaml`. Unit: `podman-compose@adguard-home`.
 
-No longer managed by Komodo — it runs as a `podman-compose` systemd user unit like Caddy and Komodo
-(shared pattern above). It uses `network_mode: host` and binds `:53` (DNS) and `:8095` (web UI),
+Runs as a `podman-compose` systemd user unit like Caddy (shared pattern above).
+It uses `network_mode: host` and binds `:53` (DNS) and `:8095` (web UI),
 which requires the unprivileged-port sysctl and the `dns` firewalld service from
 [host-setup.md](host-setup.md).
 
@@ -221,9 +223,12 @@ AdGuard (`192.168.178.249`) as their DNS server.
 
 > **Hardcoded host IP:** `192.168.178.249` (the Fritzbox-assigned static IP, see
 > [host-setup.md](host-setup.md#static-ip-address)) is referenced in `caddy/Caddyfile`
-> (AdGuard `reverse_proxy`) and `stacks/homepage/config/services.yaml` (AdGuard widget).
-> Rootless containers cannot reach host services by name, so the IP is hardcoded — if the
-> static IP ever changes, update both files.
+> (AdGuard, Home Assistant and Cockpit `reverse_proxy`),
+> `stacks/homepage/config/services.yaml` (AdGuard widget),
+> `stacks/homeassistant/config/configuration.yaml` (`internal_url`) and
+> `docs/podman.md` (Podman Desktop connection). Rootless containers cannot reach
+> host services by name, so the IP is hardcoded — if the static IP ever changes,
+> update all of these files.
 >
 > **Do not use `host.containers.internal` here:** the name lives only in the container's
 > `/etc/hosts` (so `getent` resolves it), Caddy's `reverse_proxy` resolves upstreams via
@@ -263,16 +268,16 @@ This should automatically resolve to a `CNAME` record.
 Run from any LAN client:
 
 ```bash
-dig komodo.sseifried.link
+dig cockpit.sseifried.link
 dig homebase.fritz.box
-dig +trace komodo.sseifried.link   # public resolution: NXDOMAIN is expected
+dig +trace cockpit.sseifried.link   # public resolution: NXDOMAIN is expected
 ```
 
 ## Wanderer (Trail Database)
 
 Self-hosted trail database ([wanderer](https://github.com/open-wanderer/wanderer)).
-Compose file: `stacks/wanderer/compose.yaml`. Komodo-managed stack (like Homepage) —
-deployed from the Komodo UI, not a systemd unit.
+Compose file: `stacks/wanderer/compose.yaml`. Unit: `podman-compose@wanderer`
+(shared pattern above — like Caddy/AdGuard/Homepage).
 
 Three services: `web` (SvelteKit UI — the only one on `caddy-proxy`, alias `wanderer`),
 `db` (PocketBase) and `search` (Meilisearch) on the internal `wanderer-internal` network.
@@ -281,8 +286,8 @@ The instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`) — users only see t
 
 ### First run
 
-The steps below run in the stack checkout — on the server that is the Komodo periphery
-checkout under `PERIPHERY_ROOT_DIRECTORY`, not the `~/src/homebase` clone.
+The steps below run in the stack checkout — on the server that is the
+`~/src/homebase` clone.
 
 1. Provision the secrets (requires an unlocked Bitwarden CLI):
 
@@ -317,8 +322,12 @@ accounts only ever see their own trails, and the box is LAN-only (no public DNS
 records). To close registration later, set `PUBLIC_DISABLE_SIGNUP: "true"` in
 `compose.yaml`, commit and redeploy.
 
-4. Register the Komodo stack: **Stacks → Add Stack → git**, repo `homebase`,
-root path `stacks/wanderer`, branch `main` (same as Homepage). Deploy.
+4. Deploy with the shared pattern above (unit: `podman-compose@wanderer`):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@wanderer
+```
 
 5. Verify:
 
@@ -332,8 +341,9 @@ podman logs --tail=20 wanderer-search-1   # Meilisearch must come up healthy
 
 The `data.ms` format is **not forward-compatible** — a newer engine refuses to
 open an older index directory and crash-loops. On a version bump: set
-`MEILI_UPGRADE_DB: "true"` on the search service, deploy once (the engine
-upgrades `data.ms` in place), then remove the flag and deploy again.
+`MEILI_UPGRADE_DB: "true"` on the search service, restart the unit once
+(`systemctl --user restart podman-compose@wanderer` — the engine upgrades
+`data.ms` in place), then remove the flag and restart again.
 Fallback if the in-place upgrade fails: wipe `data/data.ms` (recreate +
 `podman unshare chown 1000:1000 data/data.ms`) — the index rebuilds from
 PocketBase; if PocketBase's `init_meilisearch` migration is already recorded
@@ -350,11 +360,11 @@ is a future option — see the commented block in the upstream `docker-compose.y
 ## Home Assistant (Home Automation)
 
 Home automation platform ([home-assistant](https://www.home-assistant.io/)).
-Compose file: `stacks/homeassistant/compose.yaml`. Komodo-managed stack (like
-Homepage/Wanderer) — deployed from the Komodo UI, not a systemd unit.
+Compose file: `stacks/homeassistant/compose.yaml`. Unit: `podman-compose@homeassistant`
+(shared pattern above — like Caddy/AdGuard/Homepage/Wanderer).
 
 Single service in **Container** install mode — the only mode viable under
-Komodo/Podman (no Supervisor, no add-ons; MQTT, ZHA etc. come as integrations).
+Podman (no Supervisor, no add-ons; MQTT, ZHA etc. come as integrations).
 `network_mode: host` (like AdGuard Home) — required for local device discovery
 (mDNS/SSDP/UPnP, HomeKit, inbound integrations). No host ports are opened for
 LAN access: clients reach the UI only through Caddy at
@@ -365,11 +375,16 @@ firewalld rule — by design).
 
 ### First run
 
-The steps below run in the stack checkout — on the server that is the Komodo periphery
-checkout under `PERIPHERY_ROOT_DIRECTORY`, not the `~/src/homebase` clone.
+The steps below run in the stack checkout — on the server that is the
+`~/src/homebase` clone.
 
-1. Register the Komodo stack: **Stacks → Add Stack → git**, repo `homebase`,
-   root path `stacks/homeassistant`, branch `main`. Deploy.
+1. Deploy with the shared pattern above (unit: `podman-compose@homeassistant`):
+
+```bash
+cd stacks/homeassistant
+podman-compose systemd
+systemctl --user enable --now podman-compose@homeassistant
+```
 
 2. Open `https://homeassistant.sseifried.link` and complete the onboarding
    wizard — create the owner account, set the location to Vienna

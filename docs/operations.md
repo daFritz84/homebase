@@ -1,6 +1,6 @@
 # Operations
 
-Day-2 tasks: keeping the stack up to date, backing up Komodo data, and the open roadmap.
+Day-2 tasks: keeping the stack up to date, backing up irreplaceable data, and the open roadmap.
 
 - [Stack Update Procedure](#stack-update-procedure)
 - [TODO](#todo)
@@ -12,31 +12,23 @@ Day-2 tasks: keeping the stack up to date, backing up Komodo data, and the open 
 
 ```bash
 systemctl --user status podman-compose@caddy
-systemctl --user status podman-compose@komodo
 systemctl --user status podman-compose@adguard-home
+systemctl --user status podman-compose@homepage
+systemctl --user status podman-compose@wanderer
+systemctl --user status podman-compose@homeassistant
 podman ps
 ```
 
-### Database backups
+### Backups
 
-Komodo's **built-in scheduled backups** are enabled (Settings → Backups). Dated dumps land
-in `COMPOSE_KOMODO_BACKUPS_PATH` from `komodo/.env` (e.g. `~/.local/share/komodo/backups`),
-which core mounts at `/backups`. Verify a fresh dump exists before updating the stack.
-
-The database holds only Komodo state (users, API keys, servers, stack definitions,
-variables) — no irreplaceable data. After a total loss:
-
-1. Restore a dump via the Komodo UI, **or** rebuild: redeploy the komodo stack, recreate
-   the admin from Bitwarden (`komodo-admin`), re-add the server with the passkey from
-   `komodo/.env.secret`, re-add stacks from this repository, recreate the Homepage API
-   key and update `stacks/homepage/.env`.
-2. Mongo credentials come from Bitwarden (`komodo-db`) via `komodo/.env.secret`.
+Komodo (and its built-in scheduled backups) is gone — its database held only rebuildable
+state (users, API keys, servers, stack definitions, variables), no irreplaceable data.
+The scripts below cover everything that cannot be rebuilt.
 
 ### Wanderer data backups
 
 Wanderer's `stacks/wanderer/data/` (PocketBase db, GPX uploads, Meili index) is
-irreplaceable user data — Komodo's built-in backups do not cover it. Run from the
-stack checkout on the server:
+irreplaceable user data. Run from the stack checkout on the server:
 
 ```bash
 cd stacks/wanderer && ./backup-wanderer-data.sh
@@ -51,8 +43,8 @@ stack, `rm -rf data && tar xzf <archive>`, start.
 
 Home Assistant's `stacks/homeassistant/config/` holds the irreplaceable
 UI-managed state — `.storage/` (integrations, dashboards, users, long-lived
-access tokens) and `secrets.yaml` are gitignored, Komodo's built-in backups do
-not cover them. Run from the stack checkout on the server:
+access tokens) and `secrets.yaml` are gitignored. Run from the stack checkout
+on the server:
 
 ```bash
 cd stacks/homeassistant && ./backup-ha-config.sh
@@ -88,10 +80,16 @@ podman-compose build   # Caddy is a local build (Cloudflare DNS plugin) — rebu
 podman run --rm --env-file .env homebase-caddy:2.11.7 \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile   # must print "Valid configuration"
 
-cd komodo
+cd adguard-home
 podman-compose pull
 
-cd adguard-home
+cd ../stacks/homepage
+podman-compose pull
+
+cd ../wanderer
+podman-compose pull
+
+cd ../homeassistant
 podman-compose pull
 ```
 
@@ -104,8 +102,10 @@ podman-compose pull
 
 ```bash
 systemctl --user restart podman-compose@caddy
-systemctl --user restart podman-compose@komodo
 systemctl --user restart podman-compose@adguard-home
+systemctl --user restart podman-compose@homepage
+systemctl --user restart podman-compose@wanderer
+systemctl --user restart podman-compose@homeassistant
 ```
 
 4. Verify
@@ -113,9 +113,10 @@ systemctl --user restart podman-compose@adguard-home
 ```bash
 podman ps
 podman logs --tail=50 <caddy-container>
-podman logs --tail=50 <komodo-container>
-podman logs --tail=50 <mongo-container>
 podman logs --tail=50 <adguard-home-container>
+podman logs --tail=50 <homepage-container>
+podman logs --tail=50 <wanderer-web-container>
+podman logs --tail=50 <homeassistant-container>
 ```
 
 5. Cleanup
@@ -159,33 +160,26 @@ Notes:
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
-- **Homepage is stopped after a Komodo restart** — by design: Homepage is a Komodo-managed
-  stack, and Komodo's StopAllContainers stops it (Caddy, Komodo, Mongo and AdGuard carry the
-  `komodo.skip` label to survive exactly that). Start Homepage from the Komodo UI.
-- **Wanderer is stopped after a Komodo restart** — same by design as Homepage (Komodo-managed
-  stack, no `komodo.skip` label). Start it from the Komodo UI.
-- **Home Assistant is stopped after a Komodo restart** — same by design (Komodo-managed
-  stack, no `komodo.skip` label). Start it from the Komodo UI.
 - **HA login fails / 401 through the proxy after network recreation** — the
   `caddy-proxy` subnet drifted and `trusted_proxies` in
   `stacks/homeassistant/config/configuration.yaml` is stale. Check
   `podman network inspect caddy-proxy`, update the CIDR, redeploy (see
   [services.md](services.md), "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
-  redirects to the Komodo HTTPS UI by design (Caddyfile `:80` block).
+  redirects to the Homepage HTTPS UI by design (Caddyfile `:80` block).
 
 ## Power Outage Recovery
 
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
-[host-setup.md](host-setup.md)) starts the user units `podman-compose@caddy`,
-`podman-compose@komodo` and `podman-compose@adguard-home`; Homepage, Wanderer and
-Home Assistant are Komodo-managed stacks and are started from the Komodo UI (see
-[Troubleshooting](#troubleshooting)).
+[host-setup.md](host-setup.md)) starts all five user units — `podman-compose@caddy`,
+`podman-compose@adguard-home`, `podman-compose@homepage`, `podman-compose@wanderer` and
+`podman-compose@homeassistant` — no manual action is needed.
 
 ## TODO
 
 - Authentik Single Sign On
+- Cockpit OIDC single sign-on (via Authentik, once it is deployed)
 
 ## Appstore as Inspiration
 

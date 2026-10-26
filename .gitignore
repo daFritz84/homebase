@@ -3,8 +3,7 @@
 .secrets/
 .secrets/*
 
-# Environment files with secrets (e.g. stacks/homepage/.env, komodo/.env.secret).
-# komodo/.env is a committed config template and stays tracked.
+# Environment files with secrets (e.g. stacks/homepage/.env, stacks/wanderer/.env.secret).
 **/.env
 **/.env.secret
 !.env.example

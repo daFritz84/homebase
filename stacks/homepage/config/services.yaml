@@ -1,24 +1,22 @@
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
+#
+# Container stats: server: homebase-podman (docker.yaml) + container name
+# (podman-compose names: <project>-<service>-1), showStats: true.
 - Homebase:
-    - Komodo:
-        icon: komodo
-        href: https://komodo.sseifried.link
-        description: Homelab Container Management
-
-        widgets:
-          - type: komodo
-            url: http://komodo:9120
-            key: {{HOMEPAGE_VAR_KOMODO_KEY}}
-            secret: {{HOMEPAGE_VAR_KOMODO_SECRET}}
-            showSummary: true
-            showStacks: true
+    - Cockpit:
+        icon: cockpit
+        href: https://cockpit.sseifried.link
+        description: Web management — systemd units, logs, containers
 
     - AdGuard Home:
         icon: adguard-home
         href: https://adguard.sseifried.link
         description: Network-wide DNS & ad blocking
+        server: homebase-podman
+        container: adguard-home-adguard-home-1
+        showStats: true
 
         widgets:
           - type: adguard
@@ -30,8 +28,14 @@
         icon: /icons/wanderer.png
         href: https://wanderer.sseifried.link
         description: Self-hosted trail database
+        server: homebase-podman
+        container: wanderer-web-1
+        showStats: true
 
     - Home Assistant:
         icon: homeassistant
         href: https://homeassistant.sseifried.link
         description: Home automation
+        server: homebase-podman
+        container: homeassistant-homeassistant-1
+        showStats: true

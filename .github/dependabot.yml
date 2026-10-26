@@ -8,7 +8,6 @@ updates:
       - "/stacks/testweb"
       - "/stacks/wanderer"
       - "/caddy"
-      - "/komodo"
       - "/adguard-home"
     schedule:
       interval: "weekly"
