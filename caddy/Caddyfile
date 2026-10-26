@@ -38,12 +38,6 @@
 
 # --- TLS services (resolved to this host by AdGuard Home split DNS) ---
 
-# nginx-ping
-testweb.sseifried.link {
-	import tls
-	reverse_proxy testweb:80
-}
-
 # Homepage
 homepage.sseifried.link {
 	import tls
