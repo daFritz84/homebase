@@ -34,8 +34,9 @@
 	@nothealth not path /health /health/*
 	handle @health {
 		rewrite * /api/healthcheck
-		header_up Host homepage.sseifried.link
-		reverse_proxy homepage:3000
+		reverse_proxy homepage:3000 {
+			header_up Host homepage.sseifried.link
+		}
 	}
 	redir @nothealth https://homepage.sseifried.link{uri}
 }
