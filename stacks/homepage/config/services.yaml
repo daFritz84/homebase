@@ -3,7 +3,7 @@
 # https://gethomepage.dev/configs/services/
 #
 # Container stats: server: homebase-podman (docker.yaml) + container name
-# (podman-compose names: <project>-<service>-1), showStats: true.
+# (podman-compose names: <project>_<service>_<n>, underscores), showStats: true.
 - Homebase:
     - Cockpit:
         icon: cockpit
@@ -15,7 +15,7 @@
         href: https://adguard.sseifried.link
         description: Network-wide DNS & ad blocking
         server: homebase-podman
-        container: adguard-home-adguard-home-1
+        container: adguard-home_adguard-home_1
         showStats: true
 
         widgets:
@@ -29,7 +29,7 @@
         href: https://wanderer.sseifried.link
         description: Self-hosted trail database
         server: homebase-podman
-        container: wanderer-web-1
+        container: wanderer_web_1
         showStats: true
 
     - Home Assistant:
@@ -37,5 +37,5 @@
         href: https://homeassistant.sseifried.link
         description: Home automation
         server: homebase-podman
-        container: homeassistant-homeassistant-1
+        container: homeassistant_homeassistant_1
         showStats: true
