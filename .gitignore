@@ -11,3 +11,10 @@
 # Home Assistant: UI-managed state + secrets stay out of git (see stacks/homeassistant)
 stacks/homeassistant/config/.storage/
 stacks/homeassistant/config/secrets.yaml
+# HA runtime state (data/logs/version marker, not committed YAML) — covered by backup-ha-config.sh
+stacks/homeassistant/config/.HA_VERSION
+stacks/homeassistant/config/.cache/
+stacks/homeassistant/config/.ha_run.lock
+stacks/homeassistant/config/blueprints/
+stacks/homeassistant/config/home-assistant.log*
+stacks/homeassistant/config/home-assistant_v2.db*
