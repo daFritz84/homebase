@@ -13,8 +13,11 @@ a Cockpit bookmark tile.
 - **Cockpit exposure**: proxied by Caddy at `cockpit.sseifried.link` → `reverse_proxy 192.168.178.249:9090`
   (same hardcoded-host-IP pattern as AdGuard `:8095` and HA `:8123` — rootless containers cannot reach
   host services by name; pasta gateway refuses forwarded connections). `/etc/cockpit/cockpit.conf`
-  needs `AllowOrigin = https://cockpit.sseifried.link`. **No firewalld rule for 9090** — LAN stays closed,
-  Caddy reaches it from the podman-managed (firewalld-trusted) bridge, proven by AdGuard/HA.
+  needs `AllowOrigin = https://cockpit.sseifried.link`. Cockpit also validates the `Host` header,
+  so the site needs `header_up Host cockpit.sseifried.link` (Caddy's default Host is the upstream
+  IP, which Cockpit rejects — bare `curl` to the host IP returns empty). **No firewalld rule for
+  9090** — LAN stays closed, Caddy reaches it from the podman-managed (firewalld-trusted) bridge,
+  proven by AdGuard/HA.
 - **`:80` block**: redirect target becomes `https://homepage.sseifried.link` (Komodo is gone; Homepage is
   the landing page). `/health` stays plaintext-proxied for LAN monitoring, repointed to
   `homepage:3000` with `rewrite → /api/health`.
@@ -141,9 +144,12 @@ sudo apt install -y cockpit cockpit-podman
 sudo systemctl enable --now cockpit.socket
 printf '[WebService]\nAllowOrigin = https://cockpit.sseifried.link\n' | sudo tee /etc/cockpit/cockpit.conf
 ```
-Verify: `systemctl is-active cockpit.socket`; log in at `https://homebase.fritz.box:9090` (LAN);
-Services page shows the user-instances toggle with `podman-compose@*` units; cockpit-podman lists
-the running containers; open a container Terminal.
+Verify: `systemctl is-active cockpit.socket`; `curl -s -H 'Host: homebase' 127.0.0.1:9090 | head -3`
+returns the login HTML. A bare `curl 192.168.178.249:9090` returning empty is **expected** — Cockpit
+rejects the IP as `Host` header (not a firewall issue); direct LAN access to `:9090` stays closed by
+design (no firewalld rule). Browser login + Services/Podman/Terminal checks happen in Phase 3 via
+`https://cockpit.sseifried.link` (Caddy forwards `Host: cockpit.sseifried.link`, allowed by
+`AllowOrigin`).
 
 **Phase 1 — pre-migration backups + Komodo control-plane teardown** (before any `git pull` —
 the pushed commit deletes `komodo/`, and `podman-compose down` needs it)
