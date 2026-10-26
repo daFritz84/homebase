@@ -174,8 +174,11 @@ the admin user.
 Served at `https://cockpit.sseifried.link` through Caddy:
 `reverse_proxy 192.168.178.249:9090` — the AdGuard/HA pattern (rootless containers cannot
 reach host services by name, see the note under [AdGuard Home](#adguard-home-dns-server)).
-Caddy passes WebSocket connections through, which Cockpit requires. Cockpit validates the
-`Origin` header, so the public origin must be allowed in `/etc/cockpit/cockpit.conf`:
+Caddy passes WebSocket connections through, which Cockpit requires. Cockpit validates both
+the browser `Origin` and the `Host` header (only `localhost`, the machine hostname and
+`AllowOrigin` hosts pass — a bare `curl` to the host IP returns an empty response), so the
+site must forward the public Host: `header_up Host cockpit.sseifried.link`. Allow the public
+origin in `/etc/cockpit/cockpit.conf`:
 
 ```ini
 [WebService]
