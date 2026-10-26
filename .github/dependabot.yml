@@ -3,6 +3,7 @@ updates:
   # --- Docker Compose (compose.yaml) — all stacks in one weekly PR group ---
   - package-ecosystem: "docker-compose"
     directories:
+      - "/stacks/homeassistant"
       - "/stacks/homepage"
       - "/stacks/testweb"
       - "/stacks/wanderer"

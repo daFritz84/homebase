@@ -1,0 +1,35 @@
+# Home Assistant Container (https://www.home-assistant.io/)
+# ---
+# network_mode: host — REQUIRED for local device discovery (mDNS/SSDP/UPnP,
+# HomeKit, inbound integrations). Same pattern as adguard-home: Caddy reaches
+# it via the hardcoded host IP (192.168.178.249:8123), LAN clients reach it
+# only through Caddy (no firewalld rule for :8123 — by design).
+# No env_file: TZ is inline, so `docker compose config` passes in CI untouched.
+# Komodo-managed stack (like homepage/wanderer): no komodo.skip label —
+# StopAllContainers stops it by design, start from the Komodo UI.
+# HA runs as root in the container; rootless Podman maps it to the host user,
+# so a host-user-owned config/ is writable — no `podman unshare chown` needed.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.10.4
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      TZ: Europe/Vienna
+    network_mode: host
+    volumes:
+      - ./config:/config
+    healthcheck:
+      # /api/ping is the unauthenticated connectivity endpoint; the HA image
+      # ships python3 (no curl).
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8123/api/ping')"]
+      interval: 15s
+      retries: 10
+      start_period: 60s # first start initializes .storage — be generous
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2g

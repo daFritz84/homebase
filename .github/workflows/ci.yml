@@ -33,7 +33,7 @@ jobs:
           COMPOSE_KOMODO_BACKUPS_PATH: /srv/komodo/backups
         run: |
           touch caddy/.env komodo/.env.secret stacks/homepage/.env stacks/wanderer/.env.secret
-          for f in caddy komodo adguard-home stacks/homepage stacks/testweb stacks/wanderer; do
+          for f in caddy komodo adguard-home stacks/homeassistant stacks/homepage stacks/testweb stacks/wanderer; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"
