@@ -1,8 +1,6 @@
 services:
   adguard-home:
     image: adguard/adguardhome:v0.107.79
-    labels:
-      komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     command:
       - '--no-check-update'
       - '-c'

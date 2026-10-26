@@ -5,8 +5,6 @@ services:
       context: .
       dockerfile: Dockerfile
     image: homebase-caddy:2.11.7
-    labels:
-      komodo.skip: # Prevent Komodo from stopping with StopAllContainers
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true

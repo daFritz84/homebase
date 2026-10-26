@@ -256,8 +256,9 @@ systemctl --user enable --now podman.socket
 systemctl --user status podman.socket
 ```
 
-Only the **rootless** socket is needed — Komodo's Periphery mounts the rootless socket
-(`${XDG_RUNTIME_DIR}/podman/podman.sock`, see `komodo/compose.yaml`). Do **not** enable the
+Only the **rootless** socket is needed — Homepage's container-stats integration and
+Podman Desktop remote connections use it
+(`${XDG_RUNTIME_DIR}/podman/podman.sock`, see `stacks/homepage/compose.yaml`). Do **not** enable the
 rootful socket: it is unused by this stack and only widens the attack surface.
 
 Allow low unprivileged ports for e.g. `caddy`, `adguard-home` (IPv4 **and** IPv6 —

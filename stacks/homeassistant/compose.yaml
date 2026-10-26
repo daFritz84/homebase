@@ -5,8 +5,8 @@
 # it via the hardcoded host IP (192.168.178.249:8123), LAN clients reach it
 # only through Caddy (no firewalld rule for :8123 — by design).
 # No env_file: TZ is inline, so `docker compose config` passes in CI untouched.
-# Komodo-managed stack (like homepage/wanderer): no komodo.skip label —
-# StopAllContainers stops it by design, start from the Komodo UI.
+# Runs as a podman-compose@homeassistant systemd user unit (shared pattern,
+# docs/services.md) — started by linger at boot, controlled via systemctl --user.
 # HA runs as root in the container; rootless Podman maps it to the host user,
 # so a host-user-owned config/ is writable — no `podman unshare chown` needed.
 

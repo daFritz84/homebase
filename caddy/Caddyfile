@@ -19,25 +19,24 @@
 	}
 }
 
-# HTTP: redirect everything to the HTTPS Komodo UI (wildcard cert covers *.sseifried.link).
-# /health stays proxied in plaintext for container health checks and LAN monitoring.
+# HTTP: redirect everything to the HTTPS Homepage UI (wildcard cert covers *.sseifried.link).
+# /health stays proxied in plaintext for container health checks and LAN monitoring
+# (Homepage's /api/health endpoint). The matcher is evaluated once at handle-block entry:
+# a bare `rewrite @health ...` + `reverse_proxy @health` pair breaks because the rewrite
+# mutates the path before reverse_proxy re-evaluates the matcher (then it never matches).
 # Temporary (302) redirect: switch to `permanent` once HSTS is proven in production.
 # Clients must resolve *.sseifried.link via AdGuard Home split DNS (see docs/services.md).
 :80 {
 	@health path /health /health/*
 	@nothealth not path /health /health/*
-	reverse_proxy @health komodo:9120
-	redir @nothealth https://komodo.sseifried.link{uri}
+	handle @health {
+		rewrite * /api/health
+		reverse_proxy homepage:3000
+	}
+	redir @nothealth https://homepage.sseifried.link{uri}
 }
 
 # --- TLS services (resolved to this host by AdGuard Home split DNS) ---
-
-# Komodo
-komodo.sseifried.link {
-	import tls
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	reverse_proxy komodo:9120
-}
 
 # nginx-ping
 testweb.sseifried.link {
@@ -68,4 +67,12 @@ adguard.sseifried.link {
 homeassistant.sseifried.link {
 	import tls
 	reverse_proxy 192.168.178.249:8123
+}
+
+# Cockpit (host service — AdGuard/HA pattern: hardcoded host IP; Caddy passes
+# WebSockets through, required by Cockpit. AllowOrigin in /etc/cockpit/cockpit.conf)
+cockpit.sseifried.link {
+	import tls
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy 192.168.178.249:9090
 }

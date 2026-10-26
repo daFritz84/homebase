@@ -11,7 +11,7 @@ set -euo pipefail
 ## restarted afterwards, even if the archive fails.
 ##
 ## Run from the stack checkout (the directory containing compose.yaml and
-## config/) — on the server that is the Komodo periphery checkout of this repo.
+## config/) — on the server that is the ~/src/homebase checkout of this repo.
 
 cd "$(dirname "$(readlink -f "$0")")"
 
