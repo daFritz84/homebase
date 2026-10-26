@@ -69,15 +69,21 @@ homeassistant.sseifried.link {
 	reverse_proxy 192.168.178.249:8123
 }
 
-# Cockpit (host service — AdGuard/HA pattern: hardcoded host IP; Caddy passes
+# Cockpit (host service — hardcoded host IP, like AdGuard/HA; Caddy passes
 # WebSockets through, required by Cockpit). Cockpit validates the Host header
-# (only localhost/hostname/AllowOrigin hosts pass), so Caddy must forward the
-# public Host. AllowOrigin in /etc/cockpit/cockpit.conf covers the browser Origin.
+# (only localhost/hostname/AllowOrigin hosts pass), so Caddy forwards the public
+# Host; AllowOrigin in /etc/cockpit/cockpit.conf covers the browser Origin.
+# Cockpit must be proxied over HTTPS: it redirects NON-LOCAL plain-HTTP requests
+# to https (301 -> loop) and only trusts X-Forwarded-Proto from localhost, which
+# a rootless Caddy container is not. Cockpit serves a self-signed cert on :9090,
+# so the upstream is https with tls_insecure_skip_verify.
 cockpit.sseifried.link {
 	import tls
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	reverse_proxy 192.168.178.249:9090 {
+	reverse_proxy https://192.168.178.249:9090 {
 		header_up Host cockpit.sseifried.link
-		header_up X-Forwarded-Proto https
+		transport http {
+			tls_insecure_skip_verify
+		}
 	}
 }
