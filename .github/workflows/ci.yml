@@ -30,7 +30,7 @@ jobs:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
           touch caddy/.env stacks/homepage/.env stacks/wanderer/.env.secret
-          for f in caddy adguard-home stacks/homeassistant stacks/homepage stacks/testweb stacks/wanderer; do
+          for f in caddy adguard-home stacks/homeassistant stacks/homepage stacks/wanderer; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

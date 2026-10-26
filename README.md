@@ -15,7 +15,6 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | Homepage   | `stacks/homepage/compose.yaml`      | Service dashboard                          |
 | Wanderer   | `stacks/wanderer/compose.yaml`      | Self-hosted trail database                 |
 | Home Assistant | `stacks/homeassistant/compose.yaml` | Home automation platform                 |
-| Test web   | `stacks/testweb/compose.yaml`       | Example stack for testing                  |
 | Cockpit    | host package (apt)                  | Web management: systemd units, logs, containers |
 
 ## Quick start

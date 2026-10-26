@@ -5,7 +5,6 @@ updates:
     directories:
       - "/stacks/homeassistant"
       - "/stacks/homepage"
-      - "/stacks/testweb"
       - "/stacks/wanderer"
       - "/caddy"
       - "/adguard-home"
