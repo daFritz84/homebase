@@ -376,6 +376,14 @@ LAN access: clients reach the UI only through Caddy at
 name, see the AdGuard note above); `:8123` stays closed to the LAN (no
 firewalld rule — by design).
 
+> **Rootless capability limits (expected):** `aiodhcpwatcher` (DHCP discovery) and
+> `habluetooth` log `Operation not permitted` / `Missing NET_ADMIN/NET_RAW capabilities` —
+> AF_PACKET in the host netns is not grantable to a rootless container, so those two
+> integrations stay unavailable. mDNS/SSDP/UPnP discovery works without extra capabilities;
+> do not add `cap_add` (it cannot work rootless). `exit code 100` in the entrypoint log is
+> HA's normal restart request (e.g. after onboarding); a `Pending HTTP config was not
+> confirmed` warning after that restart is a dropped wizard session — reload the page.
+
 ### First run
 
 The steps below run in the stack checkout — on the server that is the
@@ -401,19 +409,23 @@ curl -k https://homeassistant.sseifried.link/   # onboarding HTML
 podman logs --tail=20 homeassistant_homeassistant_1
 ```
 
-Logging in **through Caddy** must work — that proves `trusted_proxies` in
-`config/configuration.yaml` matches the live caddy-proxy subnet (see below).
+Logging in **through Caddy** must work — that proves `trusted_proxies` (UI-managed,
+see below) lists the host IP Caddy proxies from.
 
 ### Reverse proxy (trusted_proxies)
 
-HA sits behind Caddy: `http: use_x_forwarded_for: true` plus
-`trusted_proxies: [10.89.0.0/24]` in `config/configuration.yaml`. Caddy
-connects from the `caddy-proxy` bridge subnet; that network is created
-**unpinned** (`caddy/ensure_proxy_network.sh`) and its subnet has changed
-before (10.88.0.0/16 → 10.89.0.0/24). After any network recreation, verify
-with `podman network inspect caddy-proxy` and update the entry — symptom of a
-stale entry is login failures via the proxy (see
+HA sits behind Caddy with `use_x_forwarded_for: true` and
+`trusted_proxies: [192.168.178.249]`. HA is `network_mode: host` and Caddy
+reaches it via the hardcoded host IP, so HA sees the proxy source as the host
+IP — **not** the `caddy-proxy` bridge subnet (the old `10.89.0.0/24` value is
+wrong here; a stale/missing entry shows up as login failures via the proxy, see
 [operations.md](operations.md) troubleshooting).
+
+This setting is **UI-managed**, not in `configuration.yaml`: HA migrated the
+`http:` block into `.storage/http` (`yaml_migration_done`) and now ignores any
+`http:` block in `configuration.yaml` (a hard error in 2027.2.0). Manage it under
+**Settings → System → Network → Trusted Proxies / X-Forwarded-For**; the value
+lives in `.storage/http` (gitignored, covered by `./backup-ha-config.sh`).
 
 ### Config drift (committed YAML, gitignored state)
 
@@ -421,7 +433,8 @@ stale entry is login failures via the proxy (see
 
 - committed: `configuration.yaml`, `automations.yaml`, `scripts.yaml`, `scenes.yaml`
 - gitignored: `.storage/` (UI-managed state: integrations, dashboards, users,
-  long-lived access tokens) and `secrets.yaml` (credentials, referenced via `!secret`)
+  long-lived access tokens, **and the `http:`/trusted_proxies config**) and
+  `secrets.yaml` (credentials, referenced via `!secret`)
 
 UI changes to the YAML files (YAML-mode automations, YAML dashboards) rewrite
 them on the server — sync the server files back to the workstation, review,
