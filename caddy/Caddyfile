@@ -21,7 +21,8 @@
 
 # HTTP: redirect everything to the HTTPS Homepage UI (wildcard cert covers *.sseifried.link).
 # /health stays proxied in plaintext for container health checks and LAN monitoring
-# (Homepage's /api/health endpoint). The matcher is evaluated once at handle-block entry:
+# (Homepage's public /api/healthcheck endpoint — v2.x renamed it from /api/health, which
+# now 404s). The matcher is evaluated once at handle-block entry:
 # a bare `rewrite @health ...` + `reverse_proxy @health` pair breaks because the rewrite
 # mutates the path before reverse_proxy re-evaluates the matcher (then it never matches).
 # Temporary (302) redirect: switch to `permanent` once HSTS is proven in production.
@@ -30,7 +31,7 @@
 	@health path /health /health/*
 	@nothealth not path /health /health/*
 	handle @health {
-		rewrite * /api/health
+		rewrite * /api/healthcheck
 		reverse_proxy homepage:3000
 	}
 	redir @nothealth https://homepage.sseifried.link{uri}
