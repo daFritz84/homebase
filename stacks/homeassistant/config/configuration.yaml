@@ -7,10 +7,11 @@ homeassistant:
   internal_url: http://192.168.178.249:8123
 
 http:
-  # Caddy runs in the caddy-proxy bridge and connects from that subnet —
-  # verify it with `podman network inspect caddy-proxy` (the network is
-  # created unpinned and changed once: 10.88.0.0/16 -> 10.89.0.0/24,
-  # see docs/operations.md troubleshooting).
+  # HA is network_mode: host, and Caddy reaches it via the hardcoded host IP
+  # (192.168.178.249:8123), so HA sees the proxy source as the host IP — NOT the
+  # caddy-proxy bridge subnet. trusted_proxies must list that host IP, otherwise
+  # login through Caddy fails with "request from a reverse proxy ... not set-up
+  # for reverse proxies". (The bridge-subnet value 10.89.0.0/24 is moot here.)
   use_x_forwarded_for: true
   trusted_proxies:
-    - 10.89.0.0/24
+    - 192.168.178.249
