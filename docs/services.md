@@ -1,6 +1,6 @@
-# Core Services
+# Services
 
-Each core service runs from its own `compose.yaml` via `podman-compose` and is managed as a user
+Each service runs from its own `compose.yaml` via `podman-compose` and is managed as a user
 systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are covered in
 [host-setup.md](host-setup.md).
 
@@ -61,14 +61,13 @@ clone, on a branch, tested with podman-compose directly:
 
 1. **Branch & edit** on the workstation: `git checkout -b <topic>`.
 2. **Validate before pushing** — the same checks CI runs:
-   - Test a stack locally: `podman-compose up -d` / `podman-compose down` in the
-     stack directory (requires the `caddy-proxy` network and the stack's `.env` files)
+   - Test a service locally: `podman-compose up -d` / `podman-compose down` in the
+     service directory (requires the `caddy-proxy` network and the service's `.env` files)
    - Caddyfile: `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
 3. **Commit & push** — the server deploy key is read-only; commits always
    originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
 4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
-   systemd unit (`systemctl --user restart podman-compose@<project>`) — for every
-   project, core services and stacks alike.
+   systemd unit (`systemctl --user restart podman-compose@<project>`) — for every project.
 5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
    sync the server file back to the workstation, review, commit, push
    (see [operations.md](operations.md)).
@@ -227,8 +226,8 @@ AdGuard (`192.168.178.249`) as their DNS server.
 > **Hardcoded host IP:** `192.168.178.249` (the Fritzbox-assigned static IP, see
 > [host-setup.md](host-setup.md#static-ip-address)) is referenced in `caddy/Caddyfile`
 > (AdGuard, Home Assistant and Cockpit `reverse_proxy`),
-> `stacks/homepage/config/services.yaml` (AdGuard widget),
-> `stacks/homeassistant/config/configuration.yaml` (`internal_url`) and
+> `homepage/config/services.yaml` (AdGuard widget),
+> `homeassistant/config/configuration.yaml` (`internal_url`) and
 > `docs/podman.md` (Podman Desktop connection). Rootless containers cannot reach
 > host services by name, so the IP is hardcoded — if the static IP ever changes,
 > update all of these files.
@@ -279,7 +278,7 @@ dig +trace cockpit.sseifried.link   # public resolution: NXDOMAIN is expected
 ## Wanderer (Trail Database)
 
 Self-hosted trail database ([wanderer](https://github.com/open-wanderer/wanderer)).
-Compose file: `stacks/wanderer/compose.yaml`. Unit: `podman-compose@wanderer`
+Compose file: `wanderer/compose.yaml`. Unit: `podman-compose@wanderer`
 (shared pattern above — like Caddy/AdGuard/Homepage).
 
 Three services: `web` (SvelteKit UI — the only one on `caddy-proxy`, alias `wanderer`),
@@ -289,13 +288,13 @@ The instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`) — users only see t
 
 ### First run
 
-The steps below run in the stack checkout — on the server that is the
+The steps below run in the service checkout — on the server that is the
 `~/src/homebase` clone.
 
 1. Provision the secrets (requires an unlocked Bitwarden CLI):
 
 ```bash
-cd stacks/wanderer
+cd wanderer
 ./provision-wanderer-secrets.sh
 ```
 
@@ -363,7 +362,7 @@ is a future option — see the commented block in the upstream `docker-compose.y
 ## Home Assistant (Home Automation)
 
 Home automation platform ([home-assistant](https://www.home-assistant.io/)).
-Compose file: `stacks/homeassistant/compose.yaml`. Unit: `podman-compose@homeassistant`
+Compose file: `homeassistant/compose.yaml`. Unit: `podman-compose@homeassistant`
 (shared pattern above — like Caddy/AdGuard/Homepage/Wanderer).
 
 Single service in **Container** install mode — the only mode viable under
@@ -386,13 +385,13 @@ firewalld rule — by design).
 
 ### First run
 
-The steps below run in the stack checkout — on the server that is the
+The steps below run in the service checkout — on the server that is the
 `~/src/homebase` clone.
 
 1. Deploy with the shared pattern above (unit: `podman-compose@homeassistant`):
 
 ```bash
-cd stacks/homeassistant
+cd homeassistant
 podman-compose systemd
 systemctl --user enable --now podman-compose@homeassistant
 ```

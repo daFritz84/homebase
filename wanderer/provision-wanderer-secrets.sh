@@ -6,7 +6,7 @@ set -euo pipefail
 # bw login
 # export BW_SESSION=$(bw unlock --raw)
 #
-# Run from the stacks/wanderer directory — compose.yaml references .env.secret
+# Run from the wanderer directory — compose.yaml references .env.secret
 # relative to the project directory.
 #
 # Each key is read from the password field of a Bitwarden item:
