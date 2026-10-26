@@ -22,9 +22,12 @@ services:
     volumes:
       - ./config:/config
     healthcheck:
-      # /api/ping is the unauthenticated connectivity endpoint; the HA image
-      # ships python3 (no curl).
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8123/api/ping')"]
+      # HA 2026.10 has no /api/ping (404); "/" returns 200 once the frontend
+      # serves. Use CMD-SHELL with a double-quoted python -c: podman-compose
+      # runs the healthcheck through /bin/sh, and the exec-form list's
+      # parentheses break sh ("unexpected word"). The HA image ships python3
+      # (no curl).
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8123/').status==200 else 1)\""]
       interval: 15s
       retries: 10
       start_period: 60s # first start initializes .storage — be generous
