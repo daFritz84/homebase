@@ -78,5 +78,6 @@ cockpit.sseifried.link {
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy 192.168.178.249:9090 {
 		header_up Host cockpit.sseifried.link
+		header_up X-Forwarded-Proto https
 	}
 }
