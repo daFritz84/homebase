@@ -176,11 +176,19 @@ podman stop wanderer_web_1 wanderer_search_1 wanderer_db_1 homepage_homepage_1 t
 Verify: `podman ps` shows only caddy + adguard-home; `podman ps -a` shows no komodo/mongo/periphery
 containers. From here on, the `komodo.skip` labels are moot — Komodo can no longer stop anything.
 
-**Phase 2 — migrate the stacks** (move data, start the unit). The changes live on
-`feat/retire-komodo-cockpit` — **merge the PR to `main` first** (the server is on `main` and its
-deploy key is read-only). Before starting, sync live config drift (AdGuard ritual) from server →
-workstation → commit → push, then `git pull --rebase --autostash` on the server (safe now: the
-komodo teardown above is done).
+**Phase 2 — migrate the stacks** (move data, start the unit). The server checks out the feature
+branch (the read-only deploy key can fetch):
+```bash
+cd ~/src/homebase
+git fetch origin
+git checkout -b feat/retire-komodo-cockpit origin/feat/retire-komodo-cockpit
+```
+(The dirty `adguard-home/config/AdGuardHome.yaml` is untouched by the branch, so the checkout keeps
+it; if checkout ever complains, `git stash` first.) Before migrating, sync live config drift
+(AdGuard ritual) from server → workstation → commit → push, then `git pull --rebase --autostash`
+on the branch (safe now: the komodo teardown above is done). **After the migration is verified,
+merge the PR on GitHub**, then on the server:
+`git checkout main && git pull --rebase --autostash && git branch -D feat/retire-komodo-cockpit`.
 
 - **Home Assistant** (not deployed yet — fresh start, no data to migrate):
   ```bash
