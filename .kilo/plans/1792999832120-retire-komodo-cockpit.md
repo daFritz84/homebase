@@ -28,8 +28,10 @@ a Cockpit bookmark tile.
   **not** a read-only boundary (the full API stays connectable), and Homepage is web-exposed.
   Tiles get `server: homebase-podman` + `container:` + `showStats: true`.
 - **Single checkout**: stacks run from `~/src/homebase/stacks/<name>` (the git clone), not the Komodo
-  periphery checkout under `/home/chef/.local/share/komodo` (`PERIPHERY_ROOT_DIRECTORY`). Irreplaceable
-  data is **moved** with `mv` (same filesystem → preserves rootless uid mappings).
+  periphery checkout under `/home/chef/.local/share/komodo` (`PERIPHERY_ROOT_DIRECTORY`). Wanderer's
+  `data/` is **moved** with `mv` (same filesystem → preserves rootless uid mappings); Home Assistant
+  was never deployed — fresh onboarding in Phase 2. Container names under podman-compose use
+  underscores (`<project>_<service>_<n>`), not docker-compose dashes.
 - **Unit names**: `podman-compose@homepage`, `podman-compose@wanderer`, `podman-compose@homeassistant`
   (podman-compose derives the project from the directory basename).
 - **Teardown order**: Cockpit up → Komodo control plane torn down **before the server's first
@@ -155,39 +157,39 @@ design (no firewalld rule). Browser login + Services/Podman/Terminal checks happ
 the pushed commit deletes `komodo/`, and `podman-compose down` needs it)
 
 ```bash
-# 0. Back up irreplaceable data FIRST (from the periphery checkout, where the data lives now)
-cd /home/chef/.local/share/komodo/stacks/homeassistant && ./backup-ha-config.sh
+# 0. Back up irreplaceable data FIRST (from the periphery checkout, where the data lives now).
+#    Home Assistant was never deployed — nothing to back up; it gets a fresh onboarding in Phase 2.
 cd /home/chef/.local/share/komodo/stacks/wanderer && ./backup-wanderer-data.sh
-ls -lh ~/.local/share/homeassistant/backups ~/.local/share/wanderer/backups   # verify fresh archives
+ls -lh ~/.local/share/wanderer/backups   # verify fresh archive
 
-# 1. Remove the Homepage/Wanderer/Home Assistant stack definitions in the Komodo UI
+# 1. Remove the Homepage/Wanderer/Home Assistant/testweb stack definitions in the Komodo UI
 #    (a UI deploy after the mv below would boot the stacks from empty dirs — split-brain)
 
 # 2. Tear down the Komodo control plane while komodo/ still exists in the checkout
 systemctl --user disable --now podman-compose@komodo
 cd ~/src/homebase/komodo && podman-compose down && cd ../..
 
-# 3. Stop the three stack containers Komodo had started (names per podman ps)
-podman stop homeassistant-homeassistant-1 wanderer-web-1 wanderer-search-1 wanderer-db-1 homepage-homepage-1
+# 3. Stop the stack containers Komodo had started (podman-compose names use underscores;
+#    names per podman ps; testweb has no restart policy and is usually already down)
+podman stop wanderer_web_1 wanderer_search_1 wanderer_db_1 homepage_homepage_1 testweb_testweb_1
 ```
 Verify: `podman ps` shows only caddy + adguard-home; `podman ps -a` shows no komodo/mongo/periphery
 containers. From here on, the `komodo.skip` labels are moot — Komodo can no longer stop anything.
 
-**Phase 2 — migrate the three stacks** (move data, start the unit). Before starting, sync live
-config drift (HA committed YAML, AdGuard ritual) from server → workstation → commit → push, then
-`git pull --rebase --autostash` on the server (safe now: the komodo teardown above is done).
+**Phase 2 — migrate the stacks** (move data, start the unit). The changes live on
+`feat/retire-komodo-cockpit` — **merge the PR to `main` first** (the server is on `main` and its
+deploy key is read-only). Before starting, sync live config drift (AdGuard ritual) from server →
+workstation → commit → push, then `git pull --rebase --autostash` on the server (safe now: the
+komodo teardown above is done).
 
-- **Home Assistant** (most delicate — do first):
+- **Home Assistant** (not deployed yet — fresh start, no data to migrate):
   ```bash
   cd ~/src/homebase/stacks/homeassistant
-  mv /home/chef/.local/share/komodo/stacks/homeassistant/config ./config.server   # full server state
-  git checkout -- config/                                                          # restore committed YAML
-  cp -a ./config.server/.storage config/.storage
-  cp -a ./config.server/secrets.yaml config/secrets.yaml
-  diff -ru config.server config    # review committed-YAML drift; commit drift from the workstation
   podman-compose systemd && systemctl --user enable --now podman-compose@homeassistant
-  # keep ./config.server until Phase 4 verifies — do NOT delete it here
   ```
+  Then open `https://homeassistant.sseifried.link` and complete the onboarding wizard (owner
+  account, location Vienna — see docs/services.md). `config/` is created in the checkout; the
+  committed-YAML drift ritual and `backup-ha-config.sh` apply from the first UI edit onward.
 - **Wanderer**:
   ```bash
   cd ~/src/homebase/stacks/wanderer
@@ -202,7 +204,7 @@ config drift (HA committed YAML, AdGuard ritual) from server → workstation →
   podman-compose systemd && systemctl --user enable --now podman-compose@homepage
   ```
 Verify per stack: `systemctl --user status podman-compose@<name>`, `curl -k
-https://<name>.sseifried.link`, HA login **through Caddy** (proves trusted_proxies still matches
+https://<name>.sseifried.link`, HA onboarding **through Caddy** (proves trusted_proxies matches
 the unchanged caddy-proxy subnet), Wanderer trails visible (data moved intact).
 
 **Phase 3 — Caddy + Homepage** (after repo changes are pushed)
@@ -220,7 +222,6 @@ Cockpit tile; no Komodo tile.
 **Phase 4 — remove leftovers** (only after Phases 0–3 verify)
 ```bash
 rm -rf /home/chef/.local/share/komodo          # periphery checkouts + backups — data moved & verified
-rm -rf ~/src/homebase/stacks/homeassistant/config.server   # HA migration snapshot — drift committed
 podman volume rm komodo_mongo-data komodo_mongo-config komodo_komodo-keys   # names per podman volume ls
 podman network rm komodo-internal-network
 podman image prune -a
@@ -254,9 +255,8 @@ wanderer, homeassistant.
 
 ## Risks / notes
 
-- **HA config drift**: server committed YAML may be ahead of git — the `diff -ru` step in Phase 2 is
-  mandatory and `config.server` stays until Phase 4; skipping the diff silently reverts UI-made
-  YAML changes.
+- **HA not deployed**: fresh onboarding in Phase 2 — no server-side state to migrate. The
+  committed-YAML drift ritual and `backup-ha-config.sh` apply from the first UI edit onward.
 - **`mv` not `cp`** for `data/` and `config/` — same filesystem, preserves the rootless uid
   mappings (Wanderer's uid-1000 dirs); `cp` would break permissions.
 - **Homepage socket mount** requires the image's root user (default) — do not add a `user:` key.

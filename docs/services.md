@@ -337,7 +337,7 @@ systemctl --user enable --now podman-compose@wanderer
 ```bash
 podman pod ps
 curl -k https://wanderer.sseifried.link
-podman logs --tail=20 wanderer-search-1   # Meilisearch must come up healthy
+podman logs --tail=20 wanderer_search_1   # Meilisearch must come up healthy
 ```
 
 ### Meilisearch upgrades
@@ -398,7 +398,7 @@ systemctl --user enable --now podman-compose@homeassistant
 ```bash
 podman ps
 curl -k https://homeassistant.sseifried.link/   # onboarding HTML
-podman logs --tail=20 homeassistant-homeassistant-1
+podman logs --tail=20 homeassistant_homeassistant_1
 ```
 
 Logging in **through Caddy** must work — that proves `trusted_proxies` in
