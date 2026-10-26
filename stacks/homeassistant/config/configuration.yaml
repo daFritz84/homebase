@@ -6,12 +6,9 @@ homeassistant:
   external_url: https://homeassistant.sseifried.link
   internal_url: http://192.168.178.249:8123
 
-http:
-  # HA is network_mode: host, and Caddy reaches it via the hardcoded host IP
-  # (192.168.178.249:8123), so HA sees the proxy source as the host IP — NOT the
-  # caddy-proxy bridge subnet. trusted_proxies must list that host IP, otherwise
-  # login through Caddy fails with "request from a reverse proxy ... not set-up
-  # for reverse proxies". (The bridge-subnet value 10.89.0.0/24 is moot here.)
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 192.168.178.249
+# HTTP / reverse-proxy config (use_x_forwarded_for, trusted_proxies) is NOT in
+# this file: HA migrated it to .storage/http (UI-managed, gitignored) and now
+# ignores any http: block here (hard error in 2027.2.0). Manage it under
+# Settings > System > Network. trusted_proxies must be the host IP
+# 192.168.178.249 (HA is network_mode: host; Caddy proxies via that IP), NOT the
+# caddy-proxy bridge subnet. .storage is covered by ./backup-ha-config.sh.
