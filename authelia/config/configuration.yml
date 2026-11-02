@@ -79,7 +79,7 @@ identity_providers:
         # authelia-oidc-homepage-secret (provision-authelia-secrets.sh)
         client_secret: 'REPLACE_ME'
         public: false
-        authorization_policy: 'two_factor'
+        authorization_policy: 'one_factor' # flip to two_factor after enrolling factors
         consent_mode: 'auto'
         scopes:
           - 'openid'
@@ -129,14 +129,16 @@ access_control:
   # domains (authelia serves its own portal — its endpoints are exempt from
   # ACL; Homepage is gated by its OIDC client's authorization_policy).
   rules:
-    # walled apps — admins only (partner joins in Phase 2)
+    # walled apps — admins only (partner joins in Phase 2). one_factor for
+    # now (no factors enrolled); flip both rules to two_factor after enrolling
+    # TOTP + a passkey at the portal.
     - domain:
         - 'adguard.sseifried.link'
         - 'wanderer.sseifried.link'
-      policy: 'two_factor'
+      policy: 'one_factor'
       subject: 'group:homebase-admins'
     - domain: 'homeassistant.sseifried.link'
-      policy: 'two_factor'
+      policy: 'one_factor'
       subject: 'group:homebase-admins'
     # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
     # proxies it directly (PAM + TOTP), default-deny never applies

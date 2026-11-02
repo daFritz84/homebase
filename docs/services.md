@@ -478,14 +478,17 @@ authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `two_factor` for `group:homebase-admins` on AdGuard,
-Home Assistant and Wanderer; `bypass` on the Authelia portal and Homepage
-(Homepage's own OIDC gate enforces auth — Authelia authorizes the `homepage`
-OIDC client, and Homepage admits any identity Authelia authorizes). Cockpit
+**default deny**; `one_factor` for `group:homebase-admins` on AdGuard,
+Home Assistant and Wanderer; no rules for the Authelia portal (its endpoints
+are exempt from ACL) or Homepage (no forward_auth — its own OIDC gate
+enforces auth: Authelia authorizes the `homepage` OIDC client, and Homepage
+admits any identity Authelia authorizes). Cockpit
 has **no rule and no forward_auth** — it stays outside Authelia entirely.
 Session cookie domain `sseifried.link` → one login, all walled apps (true SSO).
 Second factors: TOTP + WebAuthn passkeys, enrolled at
-`https://authelia.sseifried.link/portal`.
+`https://authelia.sseifried.link/portal` — **optional for now**: policies run
+`one_factor`; flip the two walled-app rules + the `homepage` OIDC client's
+`authorization_policy` to `two_factor` after enrolling.
 
 ### First run
 
@@ -649,7 +652,7 @@ LAN address (`192.168.178.249:8123`) directly.
 
 **Residual risk (accepted):** `User-Agent` is fully client-controlled, so any
 client that can reach `homeassistant.sseifried.link` can spoof the Companion
-UA and reach HA's own single-factor login, evading Authelia's `two_factor`
+UA and reach HA's own single-factor login, evading Authelia's `one_factor`
 policy and its regulation bans. The wall is an SSO/anti-phishing layer for
 browsers, not a hard boundary against a client that deliberately evades it —
 on the bypassed paths the HA long-lived tokens are the only credential, so
