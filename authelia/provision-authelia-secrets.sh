@@ -67,14 +67,15 @@ resolve() {
 }
 
 # hash_argon2 <value> — argon2id digest via the authelia image (stdout,
-# "Digest: " prefix stripped). The secret goes to the interactive prompt on
-# stdin: --password puts it in the container's argv, readable by any local
-# process via /proc/<pid>/cmdline for the run's duration. Empty output when
-# podman/the image is unavailable (or the prompt needs a TTY) — the caller
-# prints manual instructions then.
+# "Digest: " prefix stripped). The CLI reads the password from an interactive
+# tty ONLY (stdin is not supported), so the only non-interactive path is
+# --password: the secret sits in the container's argv for the run's duration,
+# readable via /proc/<pid>/cmdline by the owning user — acceptable on this
+# single-admin host. Empty output when podman/the image is unavailable — the
+# caller prints manual instructions then.
 hash_argon2() {
   local value="$1" out
-  out="$(printf '%s\n' "${value}" | podman run -i --rm "${AUTHHELIA_IMAGE}" authelia crypto hash generate argon2 --no-confirm 2>/dev/null | tail -n 1)" || out=""
+  out="$(podman run --rm "${AUTHHELIA_IMAGE}" authelia crypto hash generate argon2 --no-confirm --password "${value}" 2>/dev/null | tail -n 1)" || out=""
   printf '%s' "${out#Digest: }"
 }
 
@@ -116,7 +117,7 @@ if [ -n "${OIDC_HOMEPAGE_HASH}" ]; then
   echo "    ${OIDC_HOMEPAGE_HASH}"
 else
   echo "[!] podman/image unavailable — hash it manually (then re-run this hint):"
-  echo "    printf '%s\n' '<secret>' | podman run -i --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm"
+  echo "    podman run --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm --password '<secret>'"
 fi
 echo
 echo "    -> paste the digest as identity_providers.oidc.clients[homepage].client_secret"
@@ -135,9 +136,10 @@ echo "     mkdir -p config/keys"
 echo "     podman run --rm -v \"\$(pwd)/config/keys:/keys\" ${AUTHHELIA_IMAGE} \\"
 echo "       authelia crypto pair rsa generate --bits 2048 --directory /keys \\"
 echo "       --file.private-key oidc.key --file.public-key oidc.pub"
-echo "  2. Generate the login password hash for config/bootstrap.ldif (userPassword —"
-echo "     replace the {REPLACE_ME} placeholder; unreplaced, slapd rejects the"
-echo "     unknown {scheme} and the add fails closed):"
-echo "     printf '%s\n' '<login password>' | podman run -i --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm"
+echo "  2. Hash BOTH {REPLACE_ME} placeholders in config/bootstrap.ldif with"
+echo "     slappasswd (slapd verifies LDIF passwords; 2.4.57 has no argon2):"
+echo "     printf '%s\n' '<password>' | podman run -i --rm --entrypoint /usr/sbin/slappasswd docker.io/osixia/openldap:1.5.0 -s -"
+echo "     - cn=admin entry: the LDAP admin bind password (this item, = LDAP_ADMIN_PASSWORD)"
+echo "     - uid entry: the Authelia login password (generate one, save to Bitwarden)"
 echo "  3. Validate the config offline, then podman-compose up -d and ldapadd the"
 echo "     bootstrap LDIF piped from the host (docs/services.md, 'First run')."

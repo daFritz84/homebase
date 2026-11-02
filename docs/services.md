@@ -508,25 +508,34 @@ cd authelia
    `HOMEPAGE_OIDC_CLIENT_SECRET`). Save generated items to Bitwarden.
 
 2. Generate the OIDC RSA signing key pair (gitignored, covered by
-   `backup-authelia.sh`) and the login-password hash for the LDIF — the secret
-   goes to the prompt on **stdin**, not `--password` (argv is readable by any
-   local process via `/proc/<pid>/cmdline`):
+   `backup-authelia.sh`) and the login-password hash for the LDIF. The LDIF
+   `userPassword` must be a scheme **slapd** can verify — Authelia
+   authenticates by binding as the user, so OpenLDAP checks the hash, and
+   osixia 1.5.0's OpenLDAP 2.4.57 cannot verify argon2 (a bare `$argon2id$…`
+   digest is treated as plaintext → login "password is wrong"). Use
+   `{SSHA}` via `slappasswd` from the openldap image; the password goes to
+   stdin (`-s -`), never argv:
 
 ```bash
 mkdir -p config/keys
 podman run --rm -v "$(pwd)/config/keys:/keys" docker.io/authelia/authelia:4.39.28 \
   authelia crypto pair rsa generate --bits 2048 --directory /keys \
   --file.private-key oidc.key --file.public-key oidc.pub
-printf '%s\n' '<Authelia login password>' | podman run -i --rm \
-  docker.io/authelia/authelia:4.39.28 \
-  authelia crypto hash generate argon2 --no-confirm
+LOGIN_PW="$(openssl rand -base64 18)"
+printf '%s\n' "$LOGIN_PW" | podman run -i --rm \
+  --entrypoint /usr/sbin/slappasswd docker.io/osixia/openldap:1.5.0 -s -
+echo "Authelia login password (save to Bitwarden): $LOGIN_PW"
 ```
 
-   Paste the digest into `config/bootstrap.ldif` as `userPassword`, replacing
-   the `{REPLACE_ME}` placeholder — the `{scheme}` prefix makes slapd reject an
-   unreplaced placeholder, so a forgotten substitution fails closed instead of
-   committing a known plaintext password. This is the Authelia **login**
-   password, not the LDAP admin bind password.
+   Paste the `{SSHA}…` output into `config/bootstrap.ldif` as the
+   `uid=sseifried` `userPassword`, replacing the `{REPLACE_ME}` placeholder —
+   the `{scheme}` prefix makes slapd reject an unreplaced placeholder, so a
+   forgotten substitution fails closed. Replace the **second** `{REPLACE_ME}`
+   (the `cn=admin` entry) the same way with the hash of the LDAP admin bind
+   password (`authelia-ldap-admin-password` = `LDAP_ADMIN_PASSWORD` in
+   `.env.secret`): osixia 1.5.0 never creates the `cn=admin` entry (it only
+   sets `olcRootPW` in `cn=config`), so without it every simple bind as
+   `cn=admin` fails with "Invalid credentials (49)".
 
 3. Validate the config **offline**, before the stack starts. With an unfilled
    `client_secret: REPLACE_ME` or a missing `config/keys/oidc.key`, authelia
@@ -544,7 +553,10 @@ podman run --rm --env-file .env.secret -v "$(pwd)/config:/config" \
   authelia config validate --config /config/configuration.yml --config.experimental.filters template
 ```
 
-4. Start the stack and load the directory. podman-compose **ignores**
+4. Start the stack and load the directory (the LDIF creates the `cn=admin`
+   entry osixia never creates — the bind must succeed before `ldapadd` can
+   run, so the admin `{REPLACE_ME}` hash from step 2 must be in place).
+   podman-compose **ignores**
    `depends_on: condition: service_healthy` (start ordering only), so on
    first start authelia starts while slapd is still bootstrapping, fails its
    LDAP connection, and crash-loops for ~30s until slapd answers —
@@ -568,7 +580,7 @@ podman exec -i authelia_openldap_1 ldapadd -x \
 5. Deploy with the shared pattern (unit: `podman-compose@authelia`):
 
 ```bash
-podman-compose systemd
+podman-compose -f compose.yaml systemd
 systemctl --user enable --now podman-compose@authelia
 ```
 
@@ -671,6 +683,16 @@ files use the current (4.39.28) schema:
   signing key pair is injected into `configuration.yml` via the `template`
   config filter (`fileContent` of the gitignored `config/keys/oidc.key`).
 - `authelia hash-password` → `authelia crypto hash generate argon2`;
-  `authelia validate` → `authelia config validate`.
+  `authelia validate` → `authelia config validate`. The CLI reads the
+  password from an interactive **tty** only — stdin is NOT supported — so
+  non-interactive use needs `--random` (prints plaintext + digest) or
+  `--password` (transient argv).
+- LDAP `userPassword` schemes: Authelia logs users in by **binding as them**,
+  so SLAPD verifies the hash. osixia 1.5.0 ships OpenLDAP 2.4.57 — no argon2
+  support — so LDIF passwords use `{SSHA}` via `slappasswd` (the openldap
+  image, `-s -` on stdin). Argon2 digests are only for the OIDC
+  `client_secret` in `configuration.yml`, which Authelia verifies itself.
+- osixia 1.5.0 does not create the `cn=admin` entry (only `olcRootPW` in
+  `cn=config`) — `bootstrap.ldif` adds it.
 - No SMTP: `password_reset.disable: true` + filesystem notifier
   (`/config/notifier/notification.txt`).
