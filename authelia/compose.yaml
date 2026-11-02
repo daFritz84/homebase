@@ -1,0 +1,98 @@
+# authelia — SSO identity layer (https://www.authelia.com/) + OpenLDAP user store
+# ---
+# Secrets come from .env.secret (gitignored, 0600, provisioned by
+# provision-authelia-secrets.sh) via env_file — no ${VAR:?} interpolation, so
+# `docker compose config` passes with a touched .env.secret (CI). The same
+# LDAP admin password is consumed twice: LDAP_ADMIN_PASSWORD (osixia admin
+# account) and AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD (Authelia bind).
+# Topology: only authelia joins caddy-proxy (alias `authelia`); openldap stays
+# on the internal network. No host ports — the portal is served through Caddy.
+# X_AUTHELIA_CONFIG_FILTERS=template enables the config file filters so
+# configuration.yml can read the gitignored OIDC signing key from
+# config/keys/ via fileContent (the key must never be committed).
+# Both containers run as container root; rootless Podman maps that to the host
+# user, so the bind-mounted config/ and the named volumes need no
+# `podman unshare chown` (unlike Wanderer's uid-1000 services).
+# The authelia image ships its own HEALTHCHECK (/app/healthcheck.sh) — not
+# overridden here.
+
+services:
+  authelia:
+    image: docker.io/authelia/authelia:4.39.28
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+    volumes:
+      - ./config:/config
+      # sqlite DB lives in a named volume (data, not code) mounted over the
+      # /config/db path referenced by storage.local.path.
+      - authelia-db:/config/db
+    networks:
+      caddy-proxy:
+        aliases:
+          - authelia
+      authelia-internal: {}
+    depends_on:
+      # podman-compose IGNORES the condition (start ordering only): on first
+      # start authelia races slapd's bootstrap, fails its LDAP connection and
+      # crash-loops until restart: unless-stopped self-heals it (~30s). The
+      # healthcheck stays for podman's own visibility; docker compose users
+      # get the real gate.
+      openldap:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  openldap:
+    image: docker.io/osixia/openldap:1.5.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      # No LDAP_ADMIN_DN: osixia 1.5.0 does not consume it — the admin DN is
+      # fixed at cn=admin,<LDAP_BASE_DN>, which is what configuration.yml
+      # binds as authentication_backend.ldap.user.
+      LDAP_BASE_DN: dc=sseifried,dc=link
+      LDAP_DOMAIN: sseifried.link
+      LDAP_ORGANISATION: Homebase
+      LDAP_LOG_LEVEL: "256"
+    volumes:
+      # osixia needs both: the data dir AND the slapd.d config dir.
+      - openldap-data:/var/lib/ldap
+      - openldap-config:/etc/ldap/slapd.d
+    networks:
+      - authelia-internal
+    healthcheck:
+      # ldapwhoami ships with the image (ldap-utils); anonymous whoami is
+      # osixia's default ACL — proves slapd answers on 389. No -b option:
+      # ldapwhoami accepts none (exits non-zero on "invalid option 'b'"),
+      # which would keep this healthcheck failing forever and block authelia
+      # (depends_on: service_healthy).
+      test: ["CMD", "ldapwhoami", "-x", "-H", "ldap://localhost:389"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+networks:
+  caddy-proxy:
+    external: true
+
+  authelia-internal:
+    name: authelia-internal
+    driver: bridge
+
+volumes:
+  authelia-db:
+  openldap-data:
+  openldap-config:

@@ -1,0 +1,76 @@
+# Authelia user store bootstrap — gitops user management (no admin UI).
+# ---
+# Apply on first run (and re-runnable with `ldapadd -c` for incremental
+# changes; existing entries are skipped with an "already exists" error). Run
+# from the authelia directory: the LDIF is piped from the host checkout,
+# because the openldap container has NO ./config mount (only the authelia
+# service binds config/) — `-f /config/bootstrap.ldif` inside it is "No such
+# file":
+#
+#   podman exec -i authelia_openldap_1 ldapadd -x \
+#     -D "cn=admin,dc=sseifried,dc=link" -W < config/bootstrap.ldif
+#
+# (-W prompts for the LDAP admin password = Bitwarden item
+# authelia-ldap-admin-password.)
+#
+# BEFORE the first ldapadd, replace the {REPLACE_ME} placeholder below with an
+# argon2 digest of the Authelia login password (NOT the LDAP admin bind
+# password) — the secret goes to the prompt on stdin, not --password (argv is
+# readable by any local process via /proc/<pid>/cmdline):
+#
+#   printf '%s\n' '<login password>' | podman run -i --rm \
+#     docker.io/authelia/authelia:4.39.28 authelia crypto hash generate argon2 --no-confirm
+#
+# The placeholder is scheme-prefixed ({REPLACE_ME}) on purpose: slapd parses
+# the {scheme} prefix of userPassword and rejects the unknown scheme, so an
+# unreplaced file fails the add (fail-closed) instead of storing the publicly
+# committed literal as a plaintext login password.
+#
+# groupOfNames requires at least one member, so the admin is also a member of
+# homebase-users. Add the partner (Phase 2) as a new inetOrgPerson entry, then
+# re-run the ldapadd ritual — that creates the user, but membership lives in
+# the GROUP entry: ldapadd only issues ADD ops, so the existing group add is
+# skipped by -c and the new member: line is silently NOT applied. Grant the
+# membership with ldapmodify (changetype: modify / add: member on the group
+# DN) — see docs/services.md, "User management (LDIF ritual)".
+#
+# Drift: users/groups live in the openldap-data volume (covered by
+# backup-authelia.sh); this file is the source of truth — change users by
+# editing this file, committing, and re-running ldapadd (AdGuard drift
+# pattern).
+
+dn: ou=users,dc=sseifried,dc=link
+changetype: add
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=sseifried,dc=link
+changetype: add
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=sseifried,ou=users,dc=sseifried,dc=link
+changetype: add
+objectClass: inetOrgPerson
+uid: sseifried
+cn: Stefan Seifried
+sn: Seifried
+givenName: Stefan
+displayName: Stefan Seifried
+mail: sseifried@sseifried.link
+# {scheme} prefix -> slapd rejects the unknown scheme on add (fail-closed).
+# Replace with the argon2 digest (Authelia verifies the digest itself; it does
+# not rely on slapd's password schemes).
+userPassword: {REPLACE_ME}
+
+dn: cn=homebase-admins,ou=groups,dc=sseifried,dc=link
+changetype: add
+objectClass: groupOfNames
+cn: homebase-admins
+member: uid=sseifried,ou=users,dc=sseifried,dc=link
+
+dn: cn=homebase-users,ou=groups,dc=sseifried,dc=link
+changetype: add
+objectClass: groupOfNames
+cn: homebase-users
+member: uid=sseifried,ou=users,dc=sseifried,dc=link

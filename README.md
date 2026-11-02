@@ -15,6 +15,7 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | Homepage   | `homepage/compose.yaml`             | Service dashboard                          |
 | Wanderer   | `wanderer/compose.yaml`             | Self-hosted trail database                 |
 | Home Assistant | `homeassistant/compose.yaml`      | Home automation platform                 |
+| Authelia     | `authelia/compose.yaml`           | SSO: login portal, 2FA, OIDC, forward-auth wall |
 | Cockpit    | host package (apt)                  | Web management: systemd units, logs, containers |
 
 ## Quick start
@@ -47,7 +48,7 @@ See [`docs/host-setup.md`](docs/host-setup.md) for the full installation and con
 ## Documentation
 
 - [`docs/host-setup.md`](docs/host-setup.md) — provision the host: Proxmox VM & iGPU passthrough, Debian base, packages, firewall, static IP, Podman, Git deploy keys, Bitwarden CLI
-- [`docs/services.md`](docs/services.md) — deploy the stack: shared podman-compose systemd pattern, Caddy, Cockpit, Adguard Home, Wanderer, Home Assistant
+- [`docs/services.md`](docs/services.md) — deploy the stack: shared podman-compose systemd pattern, Caddy, Cockpit, Adguard Home, Wanderer, Home Assistant, Authelia (SSO)
 - [`docs/operations.md`](docs/operations.md) — operate the stack: update procedure, data backups, TODO & inspiration
 - [`homepage/config/README.md`](homepage/config/README.md) — Homepage dashboard configuration
 - [`docs/podman.md`](docs/podman.md) — Podman cheatsheet
