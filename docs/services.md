@@ -697,5 +697,12 @@ files use the current (4.39.28) schema:
   `client_secret` in `configuration.yml`, which Authelia verifies itself.
 - osixia 1.5.0 does not create the `cn=admin` entry (only `olcRootPW` in
   `cn=config`) — `bootstrap.ldif` adds it.
+- The 4.39.28 rfc2307bis preset group filter ends with `!(!pwdReset=TRUE)`;
+  `pwdReset` is undefined in osixia's schema set, so the clause excludes
+  EVERY group — sessions get `groups=[]` and every `subject: group:...` rule
+  403s (diagnosed via slapd access log, `LDAP_LOG_LEVEL: "128"`). Override:
+  `authentication_backend.ldap.groups_filter` (4.39.28 key — `group.filter`
+  and `group_filter` are rejected; user-DN placeholder `{dn}` —
+  `{user_identifier}` is sent literally). Fixed upstream after 4.39.28.
 - No SMTP: `password_reset.disable: true` + filesystem notifier
   (`/config/notifier/notification.txt`).

@@ -54,6 +54,13 @@ authentication_backend:
     additional_groups_dn: 'ou=groups'
     user: 'cn=admin,dc=sseifried,dc=link'
     # password from AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD
+    # rfc2307bis preset WITHOUT the preset's trailing !(!pwdReset=TRUE)
+    # clause: pwdReset is undefined in osixia 1.5.0's schema set, and the
+    # clause then silently excludes EVERY group -> sessions get groups=[]
+    # and every subject: group:... rule 403s (verified via slapd access log).
+    # 4.39.28 key is groups_filter (NOT group.filter/group_filter) and the
+    # user-DN placeholder is {dn} ({user_identifier} is sent literally).
+    groups_filter: '(&(|(member={dn})(uniqueMember={dn}))(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=groupOfMembers)))'
 
 totp:
   issuer: 'sseifried.link'
