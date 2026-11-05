@@ -29,5 +29,9 @@ authelia/config/db/
 authelia/config/keys/
 authelia/config/notifier/
 
+# Rendered LDIF (deployment {SSHA} hashes from .env.secret via render-ldif.sh)
+# — secrets, never commit; the template config/bootstrap.ldif is the source
+authelia/config/bootstrap.rendered.ldif
+
 # Kilo working plans (local migration notes, not part of the stack)
 .kilo/plans/

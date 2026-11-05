@@ -10,16 +10,16 @@
 # via the `template` config filter (X_AUTHELIA_CONFIG_FILTERS=template in
 # compose.yaml) — generate it with the provision script's step 1.
 #
-# REPLACE_ME markers (all must be filled; slapd rejects the unknown
-# {REPLACE_ME} scheme on add, so an unreplaced LDIF fails closed):
-#   - identity_providers.oidc.clients[homepage].client_secret (here) — an
-#     argon2 digest (`authelia crypto hash generate argon2`; tty-only prompt,
-#     use --random/--password) — Authelia verifies client secrets itself
-#   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=...) — {SSHA}
-#     hashes via slappasswd, NOT argon2: Authelia logs users in by binding
-#     as them, so SLAPD verifies the scheme, and osixia 1.5.0's OpenLDAP
-#     2.4.57 cannot verify argon2 (bare $argon2id$ = plaintext → login
-#     "password is wrong")
+# REPLACE_ME markers stay in the committed files — the deployment values are
+# secrets and live only on the server:
+#   - identity_providers.oidc.clients[homepage].client_secret (here): the
+#     argon2 digest is injected at runtime from .env.secret via the env
+#     override AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
+#     (written by provision-authelia-secrets.sh)
+#   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=...): {SSHA}
+#     hashes via slappasswd (slapd verifies LDIF passwords; osixia 1.5.0's
+#     OpenLDAP 2.4.57 cannot verify argon2) — ./render-ldif.sh fills them
+#     from .env.secret into the gitignored config/bootstrap.rendered.ldif
 #
 # 4.39 schema notes (the plan predates the 4.38 ACL rewrite):
 #   - server.trusted_proxies was REMOVED in 4.38 — proxy trust lives in Caddy
@@ -82,8 +82,9 @@ identity_providers:
     clients:
       - client_id: 'homepage'
         client_name: 'Homepage'
-        # argon2 digest of the secret from Bitwarden item
-        # authelia-oidc-homepage-secret (provision-authelia-secrets.sh)
+        # digest injected from .env.secret via env override
+        # AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
+        # (provision-authelia-secrets.sh) — placeholder stays committed
         client_secret: 'REPLACE_ME'
         public: false
         authorization_policy: 'one_factor' # flip to two_factor after enrolling factors
