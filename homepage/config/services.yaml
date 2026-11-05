@@ -39,3 +39,11 @@
         server: homebase-podman
         container: homeassistant_homeassistant_1
         showStats: true
+
+    - Authelia:
+        icon: authelia
+        href: https://authelia.sseifried.link
+        description: SSO — login portal, 2FA enrollment, OIDC
+        server: homebase-podman
+        container: authelia_authelia_1
+        showStats: true
