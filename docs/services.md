@@ -505,14 +505,15 @@ cd authelia
 
    The script fetches/generates the `AUTHELIA_*` secrets + the LDAP admin
    password into `.env.secret` (gitignored, mode `0600`), plus two more
-   entries: the argon2 digest of the Homepage OIDC client secret — as the
-   `AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET` env override,
-   so the committed `configuration.yml` keeps its `REPLACE_ME` placeholder —
-   and the generated Authelia **login password** (`AUTHHELIA_LOGIN_PASSWORD`,
-   printed on first generation: save it to Bitwarden as
-   `authelia-login-password`). It also prints the **raw** OIDC client secret
-   for `homepage/.env` as `HOMEPAGE_OIDC_CLIENT_SECRET`. Save generated
-   items to Bitwarden.
+   entries: the argon2 digest of the Homepage OIDC client secret — as
+   `HOMEPAGE_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml` by
+   the `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env overrides
+   are NOT supported — 4.39 rejects them), so the committed file keeps its
+   placeholder — and the generated Authelia **login password**
+   (`LDIF_LOGIN_PASSWORD`, printed on first generation: save it to Bitwarden
+   as `authelia-login-password`). It also prints the **raw** OIDC client
+   secret for `homepage/.env` as `HOMEPAGE_OIDC_CLIENT_SECRET`. Save
+   generated items to Bitwarden.
 
 2. Generate the OIDC RSA signing key pair (gitignored, covered by
    `backup-authelia.sh`):
@@ -553,9 +554,9 @@ podman run --rm -v "$(pwd)/config/keys:/keys" docker.io/authelia/authelia:4.39.2
    validating via `podman exec` into the container started in step 4 fails
    exactly when validation is needed — while the walled apps 502. The
    `--env-file` is required: the config's secrets (session secret, storage
-   encryption key, OIDC HMAC secret, and the OIDC client secret digest that
-   overrides the committed `REPLACE_ME` placeholder) are injected from
-   `.env.secret` via `AUTHELIA_*` env vars, and the validator hard-fails on
+   encryption key, OIDC HMAC secret, and the OIDC client secret digest
+   injected into the committed placeholder by the `template` filter) are
+   read from `.env.secret` via env vars, and the validator hard-fails on
    missing required options:
 
 ```bash
@@ -705,9 +706,10 @@ files use the current (4.39.28) schema:
   support — so LDIF passwords use `{SSHA}` via `slappasswd` (the openldap
   image, `-s -` on stdin) — `./render-ldif.sh` does this from `.env.secret`
   into the gitignored rendered LDIF. Argon2 digests are only for the OIDC
-  `client_secret`, injected into `configuration.yml` from `.env.secret` via
-  the `AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET` env override
-  (the committed file keeps its `REPLACE_ME` placeholder), which Authelia
+  `client_secret`, injected into `configuration.yml` from `.env.secret` by
+  the `template` filter (`{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}` —
+  indexed `AUTHELIA_..._CLIENTS_0_...` env overrides are rejected by 4.39:
+  "configuration environment variable not expected"), which Authelia
   verifies itself.
 - osixia 1.5.0 does not create the `cn=admin` entry (only `olcRootPW` in
   `cn=config`) — `bootstrap.ldif` adds it.
