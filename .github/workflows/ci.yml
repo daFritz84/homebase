@@ -29,8 +29,8 @@ jobs:
         env:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
-          touch caddy/.env homepage/.env wanderer/.env.secret
-          for f in caddy adguard-home homeassistant homepage wanderer; do
+          touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret
+          for f in caddy adguard-home homeassistant homepage wanderer authelia; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

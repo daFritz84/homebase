@@ -19,6 +19,21 @@
 	}
 }
 
+# Authelia forward-auth wall (Authelia 4.38+ official Caddy integration:
+# /api/authz/forward-auth; the legacy /api/authelia/validate?rd= endpoint is
+# gone — the redirect target is derived from the X-Forwarded-* headers Caddy
+# sends, and the portal URL from session.cookies.authelia_url in Authelia's
+# configuration.yml). trusted_proxies must match the caddy-proxy subnet
+# (`podman network inspect caddy-proxy`) — the subnet has drifted before, see
+# docs/operations.md troubleshooting.
+(authelia-fa) {
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		trusted_proxies 10.89.0.0/24
+	}
+}
+
 # HTTP: redirect everything to the HTTPS Homepage UI (wildcard cert covers *.sseifried.link).
 # /health stays proxied in plaintext for container health checks and LAN monitoring
 # (Homepage's public /api/healthcheck endpoint — v2.x renamed it from /api/health, which
@@ -43,29 +58,77 @@
 
 # --- TLS services (resolved to this host by AdGuard Home split DNS) ---
 
-# Homepage
+# Homepage — no forward-auth wall: Homepage's built-in OIDC gate redirects to
+# Authelia (native SSO). Authelia authorizes the `homepage` OIDC client;
+# Homepage admits any identity Authelia authorizes (verified in v2.7.0 docs).
 homepage.sseifried.link {
 	import tls
 	reverse_proxy homepage:3000
 }
 
-# Wanderer (trail database)
-wanderer.sseifried.link {
+# Authelia portal (login + 2FA enrollment + OIDC IdP) — serves itself,
+# access_control rule bypasses its own domain
+authelia.sseifried.link {
 	import tls
-	reverse_proxy wanderer:3000
+	reverse_proxy authelia:9091
 }
 
-# AdGuard Home
+# Wanderer (trail database) — behind the Authelia wall (one_factor for
+# homebase-admins; Wanderer's own account login stays on top of it)
+wanderer.sseifried.link {
+	import tls
+	route {
+		import authelia-fa
+		reverse_proxy wanderer:3000
+	}
+}
+
+# AdGuard Home — behind the Authelia wall (one_factor for homebase-admins)
 adguard.sseifried.link {
 	import tls
-	reverse_proxy 192.168.178.249:8095
+	route {
+		import authelia-fa
+		reverse_proxy 192.168.178.249:8095
+	}
 }
 
 # Home Assistant (host-networked container — AdGuard pattern: hardcoded host IP,
-# rootless containers cannot reach host services by name)
+# rootless containers cannot reach host services by name) — behind the Authelia
+# wall (one_factor for homebase-admins).
+# Two bypasses of the wall, both authenticated by HA itself (Authelia 4.38+
+# removed the legacy bypass_credentials/user-agent ACL criteria, so they live
+# here):
+#   - Companion app: sends no browser cookies, so it cannot pass the wall.
+#     Requests from the Companion user-agents skip forward_auth and go straight
+#     to HA, which authenticates the app with its own long-lived access token.
+#     Caddy >=2.8 removed regex from the header matcher (exact + * wildcards
+#     only) — the UA matcher MUST be header_regexp, a regex in `header` is
+#     compared literally and never matches. If the app's user-agent string
+#     changes, the pattern must follow (docs/services.md).
+#   - Bearer-token API clients (automations, custom cards, external tools):
+#     they send Authorization: Bearer <long-lived token> and no Authelia
+#     cookie, so the wall would 302 them to the portal. HA validates its own
+#     tokens, so these are proxied directly.
+# Residual risk (accepted): User-Agent is client-controlled, so any client that
+# can reach this listener can spoof the Companion UA and reach HA's own
+# single-factor login, evading Authelia's 2FA and regulation bans
+# (docs/services.md, "HA wall bypasses").
 homeassistant.sseifried.link {
 	import tls
-	reverse_proxy 192.168.178.249:8123
+	@companion header_regexp User-Agent ^(HomeAssistant/|com\.homeassistant\.companion\.android)
+	@bearer header Authorization "Bearer *"
+	handle @companion {
+		reverse_proxy 192.168.178.249:8123
+	}
+	handle @bearer {
+		reverse_proxy 192.168.178.249:8123
+	}
+	handle {
+		route {
+			import authelia-fa
+			reverse_proxy 192.168.178.249:8123
+		}
+	}
 }
 
 # Cockpit (host service — hardcoded host IP, like AdGuard/HA; Caddy passes
