@@ -13,9 +13,12 @@
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
 #   - identity_providers.oidc.clients[homepage].client_secret (here): the
-#     argon2 digest is injected at runtime from .env.secret via the env
-#     override AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
-#     (written by provision-authelia-secrets.sh)
+#     argon2 digest is injected at startup by the `template` filter from the
+#     HOMEPAGE_OIDC_CLIENT_SECRET_HASH env var (.env.secret, written by
+#     provision-authelia-secrets.sh). Indexed env overrides
+#     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
+#     "configuration environment variable not expected". Missing env var ->
+#     empty client_secret -> validation fails closed.
 #   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=...): {SSHA}
 #     hashes via slappasswd (slapd verifies LDIF passwords; osixia 1.5.0's
 #     OpenLDAP 2.4.57 cannot verify argon2) — ./render-ldif.sh fills them
@@ -82,10 +85,9 @@ identity_providers:
     clients:
       - client_id: 'homepage'
         client_name: 'Homepage'
-        # digest injected from .env.secret via env override
-        # AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
-        # (provision-authelia-secrets.sh) — placeholder stays committed
-        client_secret: 'REPLACE_ME'
+        # argon2 digest injected from .env.secret by the template filter
+        # (HOMEPAGE_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh)
+        client_secret: '{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}'
         public: false
         authorization_policy: 'one_factor' # flip to two_factor after enrolling factors
         consent_mode: 'auto'

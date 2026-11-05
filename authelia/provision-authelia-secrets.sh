@@ -24,15 +24,17 @@ set -euo pipefail
 #
 # The OIDC client secret for Homepage (item: authelia-oidc-homepage-secret)
 # is fetched/generated and argon2-hashed via the authelia image: the digest
-# goes into .env.secret as AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
-# (Authelia env override — the committed configuration.yml keeps its
-# REPLACE_ME placeholder), the RAW value is printed for homepage/.env as
+# goes into .env.secret as HOMEPAGE_OIDC_CLIENT_SECRET_HASH (injected into
+# configuration.yml by the template filter — the committed file keeps its
+# placeholder), the RAW value is printed for homepage/.env as
 # HOMEPAGE_OIDC_CLIENT_SECRET.
 #
-# The Authelia login password (AUTHHELIA_LOGIN_PASSWORD, for the LDIF
+# The Authelia login password (LDIF_LOGIN_PASSWORD, for the LDIF
 # userPassword) is generated once, kept in .env.secret across re-runs, and
 # printed on first generation — save it to Bitwarden (authelia-login-password).
 # render-ldif.sh hashes it (with LDAP_ADMIN_PASSWORD) into the rendered LDIF.
+# Both names avoid the AUTHELIA_ prefix on purpose: Authelia validates every
+# AUTHELIA_* env var as a config key and warns "not expected" on these.
 #
 # WARNING: AUTHELIA_STORAGE_ENCRYPTION_KEY encrypts 2FA secrets in the sqlite
 # DB at rest. Rotating it after factors exist forces every user to re-enroll.
@@ -94,8 +96,8 @@ LDAP_ADMIN_PASSWORD="$(resolve authelia-ldap-admin-password)"
 AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
 
 # --- OIDC client secret for Homepage: raw value -> homepage/.env, argon2
-# digest -> .env.secret (Authelia env override; the committed
-# configuration.yml keeps its REPLACE_ME placeholder) ---
+# digest -> .env.secret (template-filter injection into configuration.yml;
+# the committed file keeps its placeholder) ---
 echo "[*] OIDC client secret (Homepage):"
 OIDC_HOMEPAGE_SECRET="$(resolve authelia-oidc-homepage-secret)"
 [ -n "${OIDC_HOMEPAGE_SECRET}" ] || { echo "[ERR] Empty authelia-oidc-homepage-secret"; exit 1; }
@@ -108,11 +110,11 @@ fi
 
 # --- Authelia login password (LDIF userPassword): generated once, preserved
 # across re-runs from the existing env file; render-ldif.sh hashes it ---
-AUTHHELIA_LOGIN_PASSWORD=""
-[ -f "${ENV_FILE}" ] && AUTHHELIA_LOGIN_PASSWORD="$(grep '^AUTHHELIA_LOGIN_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+LDIF_LOGIN_PASSWORD=""
+[ -f "${ENV_FILE}" ] && LDIF_LOGIN_PASSWORD="$(grep '^LDIF_LOGIN_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
 LOGIN_PW_GENERATED=0
-if [ -z "${AUTHHELIA_LOGIN_PASSWORD}" ]; then
-  AUTHHELIA_LOGIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
+if [ -z "${LDIF_LOGIN_PASSWORD}" ]; then
+  LDIF_LOGIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
   LOGIN_PW_GENERATED=1
 fi
 
@@ -121,7 +123,7 @@ fi
 [ -n "${AUTHELIA_STORAGE_ENCRYPTION_KEY}" ] || { echo "[ERR] Empty AUTHELIA_STORAGE_ENCRYPTION_KEY"; exit 1; }
 [ -n "${AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET}" ] || { echo "[ERR] Empty AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET"; exit 1; }
 [ -n "${LDAP_ADMIN_PASSWORD}" ] || { echo "[ERR] Empty LDAP_ADMIN_PASSWORD"; exit 1; }
-[ -n "${AUTHHELIA_LOGIN_PASSWORD}" ] || { echo "[ERR] Empty AUTHHELIA_LOGIN_PASSWORD"; exit 1; }
+[ -n "${LDIF_LOGIN_PASSWORD}" ] || { echo "[ERR] Empty LDIF_LOGIN_PASSWORD"; exit 1; }
 
 # Write env file atomically (secrets -> owner-only). Re-running is idempotent
 # as long as the keys live in Bitwarden; restart the stack after any change.
@@ -131,8 +133,8 @@ fi
   printf 'AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET=%s\n' "${AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET}"
   printf 'AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD=%s\n' "${AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD}"
   printf 'LDAP_ADMIN_PASSWORD=%s\n' "${LDAP_ADMIN_PASSWORD}"
-  printf 'AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET=%s\n' "${OIDC_HOMEPAGE_HASH}"
-  printf 'AUTHHELIA_LOGIN_PASSWORD=%s\n' "${AUTHHELIA_LOGIN_PASSWORD}"
+  printf 'HOMEPAGE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HOMEPAGE_HASH}"
+  printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
@@ -143,7 +145,7 @@ echo "    -> paste the RAW OIDC value as HOMEPAGE_OIDC_CLIENT_SECRET in homepage
 echo "       ${OIDC_HOMEPAGE_SECRET}"
 if [ "${LOGIN_PW_GENERATED}" = 1 ]; then
   echo "    -> NEW Authelia login password — save to Bitwarden (authelia-login-password):"
-  echo "       ${AUTHHELIA_LOGIN_PASSWORD}"
+  echo "       ${LDIF_LOGIN_PASSWORD}"
 fi
 
 echo

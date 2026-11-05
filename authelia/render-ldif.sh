@@ -26,8 +26,8 @@ OPENLDAP_IMAGE="$(awk '/^[[:space:]]*image:[[:space:]]*docker\.io\/osixia\/openl
 
 get() { grep "^$1=" .env.secret | head -n1 | cut -d= -f2-; }
 ADMIN_PW="$(get LDAP_ADMIN_PASSWORD)"
-LOGIN_PW="$(get AUTHHELIA_LOGIN_PASSWORD)"
-[ -n "${ADMIN_PW}" ] && [ -n "${LOGIN_PW}" ] || { echo "[ERR] LDAP_ADMIN_PASSWORD / AUTHHELIA_LOGIN_PASSWORD missing in .env.secret"; exit 1; }
+LOGIN_PW="$(get LDIF_LOGIN_PASSWORD)"
+[ -n "${ADMIN_PW}" ] && [ -n "${LOGIN_PW}" ] || { echo "[ERR] LDAP_ADMIN_PASSWORD / LDIF_LOGIN_PASSWORD missing in .env.secret"; exit 1; }
 
 hash() { printf '%s\n' "$1" | podman run -i --rm --entrypoint /usr/sbin/slappasswd "${OPENLDAP_IMAGE}" -s -; }
 ADMIN_HASH="$(hash "${ADMIN_PW}")"

@@ -3,7 +3,7 @@
 # TEMPLATE — the {REPLACE_ME} userPassword placeholders below are deployment
 # secrets and are NEVER filled in this committed file. ./render-ldif.sh fills
 # them from .env.secret (slappasswd {SSHA} hashes of LDAP_ADMIN_PASSWORD and
-# AUTHHELIA_LOGIN_PASSWORD) into the gitignored config/bootstrap.rendered.ldif.
+# LDIF_LOGIN_PASSWORD) into the gitignored config/bootstrap.rendered.ldif.
 # Apply the RENDERED file (and re-runnable with `ldapadd -c` for new entries;
 # existing entries are skipped with an "already exists" error). Run from the
 # authelia directory: the LDIF is piped from the host checkout, because the
