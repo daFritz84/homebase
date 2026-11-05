@@ -11,7 +11,7 @@ services:
     # data.ms format is NOT forward-compatible: merging a bump requires wiping
     # data/data.ms (index is rebuildable from PocketBase) or a dump/restore
     # migration — see docs/services.md.
-    image: getmeili/meilisearch:v1.55.0
+    image: getmeili/meilisearch:v1.56.1
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
