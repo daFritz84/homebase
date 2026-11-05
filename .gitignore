@@ -23,5 +23,11 @@ homeassistant/config/home-assistant_v2.db*
 # plugins) — data, not code; covered by backup-wanderer-data.sh
 wanderer/data/
 
+# Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
+# outbox) — data, not code; covered by backup-authelia.sh
+authelia/config/db/
+authelia/config/keys/
+authelia/config/notifier/
+
 # Kilo working plans (local migration notes, not part of the stack)
 .kilo/plans/

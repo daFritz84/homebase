@@ -11,6 +11,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [AdGuard Home (DNS-Server)](#adguard-home-dns-server)
 - [Wanderer (Trail Database)](#wanderer-trail-database)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
+- [Authelia (SSO)](#authelia-sso)
 
 For the stack update procedure and backups see [operations.md](operations.md).
 
@@ -198,7 +199,8 @@ Home Assistant `:8123` use.
 - **Logs** page → journalctl UI, system and user journal.
 - From the workstation, **Podman Desktop** connects to the same rootless engine over SSH
   (see [podman.md](podman.md)).
-- Planned: OIDC single sign-on via Authentik (see [operations.md](operations.md) TODO).
+- **Out of scope for Authelia SSO** (user decision): Cockpit keeps PAM + TOTP, VPN/LAN only.
+  Native OIDC via oauth2-proxy is a future option (see [operations.md](operations.md) TODO).
 
 ## AdGuard Home (DNS-Server)
 
@@ -454,3 +456,253 @@ To enable: attach the dongle to the VM (Proxmox USB passthrough), add
 HA runs as root inside the container; rootless Podman maps it to the host user,
 so a host-user-owned `config/` is writable — no `podman unshare chown` needed
 (unlike Wanderer's uid-1000 services).
+
+## Authelia (SSO)
+
+Single self-hosted identity layer: **Authelia** (login portal, 2FA, OIDC IdP)
++ **OpenLDAP** (user store). Compose file: `authelia/compose.yaml`. Unit:
+`podman-compose@authelia` (shared pattern above).
+
+```
+Browser (LAN, AdGuard split DNS)
+  │ https://<app>.sseifried.link
+  ▼
+Caddy (wildcard cert)
+  ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
+  ├─ adguard|homeassistant|wanderer ──► forward_auth authelia:9091 (wall) ──► upstream
+  ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia)
+  └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP)
+
+authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
+                sqlite db + openldap data in named volumes
+```
+
+Policies (`access_control` in `authelia/config/configuration.yml`):
+**default deny**; `one_factor` for `group:homebase-admins` on AdGuard,
+Home Assistant and Wanderer; no rules for the Authelia portal (its endpoints
+are exempt from ACL) or Homepage (no forward_auth — its own OIDC gate
+enforces auth: Authelia authorizes the `homepage` OIDC client, and Homepage
+admits any identity Authelia authorizes). Cockpit
+has **no rule and no forward_auth** — it stays outside Authelia entirely.
+Session cookie domain `sseifried.link` → one login, all walled apps (true SSO).
+Second factors: TOTP + WebAuthn passkeys, enrolled at
+`https://authelia.sseifried.link/portal` — **optional for now**: policies run
+`one_factor`; flip the two walled-app rules + the `homepage` OIDC client's
+`authorization_policy` to `two_factor` after enrolling.
+
+### First run
+
+The steps below run in the service checkout — on the server that is the
+`~/src/homebase` clone.
+
+1. Provision the secrets (requires an unlocked Bitwarden CLI; the shared
+   `caddy-proxy` network must exist — `./caddy/ensure_proxy_network.sh`):
+
+```bash
+cd authelia
+./provision-authelia-secrets.sh
+```
+
+   The script fetches/generates the four `AUTHELIA_*` secrets + the LDAP admin
+   password into `.env.secret` (gitignored, mode `0600`), and prints the
+   Homepage OIDC client secret in both forms: the **argon2 hash** (paste into
+   `config/configuration.yml` → `clients[homepage].client_secret`, commit it)
+   and the **raw value** (paste into `homepage/.env` as
+   `HOMEPAGE_OIDC_CLIENT_SECRET`). Save generated items to Bitwarden.
+
+2. Generate the OIDC RSA signing key pair (gitignored, covered by
+   `backup-authelia.sh`) and the login-password hash for the LDIF. The LDIF
+   `userPassword` must be a scheme **slapd** can verify — Authelia
+   authenticates by binding as the user, so OpenLDAP checks the hash, and
+   osixia 1.5.0's OpenLDAP 2.4.57 cannot verify argon2 (a bare `$argon2id$…`
+   digest is treated as plaintext → login "password is wrong"). Use
+   `{SSHA}` via `slappasswd` from the openldap image; the password goes to
+   stdin (`-s -`), never argv:
+
+```bash
+mkdir -p config/keys
+podman run --rm -v "$(pwd)/config/keys:/keys" docker.io/authelia/authelia:4.39.28 \
+  authelia crypto pair rsa generate --bits 2048 --directory /keys \
+  --file.private-key oidc.key --file.public-key oidc.pub
+LOGIN_PW="$(openssl rand -base64 18)"
+printf '%s\n' "$LOGIN_PW" | podman run -i --rm \
+  --entrypoint /usr/sbin/slappasswd docker.io/osixia/openldap:1.5.0 -s -
+echo "Authelia login password (save to Bitwarden): $LOGIN_PW"
+```
+
+   Paste the `{SSHA}…` output into `config/bootstrap.ldif` as the
+   `uid=sseifried` `userPassword`, replacing the `{REPLACE_ME}` placeholder —
+   the `{scheme}` prefix makes slapd reject an unreplaced placeholder, so a
+   forgotten substitution fails closed. Replace the **second** `{REPLACE_ME}`
+   (the `cn=admin` entry) the same way with the hash of the LDAP admin bind
+   password (`authelia-ldap-admin-password` = `LDAP_ADMIN_PASSWORD` in
+   `.env.secret`): osixia 1.5.0 never creates the `cn=admin` entry (it only
+   sets `olcRootPW` in `cn=config`), so without it every simple bind as
+   `cn=admin` fails with "Invalid credentials (49)".
+
+3. Validate the config **offline**, before the stack starts. With an unfilled
+   `client_secret: REPLACE_ME` or a missing `config/keys/oidc.key`, authelia
+   exits at startup and crash-loops (`restart: unless-stopped`), so validating
+   via `podman exec` into the container started in step 4 fails exactly when
+   validation is needed — while the walled apps 502. The `--env-file` is
+   required: the config's secrets (session secret, storage encryption key,
+   OIDC HMAC secret) are injected from `.env.secret` via `AUTHELIA_*` env
+   vars, and the validator hard-fails on missing required options:
+
+```bash
+podman run --rm --env-file .env.secret -v "$(pwd)/config:/config" \
+  -e X_AUTHELIA_CONFIG_FILTERS=template \
+  docker.io/authelia/authelia:4.39.28 \
+  authelia config validate --config /config/configuration.yml --config.experimental.filters template
+```
+
+4. Start the stack and load the directory (the LDIF creates the `cn=admin`
+   entry osixia never creates — the bind must succeed before `ldapadd` can
+   run, so the admin `{REPLACE_ME}` hash from step 2 must be in place).
+   podman-compose **ignores**
+   `depends_on: condition: service_healthy` (start ordering only), so on
+   first start authelia starts while slapd is still bootstrapping, fails its
+   LDAP connection, and crash-loops for ~30s until slapd answers —
+   `restart: unless-stopped` self-heals it; the openldap healthcheck is for
+   podman's own visibility. The LDIF is **piped from the host checkout**: the
+   openldap container has no `./config` mount (only the authelia service
+   binds `config/`), so `-f /config/bootstrap.ldif` inside it is "No such
+   file":
+
+```bash
+podman-compose up -d
+podman exec -i authelia_openldap_1 ldapadd -x \
+  -D "cn=admin,dc=sseifried,dc=link" -W < config/bootstrap.ldif
+```
+
+   `-W` prompts for the LDAP admin password (Bitwarden item
+   `authelia-ldap-admin-password`). Re-runnable with `ldapadd -c` for new
+   users/groups only — it cannot change EXISTING entries (group membership
+   needs `ldapmodify`, see "User management").
+
+5. Deploy with the shared pattern (unit: `podman-compose@authelia`):
+
+```bash
+podman-compose -f compose.yaml systemd
+systemctl --user enable --now podman-compose@authelia
+```
+
+6. Wire the consumers: add the Homepage auth vars to `homepage/.env`
+   (see `homepage/.env.example`), restart `podman-compose@homepage`, and
+   restart `podman-compose@caddy` after the Caddyfile changes (validate the
+   Caddyfile first — shared pattern).
+
+7. Verify:
+
+```bash
+curl -ki https://adguard.sseifried.link | head -n 5   # 302 → authelia.sseifried.link
+podman logs --tail=20 authelia_authelia_1
+```
+
+   Then in a browser: log in at `https://authelia.sseifried.link/portal`
+   (enroll TOTP + a passkey), open AdGuard → lands back authenticated; open
+   Home Assistant → **no second login** (SSO cookie).
+
+### User management (LDIF ritual)
+
+Users/groups are **gitops**: `authelia/config/bootstrap.ldif` is the source of
+truth (no admin UI). Add a user → edit the LDIF, commit, push, then on the
+server (from `~/src/homebase/authelia`) `podman exec -i authelia_openldap_1
+ldapadd -c -x -D "cn=admin,dc=sseifried,dc=link" -W <
+config/bootstrap.ldif` — piped from the host checkout, because the openldap
+container has no `./config` mount (AdGuard drift pattern: the committed file
+is authoritative, the directory is the runtime copy — covered by
+`backup-authelia.sh`). `ldapadd` only issues ADD ops: existing entries are
+skipped by `-c`, so it **cannot grant group membership** — the `member:`
+values live in the existing group entry, its add is skipped, and the new
+member is silently NOT applied (the user exists, every `subject: group:...`
+rule still denies it). Grant membership with `ldapmodify`:
+
+```bash
+podman exec -i authelia_openldap_1 ldapmodify -x \
+  -D "cn=admin,dc=sseifried,dc=link" -W <<EOF
+dn: cn=homebase-users,ou=groups,dc=sseifried,dc=link
+changetype: modify
+add: member
+member: uid=partner,ou=users,dc=sseifried,dc=link
+EOF
+```
+
+Password changes = new argon2 digest in the LDIF + `ldapmodify`
+(`replace: userPassword`). `uid=partner` (homebase-users) is Phase 2.
+
+### HA wall bypasses (Companion app + Bearer tokens)
+
+The HA Companion app sends no browser cookies, so it cannot pass the wall.
+Authelia 4.38+ **removed** the legacy `bypass_credentials`/user-agent ACL
+criteria, so the bypass lives in the Caddyfile: a `User-Agent` matcher
+(`^(HomeAssistant/|com\.homeassistant\.companion\.android)`) skips
+`forward_auth` and proxies straight to HA, which authenticates the app with
+its own long-lived access token. Caddy >=2.8 **removed regex from the `header`
+matcher** (exact + `*` wildcards only) — the matcher must be `header_regexp`:
+a regex in `header` is compared literally, never matches, and the app silently
+gets walled. If the app's user-agent string changes, the pattern must follow.
+
+The same reasoning covers Bearer-token API clients (automations, custom cards,
+external tools): they send `Authorization: Bearer <long-lived token>` and no
+Authelia cookie, so the `@bearer` handle proxies them straight to HA, which
+validates its own tokens. HA **webhooks** (`/api/webhook/<id>`, no
+`Authorization` header) are not covered by either bypass — call them on the
+LAN address (`192.168.178.249:8123`) directly.
+
+**Residual risk (accepted):** `User-Agent` is fully client-controlled, so any
+client that can reach `homeassistant.sseifried.link` can spoof the Companion
+UA and reach HA's own single-factor login, evading Authelia's `one_factor`
+policy and its regulation bans. The wall is an SSO/anti-phishing layer for
+browsers, not a hard boundary against a client that deliberately evades it —
+on the bypassed paths the HA long-lived tokens are the only credential, so
+keep them scoped and revocable.
+
+### Break-glass
+
+Authelia down = walled apps (AdGuard UI, HA, Wanderer) unreachable (502).
+Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
+`systemctl --user restart podman-compose@authelia`. Lockout guard: TOTP
+secrets live in Bitwarden, factors in the sqlite DB, users in LDAP — the
+factors DB and users are covered by `backup-authelia.sh`, the
+`AUTHELIA_STORAGE_ENCRYPTION_KEY` that decrypts the factors DB is
+**Bitwarden-only** (not in the archive): a restore needs
+`./provision-authelia-secrets.sh` (unlocked vault) to recreate
+`.env.secret`, see [operations.md](operations.md), "Authelia backups".
+
+### 4.39 schema notes
+
+The integration plan predates the Authelia 4.38 config rewrite; the committed
+files use the current (4.39.28) schema:
+
+- `server.trusted_proxies` **removed** — proxy trust lives in Caddy
+  (`forward_auth trusted_proxies`, must match the `caddy-proxy` subnet, see
+  [operations.md](operations.md) troubleshooting).
+- ACL rules have no `bypass_credentials`/user-agent criteria → HA Companion
+  bypass in the Caddyfile (above).
+- Legacy `/api/authelia/validate?rd=` endpoint → `/api/authz/forward-auth`;
+  the portal URL comes from `session.cookies[].authelia_url`.
+- OIDC issuer is derived from `authelia_url` (no explicit `issuer` key); the
+  signing key pair is injected into `configuration.yml` via the `template`
+  config filter (`fileContent` of the gitignored `config/keys/oidc.key`).
+- `authelia hash-password` → `authelia crypto hash generate argon2`;
+  `authelia validate` → `authelia config validate`. The CLI reads the
+  password from an interactive **tty** only — stdin is NOT supported — so
+  non-interactive use needs `--random` (prints plaintext + digest) or
+  `--password` (transient argv).
+- LDAP `userPassword` schemes: Authelia logs users in by **binding as them**,
+  so SLAPD verifies the hash. osixia 1.5.0 ships OpenLDAP 2.4.57 — no argon2
+  support — so LDIF passwords use `{SSHA}` via `slappasswd` (the openldap
+  image, `-s -` on stdin). Argon2 digests are only for the OIDC
+  `client_secret` in `configuration.yml`, which Authelia verifies itself.
+- osixia 1.5.0 does not create the `cn=admin` entry (only `olcRootPW` in
+  `cn=config`) — `bootstrap.ldif` adds it.
+- The 4.39.28 rfc2307bis preset group filter ends with `!(!pwdReset=TRUE)`;
+  `pwdReset` is undefined in osixia's schema set, so the clause excludes
+  EVERY group — sessions get `groups=[]` and every `subject: group:...` rule
+  403s (diagnosed via slapd access log, `LDAP_LOG_LEVEL: "128"`). Override:
+  `authentication_backend.ldap.groups_filter` (4.39.28 key — `group.filter`
+  and `group_filter` are rejected; user-DN placeholder `{dn}` —
+  `{user_identifier}` is sent literally). Fixed upstream after 4.39.28.
+- No SMTP: `password_reset.disable: true` + filesystem notifier
+  (`/config/notifier/notification.txt`).

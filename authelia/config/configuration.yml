@@ -1,0 +1,151 @@
+# Authelia configuration — committed (config-as-code, gitops).
+# ---
+# Secrets are NOT in this file: they are injected from .env.secret via the
+# AUTHELIA_* environment variables (see .env.example). Config keys ending in
+# secret/password/key/token are picked up from the environment automatically
+# (session.secret, storage.encryption_key, identity_providers.oidc.hmac_secret,
+# authentication_backend.ldap.password).
+#
+# The OIDC RSA signing key is read from the gitignored config/keys/oidc.key
+# via the `template` config filter (X_AUTHELIA_CONFIG_FILTERS=template in
+# compose.yaml) — generate it with the provision script's step 1.
+#
+# REPLACE_ME markers (all must be filled; slapd rejects the unknown
+# {REPLACE_ME} scheme on add, so an unreplaced LDIF fails closed):
+#   - identity_providers.oidc.clients[homepage].client_secret (here) — an
+#     argon2 digest (`authelia crypto hash generate argon2`; tty-only prompt,
+#     use --random/--password) — Authelia verifies client secrets itself
+#   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=...) — {SSHA}
+#     hashes via slappasswd, NOT argon2: Authelia logs users in by binding
+#     as them, so SLAPD verifies the scheme, and osixia 1.5.0's OpenLDAP
+#     2.4.57 cannot verify argon2 (bare $argon2id$ = plaintext → login
+#     "password is wrong")
+#
+# 4.39 schema notes (the plan predates the 4.38 ACL rewrite):
+#   - server.trusted_proxies was REMOVED in 4.38 — proxy trust lives in Caddy
+#     (forward_auth trusted_proxies); Authelia trusts the proxy network.
+#   - access_control rules have no bypass_credentials / user-agent criteria —
+#     the HA Companion + Bearer-token bypasses are implemented in the Caddyfile
+#     (header_regexp UA matcher, @bearer handle).
+#   - the OIDC issuer is derived from session.cookies[].authelia_url.
+#   - the legacy /api/authelia/validate endpoint is now /api/authz/forward-auth.
+
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'info'
+
+storage:
+  # encryption_key from AUTHELIA_STORAGE_ENCRYPTION_KEY
+  local:
+    path: '/config/db/authelia.db'
+
+authentication_backend:
+  password_reset:
+    disable: true # no SMTP — passwords change in bootstrap.ldif (LDIF ritual)
+  password_change:
+    disable: true
+  ldap:
+    implementation: 'rfc2307bis' # uid/inetOrgPerson + groupOfNames/member presets
+    address: 'ldap://openldap:389'
+    base_dn: 'dc=sseifried,dc=link'
+    additional_users_dn: 'ou=users'
+    additional_groups_dn: 'ou=groups'
+    user: 'cn=admin,dc=sseifried,dc=link'
+    # password from AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD
+    # rfc2307bis preset WITHOUT the preset's trailing !(!pwdReset=TRUE)
+    # clause: pwdReset is undefined in osixia 1.5.0's schema set, and the
+    # clause then silently excludes EVERY group -> sessions get groups=[]
+    # and every subject: group:... rule 403s (verified via slapd access log).
+    # 4.39.28 key is groups_filter (NOT group.filter/group_filter) and the
+    # user-DN placeholder is {dn} ({user_identifier} is sent literally).
+    groups_filter: '(&(|(member={dn})(uniqueMember={dn}))(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=groupOfMembers)))'
+
+totp:
+  issuer: 'sseifried.link'
+
+webauthn:
+  # rp_id is derived from the session cookie domain (sseifried.link)
+  display_name: 'Homebase'
+
+identity_providers:
+  oidc:
+    # hmac_secret from AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET
+    # issuer is derived from session.cookies[].authelia_url below
+    jwks:
+      - key_id: 'homebase-oidc-rsa'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: |
+          {{- fileContent "/config/keys/oidc.key" | nindent 10 }}
+    clients:
+      - client_id: 'homepage'
+        client_name: 'Homepage'
+        # argon2 digest of the secret from Bitwarden item
+        # authelia-oidc-homepage-secret (provision-authelia-secrets.sh)
+        client_secret: 'REPLACE_ME'
+        public: false
+        authorization_policy: 'one_factor' # flip to two_factor after enrolling factors
+        consent_mode: 'auto'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+          - 'offline_access' # required for the refresh_token grant below
+        redirect_uris:
+          - 'https://homepage.sseifried.link/api/auth/callback/homepage-oidc'
+        grant_types:
+          - 'authorization_code'
+          - 'refresh_token'
+        response_types:
+          - 'code'
+
+session:
+  # secret from AUTHELIA_SESSION_SECRET
+  name: 'authelia_session'
+  same_site: 'lax'
+  expiration: '12h'
+  inactivity: '2h'
+  cookies:
+    - domain: 'sseifried.link'
+      authelia_url: 'https://authelia.sseifried.link'
+      default_redirection_url: 'https://homepage.sseifried.link'
+
+notifier:
+  # no SMTP (LAN-only, no mail server) — filesystem provider is the
+  # documented single-provider fallback
+  filesystem:
+    filename: '/config/notifier/notification.txt'
+
+regulation:
+  modes:
+    - 'user'
+    - 'ip'
+  max_retries: 5
+  find_time: '2m'
+  ban_time: '5m'
+
+access_control:
+  default_policy: 'deny'
+  # No `networks` definitions: they are only consumed by the `networks`
+  # criteria of rules, and no rule references one — LAN-only exposure is
+  # enforced by AdGuard split DNS + the VPN, not by Authelia policy.
+  # No bypass rules for authelia./homepage.: rules are only evaluated for
+  # forward-auth requests, and no Caddy site block forward-auths those two
+  # domains (authelia serves its own portal — its endpoints are exempt from
+  # ACL; Homepage is gated by its OIDC client's authorization_policy).
+  rules:
+    # walled apps — admins only (partner joins in Phase 2). one_factor for
+    # now (no factors enrolled); flip both rules to two_factor after enrolling
+    # TOTP + a passkey at the portal.
+    - domain:
+        - 'adguard.sseifried.link'
+        - 'wanderer.sseifried.link'
+      policy: 'one_factor'
+      subject: 'group:homebase-admins'
+    - domain: 'homeassistant.sseifried.link'
+      policy: 'one_factor'
+      subject: 'group:homebase-admins'
+    # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
+    # proxies it directly (PAM + TOTP), default-deny never applies

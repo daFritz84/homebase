@@ -8,11 +8,17 @@ updates:
       - "/wanderer"
       - "/caddy"
       - "/adguard-home"
+      - "/authelia"
     schedule:
       interval: "weekly"
     # NOTE: merging a getmeili/meilisearch bump requires wiping data/data.ms
     # (index is rebuildable from PocketBase) BEFORE the first start of the new
     # engine — the data format is not forward-compatible. See wanderer/.
+    # NOTE: merging an authelia bump requires co-bumping the same tag in
+    # docs/services.md (three commands) and authelia/config/bootstrap.ldif —
+    # Dependabot only sees compose.yaml. authelia/provision-authelia-secrets.sh
+    # and authelia/backup-authelia.sh derive their image pins from
+    # compose.yaml, so they follow automatically (openldap bumps included).
 
   # --- Dockerfile base images (caddy builder + runtime; the compose image is a local build) ---
   - package-ecosystem: "docker"
