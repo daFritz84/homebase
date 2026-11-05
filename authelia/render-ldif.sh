@@ -41,7 +41,9 @@ t = open('config/bootstrap.ldif').read()
 parts = t.split('userPassword: {REPLACE_ME}')
 assert len(parts) == 3, f"expected 2 userPassword placeholders, found {len(parts) - 1}"
 out = parts[0] + 'userPassword: ' + ah + parts[1] + 'userPassword: ' + lh + parts[2]
-assert '{REPLACE_ME}' not in out
+# the template header documents {REPLACE_ME} in prose — only active LDIF
+# lines (non-#) must be placeholder-free
+assert all('{REPLACE_ME}' not in l for l in out.splitlines() if not l.lstrip().startswith('#')), "unfilled placeholder on an active LDIF line"
 open('config/bootstrap.rendered.ldif', 'w').write(out)
 PY
 
