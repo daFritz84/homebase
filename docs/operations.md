@@ -138,6 +138,13 @@ systemctl --user restart podman-compose@homeassistant
 systemctl --user restart podman-compose@authelia
 ```
 
+> **env_file changes need a recreation, not a restart:** the unit only
+> `pod start`s the existing pod, and container env is baked in at creation —
+> new/changed `.env.secret` / `.env` entries are invisible to a plain
+> `systemctl restart`. Recreate from the service directory instead:
+> `podman-compose up -d --force-recreate` (named volumes keep all data).
+> Prove it with `podman inspect <container> --format "{{json .Config.Env}}"`.
+
 4. Verify
 
 ```bash
@@ -208,6 +215,11 @@ Notes:
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
   Homepage, VPN and SSH are unaffected (not walled) — break-glass is SSH
   (see [services.md](services.md), "Authelia (SSO) → Break-glass").
+- **New `.env.secret` entries have no effect after a unit restart** — the
+  `podman-compose@` unit only `pod start`s the existing pod; env is baked in
+  at container creation. `podman inspect <container> --format
+  "{{json .Config.Env}}"` shows the stale set; fix with
+  `podman-compose up -d --force-recreate` (see "Update the stack" note).
 - **forward_auth wall loops / auth requests rejected after network recreation**
   — the `caddy-proxy` subnet drifted and `trusted_proxies 10.89.0.0/24` in the
   Caddyfile `(authelia-fa)` snippet is stale. Check `podman network inspect

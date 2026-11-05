@@ -713,6 +713,12 @@ files use the current (4.39.28) schema:
   verifies itself.
 - osixia 1.5.0 does not create the `cn=admin` entry (only `olcRootPW` in
   `cn=config`) — `bootstrap.ldif` adds it.
+- The startup `level=error` line "Your LDAP Server supports TLS but you
+  don't appear to be utilizing it" is **expected noise**: openldap is
+  reachable only from the authelia container on the internal
+  `authelia-internal` network (no host ports), so plain `ldap://` carries no
+  traffic beyond that bridge, and osixia's self-signed cert would add no
+  real security.
 - The 4.39.28 rfc2307bis preset group filter ends with `!(!pwdReset=TRUE)`;
   `pwdReset` is undefined in osixia's schema set, so the clause excludes
   EVERY group — sessions get `groups=[]` and every `subject: group:...` rule
