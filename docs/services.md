@@ -225,20 +225,21 @@ on the LAN. Clients that do **not** use AdGuard as their DNS (e.g. Fritzbox DHCP
 Fritzbox, IPv6 DNS leaking to extern) get NXDOMAIN for `sseifried.link` — ensure LAN clients use
 AdGuard (`192.168.178.249`) as their DNS server.
 
-> **Hardcoded host IP:** `192.168.178.249` (the Fritzbox-assigned static IP, see
-> [host-setup.md](host-setup.md#static-ip-address)) is referenced in `caddy/Caddyfile`
-> (AdGuard, Home Assistant and Cockpit `reverse_proxy`),
-> `homepage/config/services.yaml` (AdGuard widget),
-> `homeassistant/config/configuration.yaml` (`internal_url`) and
-> `docs/podman.md` (Podman Desktop connection). Rootless containers cannot reach
-> host services by name, so the IP is hardcoded — if the static IP ever changes,
-> update all of these files.
+> **Host services from bridge containers:** Caddy's `reverse_proxy` upstreams for
+> AdGuard (`:8095`), Home Assistant (`:8123`) and Cockpit (`:9090`), and the AdGuard
+> widget in `homepage/config/services.yaml`, target `host.containers.internal` —
+> podman injects it into `/etc/hosts` as `169.254.1.2` (pasta `--map-guest-addr`),
+> which relays to the host loopback, so the upstream connection arrives from
+> `127.0.0.1` and is firewalld-trusted. Verified 2026-11-05.
 >
-> **Do not use `host.containers.internal` here:** the name lives only in the container's
-> `/etc/hosts` (so `getent` resolves it), Caddy's `reverse_proxy` resolves upstreams via
-> DNS and gets NXDOMAIN, and the pasta gateway (`169.254.1.2`) refuses forwarded
-> connections to host services (tested: `Connection refused`). The LAN IP is the only
-> working target — verified 2026-10-25.
+> **Do not target the LAN IP (`192.168.178.249`) from bridge containers:** the
+> connection lands in the firewalld `public` zone and is rejected on ports that are
+> not permanently opened there (this broke all walled apps after the 2026-11-05
+> reboot when firewalld lost netavark's runtime bridge trust; see
+> [operations.md](operations.md) troubleshooting). The LAN IP stays correct for
+> **LAN-facing** references: the AdGuard DNS rewrite (`*.sseifried.link`), HA
+> `internal_url`, and the Podman Desktop SSH connection (see
+> [host-setup.md](host-setup.md#static-ip-address)).
 
 #### Configure Upstreams in AdGuard Home
 
@@ -416,11 +417,12 @@ see below) lists the host IP Caddy proxies from.
 ### Reverse proxy (trusted_proxies)
 
 HA sits behind Caddy with `use_x_forwarded_for: true` and
-`trusted_proxies: [192.168.178.249]`. HA is `network_mode: host` and Caddy
-reaches it via the hardcoded host IP, so HA sees the proxy source as the host
-IP — **not** the `caddy-proxy` bridge subnet (the old `10.89.0.0/24` value is
-wrong here; a stale/missing entry shows up as login failures via the proxy, see
-[operations.md](operations.md) troubleshooting).
+`trusted_proxies: [127.0.0.1, ::1]`. HA is `network_mode: host` and Caddy
+reaches it via `host.containers.internal` (pasta relay), so HA sees the proxy
+source as the host loopback — **not** the host LAN IP and **not** the
+`caddy-proxy` bridge subnet (the old `192.168.178.249` / `10.89.0.0/24` values
+are wrong here; a stale/missing entry shows up as login failures via the proxy,
+see [operations.md](operations.md) troubleshooting).
 
 This setting is **UI-managed**, not in `configuration.yaml`: HA migrated the
 `http:` block into `.storage/http` (`yaml_migration_done`) and now ignores any

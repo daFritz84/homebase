@@ -9,6 +9,7 @@ homeassistant:
 # HTTP / reverse-proxy config (use_x_forwarded_for, trusted_proxies) is NOT in
 # this file: HA migrated it to .storage/http (UI-managed, gitignored) and now
 # ignores any http: block here (hard error in 2027.2.0). Manage it under
-# Settings > System > Network. trusted_proxies must be the host IP
-# 192.168.178.249 (HA is network_mode: host; Caddy proxies via that IP), NOT the
-# caddy-proxy bridge subnet. .storage is covered by ./backup-ha-config.sh.
+# Settings > System > Network. trusted_proxies must be 127.0.0.1 (and ::1) —
+# HA is network_mode: host; Caddy proxies via host.containers.internal (pasta
+# relay), so the proxy source is the host loopback. .storage is covered by
+# ./backup-ha-config.sh.

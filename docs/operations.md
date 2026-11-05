@@ -200,6 +200,15 @@ Notes:
   `--subnet 10.89.0.0/24`, so a recreated network keeps the CIDR that
   `trusted_proxies` expects (an existing network is left untouched — check it
   with `podman network inspect caddy-proxy`).
+- **After a host reboot: walled apps (AdGuard UI, HA) 502, AdGuard widget down,
+  containers get `connection refused` to host ports `:8095/:8123/:9090`** —
+  firewalld reloads its permanent config at boot and loses the runtime trust
+  netavark had registered for the `caddy-proxy` bridge; existing networks are
+  not re-registered. The durable fix is architectural: bridge containers reach
+  host services via `host.containers.internal` (pasta `--map-guest-addr` →
+  host loopback, firewalld-trusted), not the LAN IP — see
+  [services.md](services.md) "Split DNS" note. Verify from a bridge container:
+  `podman exec caddy curl -s -o /dev/null -w '%{http_code}' http://host.containers.internal:8095`.
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.

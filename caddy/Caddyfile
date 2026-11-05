@@ -88,13 +88,13 @@ adguard.sseifried.link {
 	import tls
 	route {
 		import authelia-fa
-		reverse_proxy 192.168.178.249:8095
+		reverse_proxy host.containers.internal:8095
 	}
 }
 
-# Home Assistant (host-networked container — AdGuard pattern: hardcoded host IP,
-# rootless containers cannot reach host services by name) — behind the Authelia
-# wall (one_factor for homebase-admins).
+# Home Assistant (host-networked container — AdGuard pattern: host.containers.internal,
+# pasta's --map-guest-addr 169.254.1.2, relayed to the host loopback) — behind the
+# Authelia wall (one_factor for homebase-admins).
 # Two bypasses of the wall, both authenticated by HA itself (Authelia 4.38+
 # removed the legacy bypass_credentials/user-agent ACL criteria, so they live
 # here):
@@ -118,31 +118,32 @@ homeassistant.sseifried.link {
 	@companion header_regexp User-Agent ^(HomeAssistant/|com\.homeassistant\.companion\.android)
 	@bearer header Authorization "Bearer *"
 	handle @companion {
-		reverse_proxy 192.168.178.249:8123
+		reverse_proxy host.containers.internal:8123
 	}
 	handle @bearer {
-		reverse_proxy 192.168.178.249:8123
+		reverse_proxy host.containers.internal:8123
 	}
 	handle {
 		route {
 			import authelia-fa
-			reverse_proxy 192.168.178.249:8123
+			reverse_proxy host.containers.internal:8123
 		}
 	}
 }
 
-# Cockpit (host service — hardcoded host IP, like AdGuard/HA; Caddy passes
+# Cockpit (host service — host.containers.internal, like AdGuard/HA; Caddy passes
 # WebSockets through, required by Cockpit). Cockpit validates the Host header
 # (only localhost/hostname/AllowOrigin hosts pass), so Caddy forwards the public
 # Host; AllowOrigin in /etc/cockpit/cockpit.conf covers the browser Origin.
 # Cockpit must be proxied over HTTPS: it redirects NON-LOCAL plain-HTTP requests
-# to https (301 -> loop) and only trusts X-Forwarded-Proto from localhost, which
-# a rootless Caddy container is not. Cockpit serves a self-signed cert on :9090,
-# so the upstream is https with tls_insecure_skip_verify.
+# to https (301 -> loop) and only trusts X-Forwarded-Proto from localhost — via
+# host.containers.internal (pasta --map-guest-addr) the upstream connection
+# arrives from the host loopback, so it is trusted. Cockpit serves a self-signed
+# cert on :9090, so the upstream is https with tls_insecure_skip_verify.
 cockpit.sseifried.link {
 	import tls
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	reverse_proxy https://192.168.178.249:9090 {
+	reverse_proxy https://host.containers.internal:9090 {
 		header_up Host cockpit.sseifried.link
 		transport http {
 			tls_insecure_skip_verify
