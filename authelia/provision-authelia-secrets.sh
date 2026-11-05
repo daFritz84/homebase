@@ -23,9 +23,16 @@ set -euo pipefail
 # under the same names before the next run.
 #
 # The OIDC client secret for Homepage (item: authelia-oidc-homepage-secret)
-# is fetched/generated, argon2-hashed via the authelia image, and both values
-# are printed: the HASH goes into config/configuration.yml (safe to commit),
-# the RAW value into homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET.
+# is fetched/generated and argon2-hashed via the authelia image: the digest
+# goes into .env.secret as AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET
+# (Authelia env override — the committed configuration.yml keeps its
+# REPLACE_ME placeholder), the RAW value is printed for homepage/.env as
+# HOMEPAGE_OIDC_CLIENT_SECRET.
+#
+# The Authelia login password (AUTHHELIA_LOGIN_PASSWORD, for the LDIF
+# userPassword) is generated once, kept in .env.secret across re-runs, and
+# printed on first generation — save it to Bitwarden (authelia-login-password).
+# render-ldif.sh hashes it (with LDAP_ADMIN_PASSWORD) into the rendered LDIF.
 #
 # WARNING: AUTHELIA_STORAGE_ENCRYPTION_KEY encrypts 2FA secrets in the sqlite
 # DB at rest. Rotating it after factors exist forces every user to re-enroll.
@@ -86,11 +93,35 @@ AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET="$(resolve authelia-oidc-hmac-secre
 LDAP_ADMIN_PASSWORD="$(resolve authelia-ldap-admin-password)"
 AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
 
+# --- OIDC client secret for Homepage: raw value -> homepage/.env, argon2
+# digest -> .env.secret (Authelia env override; the committed
+# configuration.yml keeps its REPLACE_ME placeholder) ---
+echo "[*] OIDC client secret (Homepage):"
+OIDC_HOMEPAGE_SECRET="$(resolve authelia-oidc-homepage-secret)"
+[ -n "${OIDC_HOMEPAGE_SECRET}" ] || { echo "[ERR] Empty authelia-oidc-homepage-secret"; exit 1; }
+OIDC_HOMEPAGE_HASH="$(hash_argon2 "${OIDC_HOMEPAGE_SECRET}")"
+if [ -z "${OIDC_HOMEPAGE_HASH}" ]; then
+  echo "[!] podman/image unavailable — hash it manually, then re-run:"
+  echo "    podman run --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm --password '<secret>'"
+  exit 1
+fi
+
+# --- Authelia login password (LDIF userPassword): generated once, preserved
+# across re-runs from the existing env file; render-ldif.sh hashes it ---
+AUTHHELIA_LOGIN_PASSWORD=""
+[ -f "${ENV_FILE}" ] && AUTHHELIA_LOGIN_PASSWORD="$(grep '^AUTHHELIA_LOGIN_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+LOGIN_PW_GENERATED=0
+if [ -z "${AUTHHELIA_LOGIN_PASSWORD}" ]; then
+  AUTHHELIA_LOGIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
+  LOGIN_PW_GENERATED=1
+fi
+
 # Basic sanity checks
 [ -n "${AUTHELIA_SESSION_SECRET}" ] || { echo "[ERR] Empty AUTHELIA_SESSION_SECRET"; exit 1; }
 [ -n "${AUTHELIA_STORAGE_ENCRYPTION_KEY}" ] || { echo "[ERR] Empty AUTHELIA_STORAGE_ENCRYPTION_KEY"; exit 1; }
 [ -n "${AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET}" ] || { echo "[ERR] Empty AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET"; exit 1; }
 [ -n "${LDAP_ADMIN_PASSWORD}" ] || { echo "[ERR] Empty LDAP_ADMIN_PASSWORD"; exit 1; }
+[ -n "${AUTHHELIA_LOGIN_PASSWORD}" ] || { echo "[ERR] Empty AUTHHELIA_LOGIN_PASSWORD"; exit 1; }
 
 # Write env file atomically (secrets -> owner-only). Re-running is idempotent
 # as long as the keys live in Bitwarden; restart the stack after any change.
@@ -100,30 +131,20 @@ AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
   printf 'AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET=%s\n' "${AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET}"
   printf 'AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD=%s\n' "${AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD}"
   printf 'LDAP_ADMIN_PASSWORD=%s\n' "${LDAP_ADMIN_PASSWORD}"
+  printf 'AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_0_CLIENT_SECRET=%s\n' "${OIDC_HOMEPAGE_HASH}"
+  printf 'AUTHHELIA_LOGIN_PASSWORD=%s\n' "${AUTHHELIA_LOGIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
-echo "[+] Wrote ${ENV_FILE}"
+echo "[+] Wrote ${ENV_FILE} (incl. OIDC client_secret digest + login password)"
 
-# --- OIDC client secret for Homepage (hashed value goes into the committed
-# configuration.yml; the raw value into homepage/.env) ---
 echo
-echo "[*] OIDC client secret (Homepage):"
-OIDC_HOMEPAGE_SECRET="$(resolve authelia-oidc-homepage-secret)"
-[ -n "${OIDC_HOMEPAGE_SECRET}" ] || { echo "[ERR] Empty authelia-oidc-homepage-secret"; exit 1; }
-OIDC_HOMEPAGE_HASH="$(hash_argon2 "${OIDC_HOMEPAGE_SECRET}")"
-if [ -n "${OIDC_HOMEPAGE_HASH}" ]; then
-  echo "[+] Argon2 digest generated:"
-  echo "    ${OIDC_HOMEPAGE_HASH}"
-else
-  echo "[!] podman/image unavailable — hash it manually (then re-run this hint):"
-  echo "    podman run --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm --password '<secret>'"
-fi
-echo
-echo "    -> paste the digest as identity_providers.oidc.clients[homepage].client_secret"
-echo "       in config/configuration.yml (the hash is not a secret, commit it)"
-echo "    -> paste the RAW value as HOMEPAGE_OIDC_CLIENT_SECRET in homepage/.env:"
+echo "    -> paste the RAW OIDC value as HOMEPAGE_OIDC_CLIENT_SECRET in homepage/.env:"
 echo "       ${OIDC_HOMEPAGE_SECRET}"
+if [ "${LOGIN_PW_GENERATED}" = 1 ]; then
+  echo "    -> NEW Authelia login password — save to Bitwarden (authelia-login-password):"
+  echo "       ${AUTHHELIA_LOGIN_PASSWORD}"
+fi
 
 echo
 echo "[✓] authelia secrets provisioned."
@@ -136,10 +157,7 @@ echo "     mkdir -p config/keys"
 echo "     podman run --rm -v \"\$(pwd)/config/keys:/keys\" ${AUTHHELIA_IMAGE} \\"
 echo "       authelia crypto pair rsa generate --bits 2048 --directory /keys \\"
 echo "       --file.private-key oidc.key --file.public-key oidc.pub"
-echo "  2. Hash BOTH {REPLACE_ME} placeholders in config/bootstrap.ldif with"
-echo "     slappasswd (slapd verifies LDIF passwords; 2.4.57 has no argon2):"
-echo "     printf '%s\n' '<password>' | podman run -i --rm --entrypoint /usr/sbin/slappasswd docker.io/osixia/openldap:1.5.0 -s -"
-echo "     - cn=admin entry: the LDAP admin bind password (this item, = LDAP_ADMIN_PASSWORD)"
-echo "     - uid entry: the Authelia login password (generate one, save to Bitwarden)"
+echo "  2. Render the LDIF (fills the {REPLACE_ME} hashes from .env.secret, gitignored):"
+echo "     ./render-ldif.sh"
 echo "  3. Validate the config offline, then podman-compose up -d and ldapadd the"
-echo "     bootstrap LDIF piped from the host (docs/services.md, 'First run')."
+echo "     RENDERED LDIF piped from the host (docs/services.md, 'First run')."
