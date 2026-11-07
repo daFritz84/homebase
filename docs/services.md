@@ -546,8 +546,8 @@ Browser (LAN, AdGuard split DNS)
   │ https://<app>.sseifried.link
   ▼
 Remote (public internet, no VPN)
-  │ https://wanderer|authelia.sseifried.link — ONLY these two, via Cloudflare
-  │ Access (email allowlist + Authelia OIDC federation) + cloudflared tunnel
+   │ https://wanderer|authelia.sseifried.link — ONLY these two, via Cloudflare
+   │ Access (Authelia OIDC federation login) + cloudflared tunnel
   ▼
 Caddy (wildcard cert)
   ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
@@ -574,10 +574,9 @@ old wall rule). Cockpit has **no rule and no forward_auth** — it stays
 outside Authelia entirely. Session cookie domain `sseifried.link` → one
 login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`,
 `wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
-`cloudflare-access` (Cloudflare Access federation — the raw client
-secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
-`scopes: openid/email/profile` — the `email` claim feeds the Access policy
-allowlist). Second factors: TOTP + WebAuthn passkeys, enrolled at
+    `cloudflare-access` (Cloudflare Access federation — the raw client
+    secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
+    `scopes: openid/email/profile`). Second factors: TOTP + WebAuthn passkeys, enrolled at
 `https://authelia.sseifried.link/portal` — **optional for now**: policies run
 `one_factor`; flip the walled-app rules + the `homepage`/`homeassistant`/
 `cloudflare-access` OIDC clients' `authorization_policy` to `two_factor`
@@ -889,7 +888,7 @@ Unit: `podman-compose@cloudflared` (shared pattern above).
 Work laptop / partner (public DNS, no VPN)
   │ https://wanderer.sseifried.link
   ▼
-Cloudflare Edge ── Access policy (email allowlist + Authelia IdP)
+Cloudflare Edge ── Access policy (Accept + Authelia IdP login)
   │   └─ unauthenticated → Authelia portal (authelia.sseifried.link, same tunnel)
   ▼
 cloudflared container (caddy-proxy) ── tunnel (outbound) ── CF Edge
@@ -949,11 +948,10 @@ records this stack ever creates.
    after the tunnel is up.
 3. Access → **Applications**: self-hosted `wanderer.sseifried.link`
    (session duration default 24h).
-4. Access **policy** on the app: include = specific emails
-   (`sseifried@sseifried.link`, `s.seifried@gmx.at` — must equal the LDAP
-   `mail` attributes exactly, the allowlist checks the Authelia `email`
-   claim), action = Login with the Authelia IdP. No WARP/service tokens,
-   no email-OTP.
+4. Access **policy** on the app: action **Accept**, usage **Login** with
+   the Authelia IdP. No email-allowlist condition (user decision: the gate
+   is the Authelia login itself — only authorized LDAP accounts exist),
+   no WARP/service tokens, no email-OTP.
 5. Zone → SSL/TLS → Edge Certificates → **Always Use HTTPS: on** —
    `http://<published>` requests otherwise reach the origin through the
    tunnel with `X-Forwarded-Proto: http` and the wall 400s them

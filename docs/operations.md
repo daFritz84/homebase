@@ -314,10 +314,12 @@ Notes:
   published hostname) — the tunnel ingress must target `https://caddy:443`
   with a per-host `originServerName` (`cloudflared/config.yml`); an
   `http://` ingress hits Caddy's `:80` redirect block and loops.
-- **Access 403 after a successful Authelia login** — the Access policy
-  include email must equal the Authelia `email` claim exactly (the LDAP
-  `mail` attribute in `authelia/config/bootstrap.ldif`); check the user's
-  `mail` and the policy, and that the app's IdP is the Authelia OIDC IdP.
+- **Access 403 after a successful Authelia login** — check the app's policy
+  (Accept + Login with the Authelia OIDC IdP) and that the IdP's client
+  secret matches the RAW `authelia-oidc-cloudflare-secret`; if an
+  email-include condition is ever added, its emails must equal the Authelia
+  `email` claim exactly (the LDAP `mail` attribute in
+  `authelia/config/bootstrap.ldif`).
 - **`http://<published-hostname>` → 400 Bad Request** — the request reaches
   the origin through the tunnel with `X-Forwarded-Proto: http` and the wall
   refuses it (Authelia: "Target URL ... has an insecure scheme 'http'",
