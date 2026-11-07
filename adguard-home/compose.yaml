@@ -1,6 +1,6 @@
 services:
   adguard-home:
-    image: adguard/adguardhome:v0.107.79
+    image: adguard/adguardhome:v0.107.80
     command:
       - '--no-check-update'
       - '-c'
