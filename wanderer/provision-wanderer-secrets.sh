@@ -13,9 +13,15 @@ set -euo pipefail
 #   wanderer-meili-key          -> MEILI_MASTER_KEY
 #   wanderer-pb-encryption-key  -> POCKETBASE_ENCRYPTION_KEY
 #   wanderer-pb-proxy-secret    -> POCKETBASE_PROXY_SECRET
+#   wanderer-pocketbase-admin   -> POCKETBASE_ADMIN_PASSWORD
 #
 # Missing items are generated and printed on stderr — save them to Bitwarden
 # under the same names before the next run.
+#
+# POCKETBASE_ADMIN_EMAIL/POCKETBASE_ADMIN_PASSWORD make PocketBase upsert the
+# superuser at every container start — the admin account (and the SSO
+# provisioning script's API access) survives a full stack recreation. The
+# email is fixed (admin@sseifried.link); the password comes from Bitwarden.
 #
 # WARNING: POCKETBASE_ENCRYPTION_KEY encrypts trail data at rest. Existing
 # Bitwarden values are fetched, never regenerated — rotating the key after
@@ -54,11 +60,14 @@ echo "[*] Provisioning wanderer secrets -> ${ENV_FILE}"
 MEILI_MASTER_KEY="$(resolve wanderer-meili-key)"
 POCKETBASE_ENCRYPTION_KEY="$(resolve wanderer-pb-encryption-key)"
 POCKETBASE_PROXY_SECRET="$(resolve wanderer-pb-proxy-secret)"
+POCKETBASE_ADMIN_EMAIL="admin@sseifried.link"
+POCKETBASE_ADMIN_PASSWORD="$(resolve wanderer-pocketbase-admin)"
 
 # Basic sanity checks
 [ -n "${MEILI_MASTER_KEY}" ] || { echo "[ERR] Empty MEILI_MASTER_KEY"; exit 1; }
 [ -n "${POCKETBASE_ENCRYPTION_KEY}" ] || { echo "[ERR] Empty POCKETBASE_ENCRYPTION_KEY"; exit 1; }
 [ -n "${POCKETBASE_PROXY_SECRET}" ] || { echo "[ERR] Empty POCKETBASE_PROXY_SECRET"; exit 1; }
+[ -n "${POCKETBASE_ADMIN_PASSWORD}" ] || { echo "[ERR] Empty POCKETBASE_ADMIN_PASSWORD"; exit 1; }
 
 # Write env file atomically (secrets -> owner-only). Re-running is idempotent
 # as long as the keys live in Bitwarden; restart all three services after any
@@ -67,6 +76,8 @@ POCKETBASE_PROXY_SECRET="$(resolve wanderer-pb-proxy-secret)"
   printf 'MEILI_MASTER_KEY=%s\n' "${MEILI_MASTER_KEY}"
   printf 'POCKETBASE_ENCRYPTION_KEY=%s\n' "${POCKETBASE_ENCRYPTION_KEY}"
   printf 'POCKETBASE_PROXY_SECRET=%s\n' "${POCKETBASE_PROXY_SECRET}"
+  printf 'POCKETBASE_ADMIN_EMAIL=%s\n' "${POCKETBASE_ADMIN_EMAIL}"
+  printf 'POCKETBASE_ADMIN_PASSWORD=%s\n' "${POCKETBASE_ADMIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
