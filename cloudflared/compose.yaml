@@ -11,15 +11,18 @@
 # Topology: joins caddy-proxy only and reaches caddy:443 by service name.
 # Outbound-only: the tunnel is a long-lived connection to the Cloudflare edge
 # — no host ports, no firewall rules, no ingress to the LAN.
-# No healthcheck: the -nonroot image is distroless (no /bin/sh) and
-# podman-compose always runs healthchecks as "/bin/sh -c ..." (the exec-form
-# list is mangled to the same shell form), so a healthcheck can NEVER run
-# here (same trap as wanderer's db service). Connector liveness: `podman logs
+# No healthcheck: the image is distroless (no /bin/sh) and podman-compose
+# always runs healthchecks as "/bin/sh -c ..." (the exec-form list is mangled
+# to the same shell form), so a healthcheck can NEVER run here (same trap as
+# wanderer's db service). Connector liveness: `podman logs
 # cloudflared_cloudflared_1` + the Zero Trust dashboard (Tunnels → connectors).
+# The image runs as nonroot uid 65532 (the -nonroot variant was merged into
+# the main tag; verified via the registry image config) — credentials.json
+# must be readable by that uid (provision script chowns it).
 
 services:
   cloudflared:
-    image: docker.io/cloudflare/cloudflared:2026.10.7-nonroot
+    image: docker.io/cloudflare/cloudflared:2026.10.7
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true

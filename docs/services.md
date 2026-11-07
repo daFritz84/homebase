@@ -894,9 +894,10 @@ cd cloudflared
 ```
 
    Writes `credentials.json` (gitignored, mode `0600`, chowned to container
-   uid 65535 via `podman unshare chown` — the `-nonroot` image runs as that
-   uid and rootless Podman maps it to a subuid that cannot read a
-   host-user-owned 0600 file).
+   uid 65532 via `podman unshare chown` — the image runs as nonroot uid
+   65532 (the `-nonroot` variant was merged into the main tag) and rootless
+   Podman maps it to a subuid that cannot read a host-user-owned 0600
+   file).
 
 2. Deploy with the shared pattern (unit: `podman-compose@cloudflared`):
 
