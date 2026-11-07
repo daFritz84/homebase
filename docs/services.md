@@ -309,12 +309,16 @@ cd wanderer
 ./provision-wanderer-secrets.sh
 ```
 
-The script fetches the three keys from the Bitwarden items `wanderer-meili-key`,
-`wanderer-pb-encryption-key` and `wanderer-pb-proxy-secret` (password field) into
-`.env.secret` (gitignored, mode `0600`). On the first run the items do not exist yet:
-the script generates the keys and prints them — save them to Bitwarden under those
-names. **`POCKETBASE_ENCRYPTION_KEY` encrypts trail data at rest; rotating it after
-data exists makes the database unreadable.**
+The script fetches four keys from the Bitwarden items `wanderer-meili-key`,
+`wanderer-pb-encryption-key`, `wanderer-pb-proxy-secret` and
+`wanderer-pocketbase-admin` (password field) into `.env.secret` (gitignored,
+mode `0600`). On the first run the items do not exist yet: the script
+generates the keys and prints them — save them to Bitwarden under those
+names. `POCKETBASE_ADMIN_EMAIL`/`POCKETBASE_ADMIN_PASSWORD` make PocketBase
+upsert the superuser (`admin@sseifried.link`) at every container start, so
+the admin account and the SSO script's API access survive a full stack
+recreation. **`POCKETBASE_ENCRYPTION_KEY` encrypts trail data at rest;
+rotating it after data exists makes the database unreadable.**
 
 2. Rootless bind-mount ownership: `meilisearch` and the web app run as container
 uid 1000, which rootless Podman maps into the subuid range — a `data/` directory
@@ -381,21 +385,31 @@ podman run -d --rm --name pb-admin-proxy --network wanderer-internal \
 # done: podman stop pb-admin-proxy
 ```
 
-  users collection → gear → Options → **OAuth2** → add provider:
-  Name `authelia` (slot name → `OIDC_*` env vars + button label), Type
-  **OIDC**, Client ID `wanderer`, Client Secret = RAW value, Auth URL
-  `https://authelia.sseifried.link/api/oidc/authorization`, Token URL
-  `https://authelia.sseifried.link/api/oidc/token`, API URL
-  `https://authelia.sseifried.link/api/oidc/userinfo`, Scopes
-  `openid profile email`, **PKCE: enabled** (the client requires S256),
-  Email attribute `email`, Username attribute `preferred_username`,
-  Verified attribute `email_verified`.
+  The provider config lives in the PocketBase DB (not in a file), so it is
+  scripted: start the socat proxy above, unlock Bitwarden, then run
+  `./provision-wanderer-sso.sh` from `wanderer/` on the server. It reads the
+  RAW client secret from Bitwarden `authelia-oidc-wanderer-secret`
+  (`PB_CLIENT_SECRET=…` env override for testing), the superuser credentials
+  from `.env.secret` (`provision-wanderer-secrets.sh` creates them), and
+  upserts the `oidc` slot via the REST API — idempotent, re-runnable after
+  stack recreation.
+- **API shape gotchas** (flomp/wanderer-db vendors PocketBase 0.38.0 core —
+  registry slots `oidc|oidc2|oidc3` — but the fork's users collection carries
+  a custom top-level `oauth2` field, not 0.23+ `options.authMethods`). The
+  provider struct is FLAT and REDUCED: `name`, `displayName` (login-button
+  label), `clientId`, `clientSecret` (write-only, GET masks it), `authURL`,
+  `tokenURL`, `userInfoURL`, `pkce`, `extra` — unknown keys are silently
+  dropped, and the 400 bodies name the surviving keys. The slot `name` MUST
+  be a registry key (`oidc`), not a free-form label. Claim attrs (`email` /
+  `preferred_username` / `email_verified`), scopes (`openid profile email`,
+  overridable per slot via the `OIDC_SCOPES` env var) and the S256 PKCE
+  method are PocketBase core defaults the fork does not expose.
 - **Account migration (do this BEFORE the first OIDC login):** OIDC logins
   create NEW PocketBase users — accounts are never linked by email, and
   trails belong to the user record. Log in once via OIDC (creates a fresh
   account), open it in the admin UI, copy its **Provider ID** (= Authelia's
-  `sub` claim), attach that credential (auth-method `authelia` + Provider
-  ID) to your EXISTING account, delete the fresh account. Your trails stay
+  `sub` claim), attach that credential (auth-method `oidc` + Provider ID)
+  to your EXISTING account, delete the fresh account. Your trails stay
   on the old account. The partner needs no migration — their first OIDC
   login creates their account (username `partner`, own trails).
 - **Optional:** disable PocketBase password auth (users → Options →
