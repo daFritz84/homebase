@@ -672,13 +672,13 @@ ha_oidc_client_secret` in gitignored `secrets.yaml`).
   `roles.user: 'homebase-admins'` — configuring `roles.user` makes the
   component **reject** identities in neither group. Phase 2 `uid=partner`
   (homebase-users) stays out of HA until a role is added then.
-- **Account migration:** `features.automatic_user_linking: true`
+- **Account migration (done):** `features.automatic_user_linking: true`
   (TEMPORARY) links the first OIDC login to the existing HA user whose
   username credential exactly matches the `preferred_username` claim (LDAP
-  uid, e.g. `chef`). Verify the owner's username matches, log in once,
-  confirm the owner profile/entities/person are intact, then **remove the
-  flag** and restart — the username match bypasses MFA, so it stays enabled
-  only for the one-time link.
+  uid, e.g. `sseifried`). The owner was linked this way on 2026-11-07 and
+  the flag was **removed** afterwards — the username match bypasses MFA, so
+  it stays enabled only for a one-time link. Re-enable it (restart the unit)
+  if a future user needs the same one-time link, then remove it again.
 - **HA's own login stays enabled** as break-glass (Companion tokens, direct
   host access, Authelia down). Backup form:
   `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`; from the

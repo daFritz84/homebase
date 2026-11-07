@@ -37,8 +37,6 @@ auth_oidc:
     user: 'homebase-admins'
   features:
     default_redirect: true
-    # TEMPORARY — links the first OIDC login (preferred_username == HA
-    # username, e.g. chef) to the EXISTING owner account, bypassing MFA on
-    # that match. Remove after the owner has logged in once via OIDC and the
-    # profile/entities/person are confirmed intact, then restart the unit.
-    automatic_user_linking: true
+    # automatic_user_linking was used ONCE to link the first OIDC login
+    # (preferred_username sseifried) to the existing owner account — removed
+    # after the link was confirmed (the username match bypasses MFA).
