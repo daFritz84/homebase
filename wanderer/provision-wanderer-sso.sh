@@ -114,7 +114,10 @@ else:
 
 oauth2["providers"] = providers
 oauth2["enabled"] = True
-api("/api/collections/users", "PATCH", {"oauth2": oauth2})
+# PocketBase 0.22 PATCH requires the FULL collection record (name, type,
+# fields, ... all mandatory) — send the GET record back with oauth2 replaced.
+coll["oauth2"] = oauth2
+api("/api/collections/users", "PATCH", coll)
 
 # read back: PocketBase strips unknown params fields — verify they stuck
 check = api("/api/collections/users").get("oauth2") or {}
