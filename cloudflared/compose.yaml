@@ -26,7 +26,9 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
-    command: tunnel --no-autoupdate run --config /etc/cloudflared/config.yml homebase
+    # --config is a persistent flag of `tunnel` and MUST precede the `run`
+    # subcommand (urfave/cli: "flag provided but not defined: -config" after it)
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run homebase
     volumes:
       - ./config.yml:/etc/cloudflared/config.yml:ro
       - ./credentials.json:/etc/cloudflared/credentials.json:ro
