@@ -30,7 +30,9 @@ jobs:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
           touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret
-          for f in caddy adguard-home homeassistant homepage wanderer authelia; do
+          # cloudflared needs no stub: no env_file (credentials.json is a
+          # bind-mount, and volume targets need not exist for `config`)
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

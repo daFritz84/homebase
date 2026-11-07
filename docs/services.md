@@ -12,6 +12,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Wanderer (Trail Database)](#wanderer-trail-database)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
+- [Cloudflare Tunnel (cloudflared)](#cloudflare-tunnel-cloudflared)
 
 For the stack update procedure and backups see [operations.md](operations.md).
 
@@ -68,7 +69,8 @@ clone, on a branch, tested with podman-compose directly:
 3. **Commit & push** — the server deploy key is read-only; commits always
    originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
 4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
-   systemd unit (`systemctl --user restart podman-compose@<project>`) — for every project.
+   service's containers (`podman restart <container>` — a unit restart can be a
+   no-op on a running pod, see [operations.md](operations.md)) — for every project.
 5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
    sync the server file back to the workstation, review, commit, push
    (see [operations.md](operations.md)).
@@ -202,6 +204,11 @@ Home Assistant `:8123` use.
 - **Out of scope for Authelia SSO** (user decision): Cockpit keeps PAM + TOTP, VPN/LAN only.
   As a host management tool its authentication never depends on a hosted identity
   provider — no OIDC, no oauth2-proxy, no SSO.
+- **Never via Cloudflare** (user decision): Cockpit is **never** added to the
+  tunnel ingress (`cloudflared/config.yml`), has **no public DNS record**
+  (NXDOMAIN from the internet), and is not exposed through Cloudflare Access
+  in any form. LAN/VPN + PAM + TOTP unchanged — the 4-fold enforcement is
+  documented under [Cloudflare Tunnel](#cloudflare-tunnel-cloudflared).
 
 ## AdGuard Home (DNS-Server)
 
@@ -302,12 +309,16 @@ cd wanderer
 ./provision-wanderer-secrets.sh
 ```
 
-The script fetches the three keys from the Bitwarden items `wanderer-meili-key`,
-`wanderer-pb-encryption-key` and `wanderer-pb-proxy-secret` (password field) into
-`.env.secret` (gitignored, mode `0600`). On the first run the items do not exist yet:
-the script generates the keys and prints them — save them to Bitwarden under those
-names. **`POCKETBASE_ENCRYPTION_KEY` encrypts trail data at rest; rotating it after
-data exists makes the database unreadable.**
+The script fetches four keys from the Bitwarden items `wanderer-meili-key`,
+`wanderer-pb-encryption-key`, `wanderer-pb-proxy-secret` and
+`wanderer-pocketbase-admin` (password field) into `.env.secret` (gitignored,
+mode `0600`). On the first run the items do not exist yet: the script
+generates the keys and prints them — save them to Bitwarden under those
+names. `POCKETBASE_ADMIN_EMAIL`/`POCKETBASE_ADMIN_PASSWORD` make PocketBase
+upsert the superuser (`admin@sseifried.link`) at every container start, so
+the admin account and the SSO script's API access survive a full stack
+recreation. **`POCKETBASE_ENCRYPTION_KEY` encrypts trail data at rest;
+rotating it after data exists makes the database unreadable.**
 
 2. Rootless bind-mount ownership: `meilisearch` and the web app run as container
 uid 1000, which rootless Podman maps into the subuid range — a `data/` directory
@@ -322,11 +333,13 @@ PocketBase runs as root — container root maps to the host user, so `pb_data` a
 `plugins` need no chown. Skipping this step shows up as permission-denied crashes
 in the search/web containers on first start.
 
-3. Open `https://wanderer.sseifried.link` and create your account — signup is
-enabled by design. The instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`), so new
-accounts only ever see their own trails, and the box is LAN-only (no public DNS
-records). To close registration later, set `PUBLIC_DISABLE_SIGNUP: "true"` in
-`compose.yaml`, commit and redeploy.
+3. Open `https://wanderer.sseifried.link` and create your account. The
+instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`), so accounts only
+ever see their own trails. Registration is now closed
+(`PUBLIC_DISABLE_SIGNUP: "true"` — the app is internet-published via
+Cloudflare Access and accounts arrive through Authelia OIDC, which creates
+records server-side and is unaffected by the flag; set it back to `"false"`
+to reopen signup, e.g. for a new person's first account).
 
 4. Deploy with the shared pattern above (unit: `podman-compose@wanderer`):
 
@@ -342,6 +355,68 @@ podman pod ps
 curl -k https://wanderer.sseifried.link
 podman logs --tail=20 wanderer_search_1   # Meilisearch must come up healthy
 ```
+
+### Wanderer SSO (Authelia OIDC via PocketBase)
+
+Wanderer's own account system (PocketBase) federates to Authelia via generic
+OIDC: the login page gets an **Authelia button**, and because the
+`authelia_session` cookie covers `sseifried.link`, the OIDC redirect is
+authorized **silently** — one login end to end (internet via Access, LAN via
+split DNS). The wall (forward_auth) and the app login are separate layers;
+this closes the second one.
+
+- **Authelia client:** `wanderer` in `authelia/config/configuration.yml`
+  (confidential, PKCE S256, `client_secret_post` — PocketBase posts
+  credentials in the token body; argon2 digest from `.env.secret`, RAW
+  secret = Bitwarden `authelia-oidc-wanderer-secret`, printed by
+  `provision-authelia-secrets.sh`). Redirect:
+  `https://wanderer.sseifried.link/login/redirect` (PocketBase's fixed
+  callback path).
+- **PocketBase admin UI** (the `db` service has no host port — bridge
+  containers can't reach host services, so the admin UI is reached through a
+  throwaway socat container on `wanderer-internal`, bound to the server's
+  loopback only; `podman port-forward` does not exist on the server's podman
+  version):
+
+```bash
+podman run -d --rm --name pb-admin-proxy --network wanderer-internal \
+  -p 127.0.0.1:8090:8090 docker.io/alpine/socat \
+  TCP-LISTEN:8090,fork TCP-CONNECT:db:8090
+# workstation: ssh -L 8090:localhost:8090 chef@192.168.178.249
+# browser: http://localhost:8090/_/
+# done: podman stop pb-admin-proxy
+```
+
+  The provider config lives in the PocketBase DB (not in a file), so it is
+  scripted: start the socat proxy above, unlock Bitwarden, then run
+  `./provision-wanderer-sso.sh` from `wanderer/` on the server. It reads the
+  RAW client secret from Bitwarden `authelia-oidc-wanderer-secret`
+  (`PB_CLIENT_SECRET=…` env override for testing), the superuser credentials
+  from `.env.secret` (`provision-wanderer-secrets.sh` creates them), and
+  upserts the `oidc` slot via the REST API — idempotent, re-runnable after
+  stack recreation.
+- **API shape gotchas** (flomp/wanderer-db vendors PocketBase 0.38.0 core —
+  registry slots `oidc|oidc2|oidc3` — but the fork's users collection carries
+  a custom top-level `oauth2` field, not 0.23+ `options.authMethods`). The
+  provider struct is FLAT and REDUCED: `name`, `displayName` (login-button
+  label), `clientId`, `clientSecret` (write-only, GET masks it), `authURL`,
+  `tokenURL`, `userInfoURL`, `pkce`, `extra` — unknown keys are silently
+  dropped, and the 400 bodies name the surviving keys. The slot `name` MUST
+  be a registry key (`oidc`), not a free-form label. Claim attrs (`email` /
+  `preferred_username` / `email_verified`), scopes (`openid profile email`,
+  overridable per slot via the `OIDC_SCOPES` env var) and the S256 PKCE
+  method are PocketBase core defaults the fork does not expose.
+- **Account migration (do this BEFORE the first OIDC login):** OIDC logins
+  create NEW PocketBase users — accounts are never linked by email, and
+  trails belong to the user record. Log in once via OIDC (creates a fresh
+  account), open it in the admin UI, copy its **Provider ID** (= Authelia's
+  `sub` claim), attach that credential (auth-method `oidc` + Provider ID)
+  to your EXISTING account, delete the fresh account. Your trails stay
+  on the old account. The partner needs no migration — their first OIDC
+  login creates their account (username `partner`, own trails).
+- **Optional:** disable PocketBase password auth (users → Options →
+  Identity/Password toggle) once SSO works — keep it as break-glass if
+  Authelia-down app access matters.
 
 ### Meilisearch upgrades
 
@@ -470,31 +545,44 @@ Single self-hosted identity layer: **Authelia** (login portal, 2FA, OIDC IdP)
 Browser (LAN, AdGuard split DNS)
   │ https://<app>.sseifried.link
   ▼
+Remote (public internet, no VPN)
+  │ https://wanderer|authelia.sseifried.link — ONLY these two, via Cloudflare
+  │ Access (email allowlist + Authelia OIDC federation) + cloudflared tunnel
+  ▼
 Caddy (wildcard cert)
   ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
   ├─ homeassistant.sseifried.link ──► host.containers.internal:8123 (native OIDC client → Authelia (gate))
   ├─ adguard|wanderer ──► forward_auth authelia:9091 (wall) ──► upstream
-  ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia)
-  └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP)
+  ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia, LAN/VPN-only)
+  └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP;
+       internet-published via the tunnel — federation login + wall redirects)
 
 authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
                 sqlite db + openldap data in named volumes
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `one_factor` for `group:homebase-admins` on AdGuard and
-Wanderer; no rules for the Authelia portal (its endpoints are exempt from
-ACL), Homepage (no forward_auth — its own OIDC gate enforces auth: Authelia
-authorizes the `homepage` OIDC client, and Homepage admits any identity
-Authelia authorizes) or Home Assistant (no forward_auth — gated by its OIDC
-client's `authorization_policy` + the component's `roles`: only
-`homebase-admins` is admitted, admins-only as the old wall rule). Cockpit
-has **no rule and no forward_auth** — it stays outside Authelia entirely.
-Session cookie domain `sseifried.link` → one login, all walled apps (true SSO).
-Second factors: TOTP + WebAuthn passkeys, enrolled at
+**default deny**; `one_factor` for `group:homebase-admins` on AdGuard and for
+`group:homebase-admins` **or** `group:homebase-users` on Wanderer (the
+internet-published app, shared with the partner); no rules for the Authelia
+portal (its endpoints are exempt from ACL), Homepage (no forward_auth — its
+own OIDC gate enforces auth: Authelia authorizes the `homepage` OIDC client,
+and Homepage admits any identity Authelia authorizes) or Home Assistant (no
+forward_auth — gated by its OIDC client's `authorization_policy` + the
+component's `roles`: only `homebase-admins` is admitted, admins-only as the
+old wall rule). Cockpit has **no rule and no forward_auth** — it stays
+outside Authelia entirely. Session cookie domain `sseifried.link` → one
+login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`,
+`wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
+`cloudflare-access` (Cloudflare Access federation — the raw client
+secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
+`scopes: openid/email/profile` — the `email` claim feeds the Access policy
+allowlist). Second factors: TOTP + WebAuthn passkeys, enrolled at
 `https://authelia.sseifried.link/portal` — **optional for now**: policies run
-`one_factor`; flip the walled-app rule + the `homepage`/`homeassistant` OIDC
-clients' `authorization_policy` to `two_factor` after enrolling.
+`one_factor`; flip the walled-app rules + the `homepage`/`homeassistant`/
+`cloudflare-access` OIDC clients' `authorization_policy` to `two_factor`
+after enrolling (passkeys work through the tunnel: rp_id `sseifried.link`,
+real domain).
 
 ### First run
 
@@ -511,18 +599,23 @@ cd authelia
 
    The script fetches/generates the `AUTHELIA_*` secrets + the LDAP admin
    password into `.env.secret` (gitignored, mode `0600`), plus more
-   entries: the argon2 digests of the Homepage and Home Assistant OIDC
-   client secrets — as `HOMEPAGE_OIDC_CLIENT_SECRET_HASH` /
-   `HA_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml` by the
-   `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env overrides
-   are NOT supported — 4.39 rejects them), so the committed file keeps its
-   placeholders — and the generated Authelia **login password**
-   (`LDIF_LOGIN_PASSWORD`, printed on first generation: save it to Bitwarden
-   as `authelia-login-password`). It also prints the **raw** OIDC client
-   secrets: for `homepage/.env` as `HOMEPAGE_OIDC_CLIENT_SECRET` and for
-   `homeassistant/config/secrets.yaml` as `ha_oidc_client_secret`
-   (gitignored — never commit). Save generated items to Bitwarden (the HA
-   client secret is item `authelia-oidc-homeassistant-secret`).
+   entries: the argon2 digests of the Homepage, Home Assistant and
+   Cloudflare Access OIDC client secrets — as
+   `HOMEPAGE_OIDC_CLIENT_SECRET_HASH` / `HA_OIDC_CLIENT_SECRET_HASH` /
+   `CLOUDFLARE_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml`
+   by the `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env
+   overrides are NOT supported — 4.39 rejects them), so the committed file
+   keeps its placeholders — and the generated Authelia **login passwords**
+   (`LDIF_LOGIN_PASSWORD` for `uid=sseifried`, `LDIF_PARTNER_PASSWORD` for
+   `uid=partner`, printed on first generation: save them to Bitwarden as
+   `authelia-login-password` / `authelia-partner-login-password`). It also
+   prints the **raw** OIDC client secrets: for `homepage/.env` as
+   `HOMEPAGE_OIDC_CLIENT_SECRET`, for `homeassistant/config/secrets.yaml`
+   as `ha_oidc_client_secret` (gitignored — never commit), and as the
+   client secret of the Authelia OIDC IdP in the Cloudflare Access
+   dashboard (see "Cloudflare Tunnel"). Save generated items to Bitwarden
+   (the HA client secret is item `authelia-oidc-homeassistant-secret`, the
+   Cloudflare one `authelia-oidc-cloudflare-secret`).
 
 2. Generate the OIDC RSA signing key pair (gitignored, covered by
    `backup-authelia.sh`):
@@ -651,7 +744,10 @@ EOF
 
 Password changes = re-render (`./render-ldif.sh`) + `ldapmodify`
 (`replace: userPassword` with the freshly rendered `{SSHA}` hash).
-`uid=partner` (homebase-users) is Phase 2.
+`uid=partner` (homebase-users) is in the LDIF — the Wanderer-sharing partner
+account (internet access via Cloudflare Access, see "Cloudflare Tunnel");
+its login password is Bitwarden `authelia-partner-login-password`, handed
+out out-of-band.
 
 ### HA SSO (hass-oidc-auth)
 
@@ -778,3 +874,159 @@ files use the current (4.39.28) schema:
   `{user_identifier}` is sent literally). Fixed upstream after 4.39.28.
 - No SMTP: `password_reset.disable: true` + filesystem notifier
   (`/config/notifier/notification.txt`).
+
+## Cloudflare Tunnel (cloudflared)
+
+Outbound-only remote access for the **work laptop + partner** without a VPN:
+a locally-managed Cloudflare Tunnel publishes **only**
+`wanderer.sseifried.link` and `authelia.sseifried.link` (the portal is
+required: the wall redirects there and the Access federation login lives
+there) to the internet, gated by **Cloudflare Access** with **Authelia OIDC
+federation only** (no email-OTP). Compose file: `cloudflared/compose.yaml`.
+Unit: `podman-compose@cloudflared` (shared pattern above).
+
+```
+Work laptop / partner (public DNS, no VPN)
+  │ https://wanderer.sseifried.link
+  ▼
+Cloudflare Edge ── Access policy (email allowlist + Authelia IdP)
+  │   └─ unauthenticated → Authelia portal (authelia.sseifried.link, same tunnel)
+  ▼
+cloudflared container (caddy-proxy) ── tunnel (outbound) ── CF Edge
+  │ https://caddy:443 + originServerName (Full strict)
+  ▼
+Caddy ── forward_auth wall (authelia_session cookie from the federation
+  │      login → passes: ONE login end to end)
+  ▼
+wanderer:3000 (PocketBase OIDC SSO → the Authelia button is silent, see
+  "Wanderer SSO")
+
+LAN path unchanged: AdGuard split DNS → Caddy :443 (LE wildcard cert).
+```
+
+The tunnel is a long-lived **outbound** connection from the container to the
+Cloudflare edge — no host ports, no firewall rules, no ingress to the LAN.
+Origin transport: cloudflared → `https://caddy:443` with a per-host
+`originServerName` (Full-strict) — the LE wildcard cert is publicly valid,
+so no Origin CA cert and no Caddy site changes are needed; an `http://`
+ingress would hit Caddy's `:80` redirect and loop at the edge.
+
+### Ingress allowlist doctrine
+
+`cloudflared/config.yml` is the committed, auditable public-exposure
+allowlist: **wanderer + authelia ONLY**, fallback `http_status:404`.
+`cockpit`/`adguard`/`homepage`/`homeassistant` are deliberately absent —
+**never add them** (user decision: admin tools stay LAN/VPN-only). Cockpit's
+exclusion is enforced 4-fold: absent from the allowlist, 404 fallback, no
+public DNS record (NXDOMAIN from the internet), TLS-only site + PAM.
+
+### Workstation setup (one-time, manual)
+
+The tunnel is created on the **workstation** (the server never receives the
+account cert); install `cloudflared` there, then:
+
+```bash
+cloudflared tunnel login                      # browser → ~/.cloudflared/cert.pem
+cloudflared tunnel create homebase            # → ~/.cloudflared/<uuid>.json
+cloudflared tunnel route dns homebase wanderer.sseifried.link
+cloudflared tunnel route dns homebase authelia.sseifried.link
+```
+
+Save `cert.pem` → Bitwarden item `cloudflared-account-cert`, the credentials
+JSON → `cloudflared-tunnel-credentials` (password field, single-line JSON).
+`route dns` creates proxied (orange-cloud) CNAMEs — the only public DNS
+records this stack ever creates.
+
+### Cloudflare Access setup (dashboard, one-time)
+
+1. Zero Trust (free plan, 2 users): sign up, note the team domain —
+   `green-mouse-0fd5.cloudflareaccess.com`.
+2. Access → Authentication → **OIDC IdPs**: add "Authelia" — issuer
+   `https://authelia.sseifried.link` (discovery), client_id
+   `cloudflare-access`, client secret = the RAW value printed by
+   `authelia/provision-authelia-secrets.sh` (Bitwarden
+   `authelia-oidc-cloudflare-secret`). Requires the portal public → do this
+   after the tunnel is up.
+3. Access → **Applications**: self-hosted `wanderer.sseifried.link`
+   (session duration default 24h).
+4. Access **policy** on the app: include = specific emails
+   (`sseifried@sseifried.link`, `s.seifried@gmx.at` — must equal the LDAP
+   `mail` attributes exactly, the allowlist checks the Authelia `email`
+   claim), action = Login with the Authelia IdP. No WARP/service tokens,
+   no email-OTP.
+5. Zone → SSL/TLS → Edge Certificates → **Always Use HTTPS: on** —
+   `http://<published>` requests otherwise reach the origin through the
+   tunnel with `X-Forwarded-Proto: http` and the wall 400s them
+   (Authelia rejects insecure redirect targets, fail-closed).
+
+### First run (server)
+
+1. Provision the credentials (requires an unlocked Bitwarden CLI):
+
+```bash
+cd cloudflared
+./provision-cloudflared-secrets.sh
+```
+
+   Writes `credentials.json` (gitignored, mode `0600`, chowned to container
+   uid 65532 via `podman unshare chown` — the image runs as nonroot uid
+   65532 (the `-nonroot` variant was merged into the main tag) and rootless
+   Podman maps it to a subuid that cannot read a host-user-owned 0600
+   file).
+
+2. Deploy with the shared pattern (unit: `podman-compose@cloudflared`):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@cloudflared
+```
+
+3. Verify:
+
+```bash
+podman logs --tail=50 cloudflared_cloudflared_1   # connector registered
+```
+
+   Dashboard → Networks → Tunnels → homebase → connector **online**. From a
+   public network (no VPN): `dig +short wanderer.sseifried.link` →
+   Cloudflare edge IPs; `curl -sI https://wanderer.sseifried.link` → 302 to
+   `green-mouse-0fd5.cloudflareaccess.com`; `dig +short
+   cockpit.sseifried.link adguard.sseifried.link homepage.sseifried.link
+   homeassistant.sseifried.link` → **NXDOMAIN** (cockpit guarantee).
+
+### Partner onboarding
+
+Browser → `https://wanderer.sseifried.link` → Access → Authelia login
+(`uid=partner`, password = Bitwarden `authelia-partner-login-password`,
+handed out out-of-band) → wall passes → Wanderer login page → **Authelia
+button** → account auto-created (username `partner`, own trails — private
+instance). After onboarding set `PUBLIC_DISABLE_SIGNUP: "true"` in
+`wanderer/compose.yaml`, commit and redeploy — email/password registration
+is no longer needed and the app is now internet-published (OIDC logins keep
+working; reversible).
+
+### Rollback
+
+Dashboard: delete the public hostname(s) (DNS records) → stop the unit
+(`systemctl --user disable --now podman-compose@cloudflared`). Nothing else
+changes: the LAN path never depended on the tunnel.
+
+### Federation notes
+
+- **Federation-only**: Authelia down ⇒ remote access down (Access cannot
+  authenticate). LAN, VPN, SSH, Cockpit unaffected — break-glass unchanged.
+- The portal is internet-published (inherent: the wall redirects + the
+  federation login live there). The login page is the public auth surface;
+  Authelia `regulation` rate-limits it. `one_factor` kept per user decision —
+  flip to `two_factor` with the documented follow-up (enroll TOTP/passkeys).
+- Session lifetime: Access 24h vs `authelia_session` 12h/2h inactivity → the
+  wall re-prompts at the portal after Authelia expiry. Expected.
+- PKCE: the `cloudflare-access` client requires `S256`; if the federation
+  test shows Access sends no PKCE, drop `require_pkce`.
+- Real client IPs: cloudflared sends `X-Forwarded-For`; Caddy trusts the
+  `caddy-proxy` CIDR (`servers { trusted_proxies static 10.89.0.0/24 }` in
+  the Caddyfile global block — 2.11 IP-range-source syntax;
+  `trusted_proxies_static` is not a 2.11.7 option name) so Authelia
+  `regulation` ip-mode bans are per client, not per shared tunnel source.
+- `cert.pem` + credentials JSON are account-level secrets: Bitwarden-only,
+  0600, gitignored; gitleaks guards the repo.

@@ -3,7 +3,6 @@
 Day-2 tasks: keeping the stack up to date, backing up irreplaceable data, and the open roadmap.
 
 - [Stack Update Procedure](#stack-update-procedure)
-- [TODO](#todo)
 - [Appstore as Inspiration](#appstore-as-inspiration)
 
 ## Stack Update Procedure
@@ -17,6 +16,7 @@ systemctl --user status podman-compose@homepage
 systemctl --user status podman-compose@wanderer
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
+systemctl --user status podman-compose@cloudflared
 podman ps
 ```
 
@@ -120,6 +120,9 @@ podman-compose pull
 
 cd ../authelia
 podman-compose pull
+
+cd ../cloudflared
+podman-compose pull
 ```
 
 > **Plugin pin not tracked by Dependabot:** the Cloudflare DNS plugin is pinned in
@@ -136,6 +139,7 @@ systemctl --user restart podman-compose@homepage
 systemctl --user restart podman-compose@wanderer
 systemctl --user restart podman-compose@homeassistant
 systemctl --user restart podman-compose@authelia
+systemctl --user restart podman-compose@cloudflared
 ```
 
 > **env_file changes need a recreation, not a restart:** the unit only
@@ -144,6 +148,16 @@ systemctl --user restart podman-compose@authelia
 > `systemctl restart`. Recreate from the service directory instead:
 > `podman-compose up -d --force-recreate` (named volumes keep all data).
 > Prove it with `podman inspect <container> --format "{{json .Config.Env}}"`.
+
+> **Unit restarts can be a no-op (config changes ignored):** the
+> `podman-compose@` unit's start path is `podman pod start pod_<project>` —
+> a no-op on an already-running pod, so `systemctl --user restart` has been
+> observed leaving containers running with the OLD config (diagnosed
+> 2026-11-07: an authelia `configuration.yml` change stayed invisible for
+> ~1h of restarts; `podman inspect <container> --format
+> "{{.State.StartedAt}}"` proved the container never restarted). Reliable
+> for config-only changes: `podman restart <container>` (verify
+> `StartedAt` moved).
 
 4. Verify
 
@@ -156,6 +170,7 @@ podman logs --tail=50 <wanderer-web-container>
 podman logs --tail=50 <homeassistant-container>
 podman logs --tail=50 authelia_authelia_1
 podman logs --tail=50 authelia_openldap_1
+podman logs --tail=50 cloudflared_cloudflared_1
 ```
 
 5. Cleanup
@@ -280,21 +295,50 @@ Notes:
   `ldapwhoami` (it accepts no base DN — such a check fails forever and marks
   slapd unhealthy). Check `podman inspect authelia_openldap_1 --format
   '{{json .State.Health}}'` and `podman logs authelia_openldap_1`.
+- **Config change has no effect after `systemctl --user restart
+  podman-compose@<project>`** — the unit's start path is `podman pod start
+  pod_<project>`, a no-op on a running pod; the container keeps running
+  with the old config (authelia kept rejecting a fixed OIDC client setting
+  for ~1h this way, 2026-11-07). Check `podman inspect <container>
+  --format "{{.State.StartedAt}}"` — if it predates your restart, the
+  container never restarted. Fix: `podman restart <container>` (config
+  changes) or `podman-compose up -d --force-recreate` (env changes).
+- **Tunnel down / dashboard shows `connector has never connected`** —
+  `podman logs --tail=50 cloudflared_cloudflared_1`: `credentials.json`
+  missing/unreadable (re-run `cloudflared/provision-cloudflared-secrets.sh`
+  — the file must be 0600 **and** chowned to container uid 65532 via
+  `podman unshare chown`, see [services.md](services.md) "Cloudflare
+  Tunnel"); cert.pem is NOT needed on the server. Also check the unit is
+  active and the dashboard connector status.
+- **Redirect loop at the Cloudflare edge** (too many redirects on a
+  published hostname) — the tunnel ingress must target `https://caddy:443`
+  with a per-host `originServerName` (`cloudflared/config.yml`); an
+  `http://` ingress hits Caddy's `:80` redirect block and loops.
+- **Access 403 after a successful Authelia login** — the Access policy
+  include email must equal the Authelia `email` claim exactly (the LDAP
+  `mail` attribute in `authelia/config/bootstrap.ldif`); check the user's
+  `mail` and the policy, and that the app's IdP is the Authelia OIDC IdP.
+- **`http://<published-hostname>` → 400 Bad Request** — the request reaches
+  the origin through the tunnel with `X-Forwarded-Proto: http` and the wall
+  refuses it (Authelia: "Target URL ... has an insecure scheme 'http'",
+  fail-closed). Enable Cloudflare **Always Use HTTPS** (SSL/TLS → Edge
+  Certificates) so http 301s at the edge.
+- **Authelia ip-mode ban hits all remote users at once** (one failed login
+  bans everyone through the tunnel) — Caddy's global
+  `servers { trusted_proxies static 10.89.0.0/24 }` is missing/stale, so
+  `forward_auth` passes the shared tunnel source IP and every remote client
+  shares one `remote_ip`. Check the Caddyfile global block and the
+  `caddy-proxy` subnet (`podman network inspect caddy-proxy`), validate,
+  restart `podman-compose@caddy`.
 
 ## Power Outage Recovery
 
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
-[host-setup.md](host-setup.md)) starts all six user units — `podman-compose@caddy`,
+[host-setup.md](host-setup.md)) starts all seven user units — `podman-compose@caddy`,
 `podman-compose@adguard-home`, `podman-compose@homepage`, `podman-compose@wanderer`,
-`podman-compose@homeassistant` and `podman-compose@authelia` — no manual action is
-needed.
-
-## TODO
-
-- Phase 2: cloudflared + Cloudflare Access → Authelia OIDC federation
-  (work laptop + partner; email-allowlist + one-time PIN, publishing
-  Wanderer (+optionally Homepage/HA); `uid=partner` LDIF + Wanderer account)
+`podman-compose@homeassistant`, `podman-compose@authelia` and
+`podman-compose@cloudflared` — no manual action is needed.
 
 ## Appstore as Inspiration
 

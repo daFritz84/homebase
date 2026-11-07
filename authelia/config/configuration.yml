@@ -12,15 +12,17 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
-#     HA_OIDC_CLIENT_SECRET_HASH env vars (.env.secret, written by
+#     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
+#     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
 #     "configuration environment variable not expected". Missing env var ->
 #     empty client_secret -> validation fails closed.
-#   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=...): {SSHA}
+#   - {REPLACE_ME} in bootstrap.ldif (three: cn=admin + uid=sseifried +
+#     uid=partner): {SSHA}
 #     hashes via slappasswd (slapd verifies LDIF passwords; osixia 1.5.0's
 #     OpenLDAP 2.4.57 cannot verify argon2) — ./render-ldif.sh fills them
 #     from .env.secret into the gitignored config/bootstrap.rendered.ldif
@@ -122,6 +124,54 @@ identity_providers:
         access_token_signed_response_alg: 'none'
         userinfo_signed_response_alg: 'none'
         token_endpoint_auth_method: 'client_secret_post'
+      - client_id: 'wanderer'
+        client_name: 'Wanderer (PocketBase OIDC SSO)'
+        # argon2 digest injected from .env.secret by the template filter
+        # (WANDERER_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh);
+        # the RAW secret goes to the PocketBase admin UI (users collection →
+        # Options → OAuth2), see docs/services.md "Wanderer SSO"
+        client_secret: '{{ env "WANDERER_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'one_factor' # flip with the others in the two_factor follow-up
+        consent_mode: 'auto'
+        # wanderer requests exactly openid/profile/email
+        scopes: ['openid', 'profile', 'email']
+        redirect_uris:
+          # PocketBase's fixed OIDC callback path: $ORIGIN/login/redirect
+          - 'https://wanderer.sseifried.link/login/redirect'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # PocketBase authenticates at the token endpoint with POST body
+        # credentials (x/oauth2 default)
+        token_endpoint_auth_method: 'client_secret_post'
+      - client_id: 'cloudflare-access'
+        client_name: 'Cloudflare Access'
+        # argon2 digest injected from .env.secret by the template filter
+        # (CLOUDFLARE_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh);
+        # the RAW secret goes to the Access OIDC IdP form (dashboard)
+        client_secret: '{{ env "CLOUDFLARE_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'one_factor' # flip with the others in the two_factor follow-up
+        consent_mode: 'auto'
+        # the email claim feeds the Access policy email allowlist — the
+        # policy email must equal the LDAP `mail` attribute exactly
+        scopes: ['openid', 'email', 'profile']
+        redirect_uris:
+          # Zero Trust team domain (green-mouse-0fd5) — Access redirects the
+          # browser here after the Authelia login (federation callback)
+          - 'https://green-mouse-0fd5.cloudflareaccess.com/cdn-cgi/access/callback'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # Cloudflare Access authenticates at the token endpoint with HTTP
+        # Basic (client_secret_basic) — verified via the Authelia log
+        # ("request ... using 'client_secret_basic', client configured for
+        # 'client_secret_post'"). The homeassistant client keeps post.
+        token_endpoint_auth_method: 'client_secret_basic'
+        # If the federation test shows Access sends no PKCE, drop require_pkce.
 
 session:
   # secret from AUTHELIA_SESSION_SECRET
@@ -159,14 +209,19 @@ access_control:
   # from ACL; Homepage and Home Assistant are native OIDC clients, gated by
   # their clients' authorization_policy + the app-side role checks).
   rules:
-    # walled apps — admins only (partner joins in Phase 2). one_factor for
-    # now (no factors enrolled); flip this rule + the OIDC clients'
-    # authorization_policy to two_factor after enrolling TOTP + a passkey
-    # at the portal.
-    - domain:
-        - 'adguard.sseifried.link'
-        - 'wanderer.sseifried.link'
+    # walled apps. one_factor for now (no factors enrolled); flip these
+    # rules + the OIDC clients' authorization_policy to two_factor after
+    # enrolling TOTP + a passkey at the portal.
+    - domain: 'adguard.sseifried.link'
       policy: 'one_factor'
       subject: 'group:homebase-admins'
+    # Wanderer is also for the partner (uid=partner, homebase-users) — it is
+    # the one app published to the internet via the Cloudflare Tunnel
+    # (cloudflared/config.yml); AdGuard stays admins-only.
+    - domain: 'wanderer.sseifried.link'
+      policy: 'one_factor'
+      subject:
+        - 'group:homebase-admins'
+        - 'group:homebase-users'
     # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
     # proxies it directly (PAM + TOTP), default-deny never applies

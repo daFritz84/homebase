@@ -75,9 +75,11 @@ services:
       UPLOAD_FOLDER: /app/uploads
       BODY_SIZE_LIMIT: "2G"
       PUBLIC_PRIVATE_INSTANCE: "true"
-      # Signup enabled by design (private instance: accounts only see their own
-      # trails). Set to "true" to close registration (see docs/services.md).
-      PUBLIC_DISABLE_SIGNUP: "false"
+      # Registration closed: the app is internet-published (Cloudflare Access)
+      # and accounts arrive via Authelia OIDC (the OAuth2 flow creates records
+      # server-side, unaffected by this flag — see docs/services.md,
+      # "Wanderer SSO"). Reversible: set to "false" to reopen signup.
+      PUBLIC_DISABLE_SIGNUP: "true"
     volumes:
       - ./data/uploads:/app/uploads
     networks:
