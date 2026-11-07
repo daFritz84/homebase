@@ -33,7 +33,8 @@
         showStats: true
 
     - Home Assistant:
-        icon: homeassistant
+        # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
+        icon: home-assistant
         href: https://homeassistant.sseifried.link
         description: Home automation
         server: homebase-podman
