@@ -1,5 +1,7 @@
 # Home Assistant base config. UI-managed state lives in .storage/ (gitignored);
 # put credentials in secrets.yaml (gitignored) and reference via !secret.
+# The auth_oidc: block at the bottom wires SSO through Authelia (vendored
+# hass-oidc-auth integration — see docs/services.md, "HA SSO (hass-oidc-auth)").
 default_config:
 
 homeassistant:
@@ -13,3 +15,28 @@ homeassistant:
 # HA is network_mode: host; Caddy proxies via host.containers.internal (pasta
 # relay), so the proxy source is the host loopback. .storage is covered by
 # ./backup-ha-config.sh.
+
+# SSO via Authelia OIDC (vendored hass-oidc-auth v1.2.1 in custom_components/
+# auth_oidc/ — pinned, review the diff on every version bump). HA is a native
+# OIDC client (like Homepage), NOT walled by Caddy forward_auth: the client is
+# registered in authelia/config/configuration.yml (confidential + PKCE S256);
+# the secret lives in secrets.yaml (gitignored, provisioned by
+# authelia/provision-authelia-secrets.sh). discovery_url uses the public URL:
+# HA is host-networked, AdGuard split DNS resolves it, TLS via Caddy.
+# roles.user set => identities in neither group are REJECTED — admins-only,
+# reproducing the old wall rule (group:homebase-admins); revisit for Phase 2
+# (uid=partner). default_redirect sends browsers straight to Authelia; the
+# break-glass HA login form stays reachable at /?skip_oidc_redirect=true.
+auth_oidc:
+  client_id: 'homeassistant'
+  client_secret: !secret ha_oidc_client_secret
+  discovery_url: 'https://authelia.sseifried.link/.well-known/openid-configuration'
+  display_name: 'Authelia'
+  roles:
+    admin: 'homebase-admins'
+    user: 'homebase-admins'
+  features:
+    default_redirect: true
+    # automatic_user_linking was used ONCE to link the first OIDC login
+    # (preferred_username sseifried) to the existing owner account — removed
+    # after the link was confirmed (the username match bypasses MFA).

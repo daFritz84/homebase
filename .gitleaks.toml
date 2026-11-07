@@ -1,0 +1,14 @@
+# gitleaks config (gitleaks-action auto-detects this file at the repo root).
+#
+# Vendored third-party code: homeassistant/config/custom_components/ holds the
+# pinned hass-oidc-auth release zip unpacked (see docs/services.md, "HA SSO").
+# Upstream code legitimately contains high-entropy strings (base64 assets,
+# minified CSS/JS) that trip the default rules; the tree is reviewed as a diff
+# on every version bump, so scanning it adds noise, not security.
+title = "Homebase gitleaks config"
+
+[allowlist]
+  description = "Vendored third-party integrations (reviewed on every version bump)"
+  paths = [
+    '''homeassistant/config/custom_components/.*''',
+  ]

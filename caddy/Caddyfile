@@ -93,42 +93,20 @@ adguard.sseifried.link {
 }
 
 # Home Assistant (host-networked container — AdGuard pattern: host.containers.internal,
-# pasta's --map-guest-addr 169.254.1.2, relayed to the host loopback) — behind the
-# Authelia wall (one_factor for homebase-admins).
-# Two bypasses of the wall, both authenticated by HA itself (Authelia 4.38+
-# removed the legacy bypass_credentials/user-agent ACL criteria, so they live
-# here):
-#   - Companion app: sends no browser cookies, so it cannot pass the wall.
-#     Requests from the Companion user-agents skip forward_auth and go straight
-#     to HA, which authenticates the app with its own long-lived access token.
-#     Caddy >=2.8 removed regex from the header matcher (exact + * wildcards
-#     only) — the UA matcher MUST be header_regexp, a regex in `header` is
-#     compared literally and never matches. If the app's user-agent string
-#     changes, the pattern must follow (docs/services.md).
-#   - Bearer-token API clients (automations, custom cards, external tools):
-#     they send Authorization: Bearer <long-lived token> and no Authelia
-#     cookie, so the wall would 302 them to the portal. HA validates its own
-#     tokens, so these are proxied directly.
-# Residual risk (accepted): User-Agent is client-controlled, so any client that
-# can reach this listener can spoof the Companion UA and reach HA's own
-# single-factor login, evading Authelia's 2FA and regulation bans
-# (docs/services.md, "HA wall bypasses").
+# pasta's --map-guest-addr 169.254.1.2, relayed to the host loopback) — NO
+# forward_auth wall: HA is a native Authelia OIDC client (vendored
+# hass-oidc-auth, docs/services.md "HA SSO (hass-oidc-auth)"). The component
+# redirects browsers to Authelia (features.default_redirect); admins-only is
+# enforced by the component's roles + the client's authorization_policy in
+# Authelia. Companion app, Bearer-token API clients and webhooks talk to HA
+# directly — HA validates its own tokens; there is no wall, so the old
+# @companion UA matcher and @bearer handle (bypasses that existed only to
+# dodge the wall) are gone, and the "Companion UA spoofing" residual risk is
+# retired (nothing left to evade). HA's own login form stays enabled as
+# break-glass (/?skip_oidc_redirect=true).
 homeassistant.sseifried.link {
 	import tls
-	@companion header_regexp User-Agent ^(HomeAssistant/|com\.homeassistant\.companion\.android)
-	@bearer header Authorization "Bearer *"
-	handle @companion {
-		reverse_proxy host.containers.internal:8123
-	}
-	handle @bearer {
-		reverse_proxy host.containers.internal:8123
-	}
-	handle {
-		route {
-			import authelia-fa
-			reverse_proxy host.containers.internal:8123
-		}
-	}
+	reverse_proxy host.containers.internal:8123
 }
 
 # Cockpit (host service — host.containers.internal, like AdGuard/HA; Caddy passes
