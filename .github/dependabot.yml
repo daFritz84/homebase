@@ -9,6 +9,7 @@ updates:
       - "/caddy"
       - "/adguard-home"
       - "/authelia"
+      - "/cloudflared"
     schedule:
       interval: "weekly"
     # NOTE: merging a getmeili/meilisearch bump requires wiping data/data.ms

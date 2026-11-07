@@ -1,0 +1,26 @@
+# Cloudflare Tunnel ingress — the committed, auditable public-exposure allowlist.
+# ---
+# cockpit.sseifried.link, adguard.sseifried.link, homepage.sseifried.link and
+# homeassistant.sseifried.link are DELIBERATELY ABSENT — NEVER ADD THEM
+# (user decision: admin tools stay LAN/VPN-only). Enforced 4-fold: absent
+# here, http_status:404 fallback below, no public DNS record (NXDOMAIN from
+# the internet), and Cockpit is TLS-only + PAM. See docs/services.md,
+# "Cloudflare Tunnel (cloudflared)".
+#
+# Origin: https://caddy:443 with a per-host originServerName (Full-strict):
+# cloudflared verifies Caddy's cert against the PUBLIC hostname — the LE
+# wildcard cert (sseifried.link + *.sseifried.link) is publicly valid, so no
+# Origin CA cert and no Caddy site changes are needed. An http:// ingress
+# would hit Caddy's :80 redirect and loop at the edge.
+tunnel: homebase
+credentials-file: /etc/cloudflared/credentials.json
+ingress:
+  - hostname: wanderer.sseifried.link
+    service: https://caddy:443
+    originRequest:
+      originServerName: wanderer.sseifried.link
+  - hostname: authelia.sseifried.link
+    service: https://caddy:443
+    originRequest:
+      originServerName: authelia.sseifried.link
+  - service: http_status:404

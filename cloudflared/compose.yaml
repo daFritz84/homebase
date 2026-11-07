@@ -1,0 +1,44 @@
+# cloudflared — locally-managed Cloudflare Tunnel (https://developers.cloudflare.com/cloudflare-one/)
+# ---
+# Publishes ONLY the hostnames listed in config.yml (the committed, auditable
+# ingress allowlist) to the internet, gated by Cloudflare Access with Authelia
+# OIDC federation. cockpit/adguard/homepage/homeassistant are DELIBERATELY
+# ABSENT from that allowlist — never add them (admin tools stay LAN/VPN-only).
+# Secrets: credentials.json (tunnel credentials JSON, Bitwarden item
+# cloudflared-tunnel-credentials, provisioned by
+# provision-cloudflared-secrets.sh) is bind-mounted read-only — no env_file,
+# so `docker compose config` passes without stub files (CI).
+# Topology: joins caddy-proxy only and reaches caddy:443 by service name.
+# Outbound-only: the tunnel is a long-lived connection to the Cloudflare edge
+# — no host ports, no firewall rules, no ingress to the LAN.
+# No healthcheck: the image is distroless (no /bin/sh) and podman-compose
+# always runs healthchecks as "/bin/sh -c ..." (the exec-form list is mangled
+# to the same shell form), so a healthcheck can NEVER run here (same trap as
+# wanderer's db service). Connector liveness: `podman logs
+# cloudflared_cloudflared_1` + the Zero Trust dashboard (Tunnels → connectors).
+# The image runs as nonroot uid 65532 (the -nonroot variant was merged into
+# the main tag; verified via the registry image config) — credentials.json
+# must be readable by that uid (provision script chowns it).
+
+services:
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:2026.10.7
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    # --config is a persistent flag of `tunnel` and MUST precede the `run`
+    # subcommand (urfave/cli: "flag provided but not defined: -config" after it)
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run homebase
+    volumes:
+      - ./config.yml:/etc/cloudflared/config.yml:ro
+      - ./credentials.json:/etc/cloudflared/credentials.json:ro
+    networks:
+      - caddy-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+networks:
+  caddy-proxy:
+    external: true
