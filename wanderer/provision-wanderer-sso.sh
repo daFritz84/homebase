@@ -88,23 +88,26 @@ coll = api("/api/collections/users")
 oauth2 = coll.get("oauth2") or {}
 providers = oauth2.get("providers") or []
 
+# PocketBase 0.22 core.OAuth2Provider: all config keys are FLAT on the
+# provider object (the 400 body names oauth2.providers.0.clientId) —
+# NOT nested under "params" (that is the 0.23+ authMethods shape).
 provider = {
     "name": slot,
     "providerId": "oidc",
     "identity": slot,
-    "params": {
-        "clientId": "wanderer",
-        "clientSecret": secret,
-        "scopes": ["openid", "profile", "email"],
-        "pkce": True,
-        "pkceChallengeMethod": "S256",
-        "authUrl": issuer + "/api/oidc/authorization",
-        "tokenUrl": issuer + "/api/oidc/token",
-        "userInfoUrl": issuer + "/api/oidc/userinfo",
-        "emailAttr": "email",
-        "usernameAttr": "preferred_username",
-        "verifiedAttr": "email_verified",
-    },
+    "clientId": "wanderer",
+    "clientSecret": secret,
+    "scopes": ["openid", "profile", "email"],
+    "pkce": True,
+    "pkceChallengeMethod": "S256",
+    "issuer": "",
+    "authUrl": issuer + "/api/oidc/authorization",
+    "tokenUrl": issuer + "/api/oidc/token",
+    "userInfoUrl": issuer + "/api/oidc/userinfo",
+    "jwksUrl": "",
+    "emailAttr": "email",
+    "usernameAttr": "preferred_username",
+    "verifiedAttr": "email_verified",
     "state": {},
 }
 
@@ -125,14 +128,19 @@ oauth2["enabled"] = True
 coll["oauth2"] = oauth2
 api("/api/collections/users", "PATCH", coll)
 
-# read back: PocketBase strips unknown params fields — verify they stuck
+# read back: PocketBase strips unknown fields — verify they stuck.
+# clientSecret is write-only (GET returns "******"), so check the rest.
 check = api("/api/collections/users").get("oauth2") or {}
 saved = next((p for p in check.get("providers", []) if p.get("name") == slot), None)
 if not saved:
     sys.exit("[ERR] provider not present after PATCH")
-missing = [k for k in provider["params"] if k not in saved.get("params", {})]
+must = ["clientId", "authUrl", "tokenUrl", "userInfoUrl", "emailAttr",
+        "usernameAttr", "verifiedAttr", "scopes", "pkce"]
+missing = [k for k in must if k not in saved]
 if missing:
-    sys.exit("[ERR] params dropped by server (shape mismatch): %s" % missing)
+    sys.exit("[ERR] fields dropped by server (shape mismatch): %s" % missing)
+if saved.get("clientId") != "wanderer" or saved.get("authUrl") != provider["authUrl"]:
+    sys.exit("[ERR] saved provider has unexpected values: %s" % saved)
 print("[+] OIDC provider '%s' saved and enabled (button label on the"
       " Wanderer login page)" % slot)
 PY
