@@ -90,9 +90,9 @@ member: uid=sseifried,ou=users,dc=sseifried,dc=link
 
 # Partner — homebase-users only (AdGuard/HA stay admins-only); the one app
 # shared with the partner is Wanderer (published via the Cloudflare Tunnel,
-# gated by the Access email allowlist). mail MUST equal the Cloudflare Access
-# policy include email exactly — the Access allowlist checks the Authelia
-# `email` claim, which comes from this attribute.
+# gated by the Authelia federation login — no Access email-allowlist, user
+# decision). mail is the Authelia `email` claim (identity shown in Access
+# sessions and app accounts), kept as the partner's real address.
 dn: uid=partner,ou=users,dc=sseifried,dc=link
 changetype: add
 objectClass: inetOrgPerson
