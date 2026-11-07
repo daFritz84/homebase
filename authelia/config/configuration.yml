@@ -12,11 +12,12 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant|cloudflare-access].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
-#     HA_OIDC_CLIENT_SECRET_HASH / CLOUDFLARE_OIDC_CLIENT_SECRET_HASH env
-#     vars (.env.secret, written by provision-authelia-secrets.sh). Indexed env overrides
+#     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
+#     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH env vars (.env.secret, written by
+#     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
 #     "configuration environment variable not expected". Missing env var ->
 #     empty client_secret -> validation fails closed.
@@ -122,6 +123,28 @@ identity_providers:
         response_types: ['code']
         access_token_signed_response_alg: 'none'
         userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: 'client_secret_post'
+      - client_id: 'wanderer'
+        client_name: 'Wanderer (PocketBase OIDC SSO)'
+        # argon2 digest injected from .env.secret by the template filter
+        # (WANDERER_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh);
+        # the RAW secret goes to the PocketBase admin UI (users collection →
+        # Options → OAuth2), see docs/services.md "Wanderer SSO"
+        client_secret: '{{ env "WANDERER_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'one_factor' # flip with the others in the two_factor follow-up
+        consent_mode: 'auto'
+        # wanderer requests exactly openid/profile/email
+        scopes: ['openid', 'profile', 'email']
+        redirect_uris:
+          # PocketBase's fixed OIDC callback path: $ORIGIN/login/redirect
+          - 'https://wanderer.sseifried.link/login/redirect'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # PocketBase authenticates at the token endpoint with POST body
+        # credentials (x/oauth2 default)
         token_endpoint_auth_method: 'client_secret_post'
       - client_id: 'cloudflare-access'
         client_name: 'Cloudflare Access'
