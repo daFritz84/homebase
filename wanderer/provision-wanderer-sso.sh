@@ -31,7 +31,9 @@ cd "$(dirname "$(readlink -f "$0")")"
 PB_URL="${PB_URL:-http://127.0.0.1:8090}"
 PB_ADMIN_EMAIL="${PB_ADMIN_EMAIL:-admin@sseifried.link}"
 AUTHHELIA_ISSUER="https://authelia.sseifried.link"
-SLOT="authelia" # authMethods slot name -> login button label + OIDC_* env slots
+SLOT="oidc" # PocketBase registry slot (oidc|oidc2|oidc3) — the Name field
+# MUST be a registry key ("Invalid or missing provider with name X"), and
+# this is what Wanderer's OIDC_SCOPES/OIDC_TRUST_EMAIL env slots address.
 
 [ -f .env.secret ] || { echo "[ERR] .env.secret missing — run ./provision-wanderer-secrets.sh"; exit 1; }
 PB_ADMIN_PW="$(grep '^POCKETBASE_ADMIN_PASSWORD=' .env.secret | head -n1 | cut -d= -f2- || true)"
