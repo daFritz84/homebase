@@ -366,13 +366,19 @@ this closes the second one.
   `provision-authelia-secrets.sh`). Redirect:
   `https://wanderer.sseifried.link/login/redirect` (PocketBase's fixed
   callback path).
-- **PocketBase admin UI** (the `db` service has no host port — port-forward
-  it, then tunnel):
+- **PocketBase admin UI** (the `db` service has no host port — bridge
+  containers can't reach host services, so the admin UI is reached through a
+  throwaway socat container on `wanderer-internal`, bound to the server's
+  loopback only; `podman port-forward` does not exist on the server's podman
+  version):
 
 ```bash
-podman port-forward wanderer_db_1 localhost:8090:8090 &
+podman run -d --rm --name pb-admin-proxy --network wanderer-internal \
+  -p 127.0.0.1:8090:8090 docker.io/alpine/socat \
+  TCP-LISTEN:8090,fork TCP-CONNECT:db:8090
 # workstation: ssh -L 8090:localhost:8090 chef@192.168.178.249
 # browser: http://localhost:8090/_/
+# done: podman stop pb-admin-proxy
 ```
 
   users collection → gear → Options → **OAuth2** → add provider:
