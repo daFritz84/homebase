@@ -884,6 +884,10 @@ records this stack ever creates.
    `mail` attributes exactly, the allowlist checks the Authelia `email`
    claim), action = Login with the Authelia IdP. No WARP/service tokens,
    no email-OTP.
+5. Zone → SSL/TLS → Edge Certificates → **Always Use HTTPS: on** —
+   `http://<published>` requests otherwise reach the origin through the
+   tunnel with `X-Forwarded-Proto: http` and the wall 400s them
+   (Authelia rejects insecure redirect targets, fail-closed).
 
 ### First run (server)
 

@@ -318,6 +318,11 @@ Notes:
   include email must equal the Authelia `email` claim exactly (the LDAP
   `mail` attribute in `authelia/config/bootstrap.ldif`); check the user's
   `mail` and the policy, and that the app's IdP is the Authelia OIDC IdP.
+- **`http://<published-hostname>` → 400 Bad Request** — the request reaches
+  the origin through the tunnel with `X-Forwarded-Proto: http` and the wall
+  refuses it (Authelia: "Target URL ... has an insecure scheme 'http'",
+  fail-closed). Enable Cloudflare **Always Use HTTPS** (SSL/TLS → Edge
+  Certificates) so http 301s at the edge.
 - **Authelia ip-mode ban hits all remote users at once** (one failed login
   bans everyone through the tunnel) — Caddy's global
   `servers { trusted_proxies static 10.89.0.0/24 }` is missing/stale, so
