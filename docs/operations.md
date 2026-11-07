@@ -288,7 +288,7 @@ Notes:
 - **Tunnel down / dashboard shows `connector has never connected`** —
   `podman logs --tail=50 cloudflared_cloudflared_1`: `credentials.json`
   missing/unreadable (re-run `cloudflared/provision-cloudflared-secrets.sh`
-  — the file must be 0600 **and** chowned to container uid 65535 via
+  — the file must be 0600 **and** chowned to container uid 65532 via
   `podman unshare chown`, see [services.md](services.md) "Cloudflare
   Tunnel"); cert.pem is NOT needed on the server. Also check the unit is
   active and the dashboard connector status.

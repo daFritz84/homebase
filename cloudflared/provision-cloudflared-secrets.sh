@@ -38,17 +38,18 @@ printf '%s\n' "${CREDENTIALS}" > "${CRED_FILE}.tmp"
 mv -f "${CRED_FILE}.tmp" "${CRED_FILE}"
 chmod 0600 "${CRED_FILE}"
 
-# The -nonroot image runs as container uid 65535; rootless Podman maps it to
-# a subuid, which cannot read a 0600 file owned by the host user. Hand the
-# file to that uid (same pattern as wanderer's `podman unshare chown
-# 1000:1000`). The file stays gitignored and secret; re-running this script
-# replaces it (the directory is owned by the host user, so mv works).
+# The image runs as nonroot uid 65532 (the -nonroot variant was merged into
+# the main tag); rootless Podman maps it to a subuid, which cannot read a
+# 0600 file owned by the host user. Hand the file to that uid (same pattern
+# as wanderer's `podman unshare chown 1000:1000`). The file stays gitignored
+# and secret; re-running this script replaces it (the directory is owned by
+# the host user, so mv works).
 if command -v podman >/dev/null; then
-  podman unshare chown 65535:65535 "${CRED_FILE}"
-  echo "[+] Wrote ${CRED_FILE} (0600, chowned to container uid 65535 for the -nonroot image)"
+  podman unshare chown 65532:65532 "${CRED_FILE}"
+  echo "[+] Wrote ${CRED_FILE} (0600, chowned to container uid 65532 for the nonroot image)"
 else
   echo "[!] podman not found — run manually before the first start:"
-  echo "    podman unshare chown 65535:65535 ${CRED_FILE}"
+  echo "    podman unshare chown 65532:65532 ${CRED_FILE}"
   echo "[+] Wrote ${CRED_FILE} (0600)"
 fi
 
