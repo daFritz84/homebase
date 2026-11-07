@@ -22,12 +22,15 @@ set -euo pipefail
 # Missing items are generated and printed on stderr — save them to Bitwarden
 # under the same names before the next run.
 #
-# The OIDC client secret for Homepage (item: authelia-oidc-homepage-secret)
-# is fetched/generated and argon2-hashed via the authelia image: the digest
-# goes into .env.secret as HOMEPAGE_OIDC_CLIENT_SECRET_HASH (injected into
-# configuration.yml by the template filter — the committed file keeps its
-# placeholder), the RAW value is printed for homepage/.env as
-# HOMEPAGE_OIDC_CLIENT_SECRET.
+# The OIDC client secrets for Homepage (item: authelia-oidc-homepage-secret)
+# and Home Assistant (item: authelia-oidc-homeassistant-secret) are
+# fetched/generated and argon2-hashed via the authelia image: the digests go
+# into .env.secret as HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
+# HA_OIDC_CLIENT_SECRET_HASH (injected into configuration.yml by the template
+# filter — the committed file keeps its placeholders), the RAW values are
+# printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET and for
+# homeassistant/config/secrets.yaml as ha_oidc_client_secret (gitignored —
+# never commit).
 #
 # The Authelia login password (LDIF_LOGIN_PASSWORD, for the LDIF
 # userPassword) is generated once, kept in .env.secret across re-runs, and
@@ -88,6 +91,24 @@ hash_argon2() {
   printf '%s' "${out#Digest: }"
 }
 
+# provision_oidc_client <item> <label> <secret-var> <hash-var> — resolve the
+# raw OIDC client secret from Bitwarden and argon2-hash it, assigning into
+# the caller's variables via namerefs. Digest -> .env.secret (template-filter
+# injection into configuration.yml), raw -> app config (printed at the end).
+provision_oidc_client() {
+  local item="$1" label="$2" secret_var="$3" hash_var="$4"
+  local -n secret_ref="${secret_var}" hash_ref="${hash_var}"
+  echo "[*] OIDC client secret (${label}):"
+  secret_ref="$(resolve "${item}")"
+  [ -n "${secret_ref}" ] || { echo "[ERR] Empty ${item}"; exit 1; }
+  hash_ref="$(hash_argon2 "${secret_ref}")"
+  if [ -z "${hash_ref}" ]; then
+    echo "[!] podman/image unavailable — hash it manually, then re-run:"
+    echo "    podman run --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm --password '<secret>'"
+    exit 1
+  fi
+}
+
 echo "[*] Provisioning authelia secrets -> ${ENV_FILE}"
 AUTHELIA_SESSION_SECRET="$(resolve authelia-session-secret)"
 AUTHELIA_STORAGE_ENCRYPTION_KEY="$(resolve authelia-storage-secret)"
@@ -95,18 +116,12 @@ AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET="$(resolve authelia-oidc-hmac-secre
 LDAP_ADMIN_PASSWORD="$(resolve authelia-ldap-admin-password)"
 AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
 
-# --- OIDC client secret for Homepage: raw value -> homepage/.env, argon2
-# digest -> .env.secret (template-filter injection into configuration.yml;
-# the committed file keeps its placeholder) ---
-echo "[*] OIDC client secret (Homepage):"
-OIDC_HOMEPAGE_SECRET="$(resolve authelia-oidc-homepage-secret)"
-[ -n "${OIDC_HOMEPAGE_SECRET}" ] || { echo "[ERR] Empty authelia-oidc-homepage-secret"; exit 1; }
-OIDC_HOMEPAGE_HASH="$(hash_argon2 "${OIDC_HOMEPAGE_SECRET}")"
-if [ -z "${OIDC_HOMEPAGE_HASH}" ]; then
-  echo "[!] podman/image unavailable — hash it manually, then re-run:"
-  echo "    podman run --rm ${AUTHHELIA_IMAGE} authelia crypto hash generate argon2 --no-confirm --password '<secret>'"
-  exit 1
-fi
+# --- OIDC client secrets: raw values -> app configs (homepage/.env,
+# homeassistant/config/secrets.yaml), argon2 digests -> .env.secret
+# (template-filter injection into configuration.yml; the committed file
+# keeps its placeholders) ---
+provision_oidc_client authelia-oidc-homepage-secret Homepage OIDC_HOMEPAGE_SECRET OIDC_HOMEPAGE_HASH
+provision_oidc_client authelia-oidc-homeassistant-secret Home-Assistant OIDC_HA_SECRET OIDC_HA_HASH
 
 # --- Authelia login password (LDIF userPassword): generated once, preserved
 # across re-runs from the existing env file; render-ldif.sh hashes it ---
@@ -134,6 +149,7 @@ fi
   printf 'AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD=%s\n' "${AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD}"
   printf 'LDAP_ADMIN_PASSWORD=%s\n' "${LDAP_ADMIN_PASSWORD}"
   printf 'HOMEPAGE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HOMEPAGE_HASH}"
+  printf 'HA_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HA_HASH}"
   printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
@@ -143,6 +159,9 @@ echo "[+] Wrote ${ENV_FILE} (incl. OIDC client_secret digest + login password)"
 echo
 echo "    -> paste the RAW OIDC value as HOMEPAGE_OIDC_CLIENT_SECRET in homepage/.env:"
 echo "       ${OIDC_HOMEPAGE_SECRET}"
+echo "    -> paste the RAW OIDC value as ha_oidc_client_secret in"
+echo "       homeassistant/config/secrets.yaml (gitignored — never commit):"
+echo "       ${OIDC_HA_SECRET}"
 if [ "${LOGIN_PW_GENERATED}" = 1 ]; then
   echo "    -> NEW Authelia login password — save to Bitwarden (authelia-login-password):"
   echo "       ${LDIF_LOGIN_PASSWORD}"

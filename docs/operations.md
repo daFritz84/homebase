@@ -200,8 +200,10 @@ Notes:
   `--subnet 10.89.0.0/24`, so a recreated network keeps the CIDR that
   `trusted_proxies` expects (an existing network is left untouched — check it
   with `podman network inspect caddy-proxy`).
-- **After a host reboot: walled apps (AdGuard UI, HA) 502, AdGuard widget down,
-  containers get `connection refused` to host ports `:8095/:8123/:9090`** —
+- **After a host reboot: walled apps (AdGuard UI) 502, HA 502 (Caddy→HA
+  reachability, not the wall — HA is a native OIDC client, not walled),
+  AdGuard widget down, containers get `connection refused` to host ports
+  `:8095/:8123/:9090`** —
   firewalld reloads its permanent config at boot and loses the runtime trust
   netavark had registered for the `caddy-proxy` bridge; existing networks are
   not re-registered. The durable fix is architectural: bridge containers reach
@@ -212,18 +214,24 @@ Notes:
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
-- **HA login fails / 401 through the proxy after network recreation** — the
-  `caddy-proxy` subnet drifted and `trusted_proxies` in
-  `homeassistant/config/configuration.yaml` is stale. Check
-  `podman network inspect caddy-proxy`, update the CIDR, redeploy (see
-  [services.md](services.md), "Reverse proxy (trusted_proxies)").
+- **HA login fails / 401 through the proxy after network recreation** —
+  `trusted_proxies` (UI-managed in `.storage/http`, NOT in
+  `configuration.yaml`) is stale. HA is host-networked and Caddy reaches it
+  via `host.containers.internal` (pasta relay), so the value must be
+  `127.0.0.1` + `::1` — a `caddy-proxy` CIDR or LAN-IP entry is the bug.
+  Fix under Settings → System → Network (see [services.md](services.md),
+  "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Homepage HTTPS UI by design (Caddyfile `:80` block).
-- **Walled apps (AdGuard UI, HA, Wanderer) return 502** — the authelia stack is
+- **Walled apps (AdGuard UI, Wanderer) return 502** — the authelia stack is
   down. Check `systemctl --user status podman-compose@authelia` and
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
-  Homepage, VPN and SSH are unaffected (not walled) — break-glass is SSH
-  (see [services.md](services.md), "Authelia (SSO) → Break-glass").
+  Homepage, VPN and SSH are unaffected (not walled). Home Assistant keeps
+  serving (native OIDC client, not walled) — only its login redirect to
+  Authelia fails; existing HA sessions keep working, break-glass form:
+  `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
+  Break-glass is SSH (see [services.md](services.md), "Authelia (SSO) →
+  Break-glass").
 - **New `.env.secret` entries have no effect after a unit restart** — the
   `podman-compose@` unit only `pod start`s the existing pod; env is baked in
   at container creation. `podman inspect <container> --format
@@ -236,16 +244,25 @@ Notes:
   `podman-compose@caddy`. (Authelia 4.38+ has no `server.trusted_proxies` —
   proxy trust lives only in Caddy.) `ensure_proxy_network.sh` pins the subnet
   at creation, so a recreated network should not drift.
-- **HA Companion app cannot connect** — the app's user-agent string changed
-  and no longer matches the `@companion` matcher in the Caddyfile; update the
-  `header_regexp` pattern. A regex in a plain `header` matcher never matches
-  on Caddy >=2.8 (exact + `*` wildcards only) — that is the bug, not the app.
-  Probe: `curl -A 'HomeAssistant/2026.1' -ki https://homeassistant.sseifried.link | head -n 3`
-  (see [services.md](services.md), "HA wall bypasses").
-- **HA REST clients / custom cards get a 302 to the Authelia portal** — they
-  send `Authorization: Bearer <token>` and no Authelia cookie; the `@bearer`
-  handle is the bypass. HA **webhooks** send no `Authorization` header and are
-  not bypassed — point them at the LAN address `192.168.178.249:8123`.
+- **HA login loops between `homeassistant.sseifried.link` and
+  `authelia.sseifried.link`** — the OIDC round trip fails: the component
+  cannot reach its `discovery_url`
+  (`https://authelia.sseifried.link/.well-known/openid-configuration`) from
+  HA. HA is host-networked: AdGuard split DNS must resolve the domain and
+  Caddy must be up (TLS via Caddy, no private CA). Probe from the host:
+  `curl -s https://authelia.sseifried.link/.well-known/openid-configuration`.
+  Also check the `homeassistant` OIDC client's `redirect_uris` in
+  `authelia/config/configuration.yml` matches
+  `https://homeassistant.sseifried.link/auth/oidc/callback` exactly
+  (see [services.md](services.md), "HA SSO (hass-oidc-auth)").
+- **HA login page stops offering the Authelia button / breaks after an HA
+  core update** — the vendored `hass-oidc-auth` pin (v1.2.1,
+  `homeassistant/config/custom_components/auth_oidc/`) is incompatible with
+  the new core (it injects frontend assets). Check upstream releases/issues,
+  bump the vendored zip per the upgrade procedure in
+  [services.md](services.md), "HA SSO (hass-oidc-auth)". Fallback meanwhile:
+  HA's own login form — `http://127.0.0.1:8123/?skip_oidc_redirect=true`
+  from the host, or `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`.
 - **authelia crash-loops at first start** — podman-compose **ignores**
   `depends_on: condition: service_healthy` (start ordering only), so authelia
   starts while slapd is still bootstrapping, fails its LDAP connection and
@@ -270,7 +287,6 @@ needed.
 - Phase 2: cloudflared + Cloudflare Access → Authelia OIDC federation
   (work laptop + partner; email-allowlist + one-time PIN, publishing
   Wanderer (+optionally Homepage/HA); `uid=partner` LDIF + Wanderer account)
-- HA trusted-header SSO (drop HA's own login behind the wall)
 
 ## Appstore as Inspiration
 

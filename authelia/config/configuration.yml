@@ -12,9 +12,10 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage].client_secret (here): the
-#     argon2 digest is injected at startup by the `template` filter from the
-#     HOMEPAGE_OIDC_CLIENT_SECRET_HASH env var (.env.secret, written by
+#   - identity_providers.oidc.clients[homepage|homeassistant].client_secret
+#     (here): the argon2 digest is injected at startup by the `template`
+#     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
+#     HA_OIDC_CLIENT_SECRET_HASH env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
 #     "configuration environment variable not expected". Missing env var ->
@@ -28,8 +29,8 @@
 #   - server.trusted_proxies was REMOVED in 4.38 — proxy trust lives in Caddy
 #     (forward_auth trusted_proxies); Authelia trusts the proxy network.
 #   - access_control rules have no bypass_credentials / user-agent criteria —
-#     the HA Companion + Bearer-token bypasses are implemented in the Caddyfile
-#     (header_regexp UA matcher, @bearer handle).
+#     moot: HA is a native OIDC client (no wall, no bypasses) and the other
+#     walled apps (AdGuard, Wanderer) need none.
 #   - the OIDC issuer is derived from session.cookies[].authelia_url.
 #   - the legacy /api/authelia/validate endpoint is now /api/authz/forward-auth.
 
@@ -103,6 +104,24 @@ identity_providers:
           - 'refresh_token'
         response_types:
           - 'code'
+      - client_id: 'homeassistant'
+        client_name: 'Home Assistant'
+        # argon2 digest injected from .env.secret by the template filter
+        # (HA_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh)
+        client_secret: '{{ env "HA_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'one_factor' # flip to two_factor with the other rules
+        consent_mode: 'auto'
+        scopes: ['openid', 'profile', 'email', 'groups']
+        redirect_uris:
+          - 'https://homeassistant.sseifried.link/auth/oidc/callback'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        access_token_signed_response_alg: 'none'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: 'client_secret_post'
 
 session:
   # secret from AUTHELIA_SESSION_SECRET
@@ -134,20 +153,19 @@ access_control:
   # No `networks` definitions: they are only consumed by the `networks`
   # criteria of rules, and no rule references one — LAN-only exposure is
   # enforced by AdGuard split DNS + the VPN, not by Authelia policy.
-  # No bypass rules for authelia./homepage.: rules are only evaluated for
-  # forward-auth requests, and no Caddy site block forward-auths those two
-  # domains (authelia serves its own portal — its endpoints are exempt from
-  # ACL; Homepage is gated by its OIDC client's authorization_policy).
+  # No bypass rules for authelia./homepage./homeassistant.: rules are only
+  # evaluated for forward-auth requests, and no Caddy site block forward-auths
+  # those domains (authelia serves its own portal — its endpoints are exempt
+  # from ACL; Homepage and Home Assistant are native OIDC clients, gated by
+  # their clients' authorization_policy + the app-side role checks).
   rules:
     # walled apps — admins only (partner joins in Phase 2). one_factor for
-    # now (no factors enrolled); flip both rules to two_factor after enrolling
-    # TOTP + a passkey at the portal.
+    # now (no factors enrolled); flip this rule + the OIDC clients'
+    # authorization_policy to two_factor after enrolling TOTP + a passkey
+    # at the portal.
     - domain:
         - 'adguard.sseifried.link'
         - 'wanderer.sseifried.link'
-      policy: 'one_factor'
-      subject: 'group:homebase-admins'
-    - domain: 'homeassistant.sseifried.link'
       policy: 'one_factor'
       subject: 'group:homebase-admins'
     # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
