@@ -60,7 +60,7 @@ TOKEN="$(curl -sf "${PB_URL}/api/collections/_superusers/auth-with-password" \
 
 echo "[*] Upserting OIDC auth method '${SLOT}' on the users collection..."
 python3 - "${PB_URL}" "${TOKEN}" "${PB_CLIENT_SECRET}" "${AUTHHELIA_ISSUER}" "${SLOT}" <<'PY'
-import json, sys, urllib.request
+import json, sys, urllib.request, urllib.error
 
 pb_url, token, secret, issuer, slot = sys.argv[1:6]
 
@@ -69,8 +69,12 @@ def api(path, method="GET", body=None):
         pb_url + path, method=method,
         headers={"Authorization": token, "Content-Type": "application/json"},
         data=json.dumps(body).encode() if body is not None else None)
-    with urllib.request.urlopen(req) as r:
-        out = json.load(r)
+    try:
+        with urllib.request.urlopen(req) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        sys.exit("[ERR] %s %s -> HTTP %d\n%s" % (
+            method, path, e.code, e.read().decode(errors="replace")))
     # PocketBase >= 0.23 wraps responses in {"data": ..., "status": ...}
     if isinstance(out, dict) and "data" in out and "status" in out:
         out = out["data"]
