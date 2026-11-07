@@ -373,10 +373,10 @@ Podman (no Supervisor, no add-ons; MQTT, ZHA etc. come as integrations).
 `network_mode: host` (like AdGuard Home) — required for local device discovery
 (mDNS/SSDP/UPnP, HomeKit, inbound integrations). No host ports are opened for
 LAN access: clients reach the UI only through Caddy at
-`https://homeassistant.sseifried.link` (Caddy proxies the hardcoded host IP
-`192.168.178.249:8123` — rootless containers cannot reach host services by
-name, see the AdGuard note above); `:8123` stays closed to the LAN (no
-firewalld rule — by design).
+`https://homeassistant.sseifried.link` (Caddy proxies
+`host.containers.internal:8123`, see the AdGuard note above); `:8123`
+stays closed to the LAN (no firewalld rule — by design). Auth is HA's own
+OIDC login against Authelia — see "HA SSO (hass-oidc-auth)" under Authelia.
 
 > **Rootless capability limits (expected):** `aiodhcpwatcher` (DHCP discovery) and
 > `habluetooth` log `Operation not permitted` / `Missing NET_ADMIN/NET_RAW capabilities` —
@@ -471,7 +471,8 @@ Browser (LAN, AdGuard split DNS)
   ▼
 Caddy (wildcard cert)
   ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
-  ├─ adguard|homeassistant|wanderer ──► forward_auth authelia:9091 (wall) ──► upstream
+  ├─ homeassistant.sseifried.link ──► host.containers.internal:8123 (native OIDC client → Authelia (gate))
+  ├─ adguard|wanderer ──► forward_auth authelia:9091 (wall) ──► upstream
   ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia)
   └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP)
 
@@ -480,17 +481,19 @@ authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `one_factor` for `group:homebase-admins` on AdGuard,
-Home Assistant and Wanderer; no rules for the Authelia portal (its endpoints
-are exempt from ACL) or Homepage (no forward_auth — its own OIDC gate
-enforces auth: Authelia authorizes the `homepage` OIDC client, and Homepage
-admits any identity Authelia authorizes). Cockpit
+**default deny**; `one_factor` for `group:homebase-admins` on AdGuard and
+Wanderer; no rules for the Authelia portal (its endpoints are exempt from
+ACL), Homepage (no forward_auth — its own OIDC gate enforces auth: Authelia
+authorizes the `homepage` OIDC client, and Homepage admits any identity
+Authelia authorizes) or Home Assistant (no forward_auth — gated by its OIDC
+client's `authorization_policy` + the component's `roles`: only
+`homebase-admins` is admitted, admins-only as the old wall rule). Cockpit
 has **no rule and no forward_auth** — it stays outside Authelia entirely.
 Session cookie domain `sseifried.link` → one login, all walled apps (true SSO).
 Second factors: TOTP + WebAuthn passkeys, enrolled at
 `https://authelia.sseifried.link/portal` — **optional for now**: policies run
-`one_factor`; flip the two walled-app rules + the `homepage` OIDC client's
-`authorization_policy` to `two_factor` after enrolling.
+`one_factor`; flip the walled-app rule + the `homepage`/`homeassistant` OIDC
+clients' `authorization_policy` to `two_factor` after enrolling.
 
 ### First run
 
@@ -506,16 +509,19 @@ cd authelia
 ```
 
    The script fetches/generates the `AUTHELIA_*` secrets + the LDAP admin
-   password into `.env.secret` (gitignored, mode `0600`), plus two more
-   entries: the argon2 digest of the Homepage OIDC client secret — as
-   `HOMEPAGE_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml` by
-   the `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env overrides
+   password into `.env.secret` (gitignored, mode `0600`), plus more
+   entries: the argon2 digests of the Homepage and Home Assistant OIDC
+   client secrets — as `HOMEPAGE_OIDC_CLIENT_SECRET_HASH` /
+   `HA_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml` by the
+   `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env overrides
    are NOT supported — 4.39 rejects them), so the committed file keeps its
-   placeholder — and the generated Authelia **login password**
+   placeholders — and the generated Authelia **login password**
    (`LDIF_LOGIN_PASSWORD`, printed on first generation: save it to Bitwarden
    as `authelia-login-password`). It also prints the **raw** OIDC client
-   secret for `homepage/.env` as `HOMEPAGE_OIDC_CLIENT_SECRET`. Save
-   generated items to Bitwarden.
+   secrets: for `homepage/.env` as `HOMEPAGE_OIDC_CLIENT_SECRET` and for
+   `homeassistant/config/secrets.yaml` as `ha_oidc_client_secret`
+   (gitignored — never commit). Save generated items to Bitwarden (the HA
+   client secret is item `authelia-oidc-homeassistant-secret`).
 
 2. Generate the OIDC RSA signing key pair (gitignored, covered by
    `backup-authelia.sh`):
@@ -530,9 +536,10 @@ podman run --rm -v "$(pwd)/config/keys:/keys" docker.io/authelia/authelia:4.39.2
    Then render the LDIF: `config/bootstrap.ldif` is a committed **template**
    whose `{REPLACE_ME}` `userPassword` placeholders are deployment secrets —
    `./render-ldif.sh` fills them with `{SSHA}` hashes computed from
-   `.env.secret` via `slappasswd` (the openldap image; the password goes to
-   stdin, `-s -`, never argv) into the gitignored
-   `config/bootstrap.rendered.ldif`:
+   `.env.secret` with `python3` `hashlib` (SHA1(pw+salt)‖salt — the exact
+   scheme slapd verifies; never the openldap image's `slappasswd`, whose
+   output slapd 2.4.57 rejects on simple bind, see "4.39 schema notes")
+   into the gitignored `config/bootstrap.rendered.ldif`:
 
 ```bash
 ./render-ldif.sh
@@ -612,7 +619,8 @@ podman logs --tail=20 authelia_authelia_1
 
    Then in a browser: log in at `https://authelia.sseifried.link/portal`
    (enroll TOTP + a passkey), open AdGuard → lands back authenticated; open
-   Home Assistant → **no second login** (SSO cookie).
+   Home Assistant → its login page redirects to Authelia → lands in HA as
+   admin (**no second login** — native OIDC SSO, see "HA SSO").
 
 ### User management (LDIF ritual)
 
@@ -644,37 +652,69 @@ Password changes = re-render (`./render-ldif.sh`) + `ldapmodify`
 (`replace: userPassword` with the freshly rendered `{SSHA}` hash).
 `uid=partner` (homebase-users) is Phase 2.
 
-### HA wall bypasses (Companion app + Bearer tokens)
+### HA SSO (hass-oidc-auth)
 
-The HA Companion app sends no browser cookies, so it cannot pass the wall.
-Authelia 4.38+ **removed** the legacy `bypass_credentials`/user-agent ACL
-criteria, so the bypass lives in the Caddyfile: a `User-Agent` matcher
-(`^(HomeAssistant/|com\.homeassistant\.companion\.android)`) skips
-`forward_auth` and proxies straight to HA, which authenticates the app with
-its own long-lived access token. Caddy >=2.8 **removed regex from the `header`
-matcher** (exact + `*` wildcards only) — the matcher must be `header_regexp`:
-a regex in `header` is compared literally, never matches, and the app silently
-gets walled. If the app's user-agent string changes, the pattern must follow.
+HA is **not** walled by Caddy `forward_auth`: it is a native Authelia **OIDC
+client** (like Homepage), using the vendored, pinned
+[hass-oidc-auth](https://github.com/christiaangoossens/hass-oidc-auth)
+integration — v1.2.1, unpacked from the release zip into
+`homeassistant/config/custom_components/auth_oidc/` (tracked in git, no
+HACS). The `homeassistant` client is registered in
+`authelia/config/configuration.yml` (confidential + PKCE S256, argon2
+digest from `.env.secret`); the HA side is the `auth_oidc:` block in
+`homeassistant/config/configuration.yaml` (secret via `!secret
+ha_oidc_client_secret` in gitignored `secrets.yaml`).
 
-The same reasoning covers Bearer-token API clients (automations, custom cards,
-external tools): they send `Authorization: Bearer <long-lived token>` and no
-Authelia cookie, so the `@bearer` handle proxies them straight to HA, which
-validates its own tokens. HA **webhooks** (`/api/webhook/<id>`, no
-`Authorization` header) are not covered by either bypass — call them on the
-LAN address (`192.168.178.249:8123`) directly.
+- **Login flow:** `features.default_redirect: true` sends browsers straight
+  to Authelia; after the portal login the OIDC callback lands in HA. The
+  `sseifried.link` session cookie makes it SSO: one portal login → HA.
+- **Admins-only policy** (reproduces the old wall rule
+  `group:homebase-admins`): `roles.admin: 'homebase-admins'` **and**
+  `roles.user: 'homebase-admins'` — configuring `roles.user` makes the
+  component **reject** identities in neither group. Phase 2 `uid=partner`
+  (homebase-users) stays out of HA until a role is added then.
+- **Account migration (done):** `features.automatic_user_linking: true`
+  (TEMPORARY) links the first OIDC login to the existing HA user whose
+  username credential exactly matches the `preferred_username` claim (LDAP
+  uid, e.g. `sseifried`). The owner was linked this way on 2026-11-07 and
+  the flag was **removed** afterwards — the username match bypasses MFA, so
+  it stays enabled only for a one-time link. Re-enable it (restart the unit)
+  if a future user needs the same one-time link, then remove it again.
+- **HA's own login stays enabled** as break-glass (Companion tokens, direct
+  host access, Authelia down). Backup form:
+  `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`; from the
+  host: `http://127.0.0.1:8123/?skip_oidc_redirect=true`.
+- **Companion app / Bearer-token API clients:** talk to HA directly — HA
+  validates its own long-lived access tokens. The old Caddyfile bypasses
+  (`@companion` UA matcher, `@bearer` handle) existed only to dodge the
+  wall; with the wall gone they are removed, and the "Companion UA
+  spoofing" residual risk is **retired** (nothing left to evade). Keep
+  long-lived tokens scoped and revocable.
+- **Webhooks** (`/api/webhook/<id>`, no `Authorization` header): keep
+  calling them on the LAN address (`192.168.178.249:8123`); they also work
+  via the domain now that nothing walls it.
+- **Exposure change:** HA's login page is reachable by anything that
+  resolves the domain (LAN + VPN via split DNS — no change in *who*
+  resolves it). Brute force against the HA form is not covered by
+  Authelia's portal rate limiting; accepted for LAN-only (optional
+  follow-up: `trusted_networks` provider for loopback).
 
-**Residual risk (accepted):** `User-Agent` is fully client-controlled, so any
-client that can reach `homeassistant.sseifried.link` can spoof the Companion
-UA and reach HA's own single-factor login, evading Authelia's `one_factor`
-policy and its regulation bans. The wall is an SSO/anti-phishing layer for
-browsers, not a hard boundary against a client that deliberately evades it —
-on the bypassed paths the HA long-lived tokens are the only credential, so
-keep them scoped and revocable.
+**Upgrade procedure (vendored component):** fetch the release zip from the
+upstream releases page → replace the contents of
+`homeassistant/config/custom_components/auth_oidc/` → **review the diff**
+(the `.gitleaks.toml` allowlist covers this tree, so the diff review is the
+security gate) → commit → restart `podman-compose@homeassistant`. Check
+upstream releases/issues **before bumping the HA core image**: the
+integration injects frontend assets and can break on core updates; HA's
+own login is the fallback.
 
 ### Break-glass
 
-Authelia down = walled apps (AdGuard UI, HA, Wanderer) unreachable (502).
-Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
+Authelia down = walled apps (AdGuard UI, Wanderer) unreachable (502).
+Home Assistant keeps serving (native OIDC client, not walled) — only its
+login redirect to Authelia fails; existing HA sessions keep working, and
+the break-glass form is `http://127.0.0.1:8123/?skip_oidc_redirect=true`
+from the host. Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
 `systemctl --user restart podman-compose@authelia`. Lockout guard: TOTP
 secrets live in Bitwarden, factors in the sqlite DB, users in LDAP — the
 factors DB and users are covered by `backup-authelia.sh`, the
@@ -691,8 +731,9 @@ files use the current (4.39.28) schema:
 - `server.trusted_proxies` **removed** — proxy trust lives in Caddy
   (`forward_auth trusted_proxies`, must match the `caddy-proxy` subnet, see
   [operations.md](operations.md) troubleshooting).
-- ACL rules have no `bypass_credentials`/user-agent criteria → HA Companion
-  bypass in the Caddyfile (above).
+- ACL rules have no `bypass_credentials`/user-agent criteria → moot: HA is
+  a native OIDC client (no wall, no bypasses) and the remaining walled apps
+  need none.
 - Legacy `/api/authelia/validate?rd=` endpoint → `/api/authz/forward-auth`;
   the portal URL comes from `session.cookies[].authelia_url`.
 - OIDC issuer is derived from `authelia_url` (no explicit `issuer` key); the
@@ -705,9 +746,15 @@ files use the current (4.39.28) schema:
   `--password` (transient argv).
 - LDAP `userPassword` schemes: Authelia logs users in by **binding as them**,
   so SLAPD verifies the hash. osixia 1.5.0 ships OpenLDAP 2.4.57 — no argon2
-  support — so LDIF passwords use `{SSHA}` via `slappasswd` (the openldap
-  image, `-s -` on stdin) — `./render-ldif.sh` does this from `.env.secret`
-  into the gitignored rendered LDIF. Argon2 digests are only for the OIDC
+  support — so LDIF passwords use `{SSHA}` — `./render-ldif.sh` hashes with
+  `python3` `hashlib` (SHA1(pw+salt)‖salt, 4-byte salt) from `.env.secret`
+  into the gitignored rendered LDIF. **Never hash via the openldap image's
+  `slappasswd`**: its `{SSHA}` payload is self-consistent under
+  `slappasswd -v` (offline checks pass) but slapd 2.4.57 rejects it on
+  simple bind — every user login 49s, while the `cn=admin` entry appears
+  fine because osixia's startup rewrites the admin password with slapd's
+  internal pw module (diagnosed 2026-11-07: manual SHA1(pw+salt) ≠ payload
+  of the image's hashes). Argon2 digests are only for the OIDC
   `client_secret`, injected into `configuration.yml` from `.env.secret` by
   the `template` filter (`{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}` —
   indexed `AUTHELIA_..._CLIENTS_0_...` env overrides are rejected by 4.39:
