@@ -292,7 +292,6 @@ needed.
 
 ## TODO
 
-- Cockpit native OIDC via oauth2-proxy (future; Bearer introspection)
 - Phase 2: cloudflared + Cloudflare Access → Authelia OIDC federation
   (work laptop + partner; email-allowlist + one-time PIN, publishing
   Wanderer (+optionally Homepage/HA); `uid=partner` LDIF + Wanderer account)

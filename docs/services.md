@@ -200,7 +200,8 @@ Home Assistant `:8123` use.
 - From the workstation, **Podman Desktop** connects to the same rootless engine over SSH
   (see [podman.md](podman.md)).
 - **Out of scope for Authelia SSO** (user decision): Cockpit keeps PAM + TOTP, VPN/LAN only.
-  Native OIDC via oauth2-proxy is a future option (see [operations.md](operations.md) TODO).
+  As a host management tool its authentication never depends on a hosted identity
+  provider — no OIDC, no oauth2-proxy, no SSO.
 
 ## AdGuard Home (DNS-Server)
 
