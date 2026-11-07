@@ -81,34 +81,29 @@ def api(path, method="GET", body=None):
     return out
 
 coll = api("/api/collections/users")
-# PocketBase 0.22 (wanderer-db fork): the collection record carries a
-# top-level `oauth2` field {providers: [...], mappedFields, enabled} —
-# NOT `options.authMethods` (0.23+). Unknown PATCH fields are silently
-# ignored, so the shape must match the server.
+# flomp/wanderer-db vendors PocketBase 0.38.0 core (auth.NewOIDCProvider,
+# registry slots oidc/oidc2/oidc3) but the fork's users collection carries a
+# custom top-level `oauth2` field {providers, mappedFields, enabled}. The
+# provider struct is FLAT and REDUCED — unknown JSON keys are silently
+# dropped; what survives (verified by read-back) is:
+#   name, displayName, clientId, clientSecret, authURL, tokenURL,
+#   userInfoURL, pkce, extra
+# Claim attrs (email / preferred_username / email_verified), scopes
+# (openid profile email, overridable via the OIDC_SCOPES env slot) and the
+# S256 PKCE method are PocketBase core defaults the fork does not expose.
 oauth2 = coll.get("oauth2") or {}
 providers = oauth2.get("providers") or []
 
-# PocketBase 0.22 core.OAuth2Provider: all config keys are FLAT on the
-# provider object (the 400 body names oauth2.providers.0.clientId) —
-# NOT nested under "params" (that is the 0.23+ authMethods shape).
 provider = {
     "name": slot,
-    "providerId": "oidc",
-    "identity": slot,
+    "displayName": "Authelia",
     "clientId": "wanderer",
     "clientSecret": secret,
-    "scopes": ["openid", "profile", "email"],
+    "authURL": issuer + "/api/oidc/authorization",
+    "tokenURL": issuer + "/api/oidc/token",
+    "userInfoURL": issuer + "/api/oidc/userinfo",
     "pkce": True,
-    "pkceChallengeMethod": "S256",
-    "issuer": "",
-    "authUrl": issuer + "/api/oidc/authorization",
-    "tokenUrl": issuer + "/api/oidc/token",
-    "userInfoUrl": issuer + "/api/oidc/userinfo",
-    "jwksUrl": "",
-    "emailAttr": "email",
-    "usernameAttr": "preferred_username",
-    "verifiedAttr": "email_verified",
-    "state": {},
+    "extra": {},
 }
 
 existing = next((p for p in providers if p.get("name") == slot), None)
@@ -128,19 +123,17 @@ oauth2["enabled"] = True
 coll["oauth2"] = oauth2
 api("/api/collections/users", "PATCH", coll)
 
-# read back: PocketBase strips unknown fields — verify they stuck.
-# clientSecret is write-only (GET returns "******"), so check the rest.
+# read back: the fork's struct drops unknown fields — verify the ones it
+# keeps stuck. clientSecret is write-only (GET masks it), so check the rest.
 check = api("/api/collections/users").get("oauth2") or {}
 saved = next((p for p in check.get("providers", []) if p.get("name") == slot), None)
 if not saved:
     sys.exit("[ERR] provider not present after PATCH")
-must = ["clientId", "authUrl", "tokenUrl", "userInfoUrl", "emailAttr",
-        "usernameAttr", "verifiedAttr", "scopes", "pkce"]
-missing = [k for k in must if k not in saved]
-if missing:
-    sys.exit("[ERR] fields dropped by server (shape mismatch): %s" % missing)
-if saved.get("clientId") != "wanderer" or saved.get("authUrl") != provider["authUrl"]:
-    sys.exit("[ERR] saved provider has unexpected values: %s" % saved)
+for key in ("clientId", "authURL", "tokenURL", "userInfoURL", "displayName"):
+    if saved.get(key) != provider[key]:
+        sys.exit("[ERR] saved provider mismatch on %s: %s" % (key, saved))
+if not saved.get("pkce"):
+    sys.exit("[ERR] pkce not enabled on saved provider: %s" % saved)
 print("[+] OIDC provider '%s' saved and enabled (button label on the"
       " Wanderer login page)" % slot)
 PY
