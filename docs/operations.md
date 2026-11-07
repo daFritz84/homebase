@@ -302,7 +302,7 @@ Notes:
   `mail` and the policy, and that the app's IdP is the Authelia OIDC IdP.
 - **Authelia ip-mode ban hits all remote users at once** (one failed login
   bans everyone through the tunnel) — Caddy's global
-  `servers { trusted_proxies_static 10.89.0.0/24 }` is missing/stale, so
+  `servers { trusted_proxies static 10.89.0.0/24 }` is missing/stale, so
   `forward_auth` passes the shared tunnel source IP and every remote client
   shares one `remote_ip`. Check the Caddyfile global block and the
   `caddy-proxy` subnet (`podman network inspect caddy-proxy`), validate,

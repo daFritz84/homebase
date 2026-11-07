@@ -946,8 +946,9 @@ changes: the LAN path never depended on the tunnel.
 - PKCE: the `cloudflare-access` client requires `S256`; if the federation
   test shows Access sends no PKCE, drop `require_pkce`.
 - Real client IPs: cloudflared sends `X-Forwarded-For`; Caddy trusts the
-  `caddy-proxy` CIDR (`servers { trusted_proxies_static 10.89.0.0/24 }` in
-  the Caddyfile global block) so Authelia `regulation` ip-mode bans are per
-  client, not per shared tunnel source.
+  `caddy-proxy` CIDR (`servers { trusted_proxies static 10.89.0.0/24 }` in
+  the Caddyfile global block — 2.11 IP-range-source syntax;
+  `trusted_proxies_static` is not a 2.11.7 option name) so Authelia
+  `regulation` ip-mode bans are per client, not per shared tunnel source.
 - `cert.pem` + credentials JSON are account-level secrets: Bitwarden-only,
   0600, gitignored; gitleaks guards the repo.
