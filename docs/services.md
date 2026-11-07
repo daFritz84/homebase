@@ -333,11 +333,13 @@ PocketBase runs as root — container root maps to the host user, so `pb_data` a
 `plugins` need no chown. Skipping this step shows up as permission-denied crashes
 in the search/web containers on first start.
 
-3. Open `https://wanderer.sseifried.link` and create your account — signup is
-enabled by design. The instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`), so new
-accounts only ever see their own trails, and the box is LAN-only (no public DNS
-records). To close registration later, set `PUBLIC_DISABLE_SIGNUP: "true"` in
-`compose.yaml`, commit and redeploy.
+3. Open `https://wanderer.sseifried.link` and create your account. The
+instance is private (`PUBLIC_PRIVATE_INSTANCE: "true"`), so accounts only
+ever see their own trails. Registration is now closed
+(`PUBLIC_DISABLE_SIGNUP: "true"` — the app is internet-published via
+Cloudflare Access and accounts arrive through Authelia OIDC, which creates
+records server-side and is unaffected by the flag; set it back to `"false"`
+to reopen signup, e.g. for a new person's first account).
 
 4. Deploy with the shared pattern above (unit: `podman-compose@wanderer`):
 
