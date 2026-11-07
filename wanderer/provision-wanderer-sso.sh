@@ -68,11 +68,19 @@ def api(path, method="GET", body=None):
         headers={"Authorization": token, "Content-Type": "application/json"},
         data=json.dumps(body).encode() if body is not None else None)
     with urllib.request.urlopen(req) as r:
-        return json.load(r)
+        out = json.load(r)
+    # PocketBase >= 0.23 wraps responses in {"data": ..., "status": ...}
+    if isinstance(out, dict) and "data" in out and "status" in out:
+        out = out["data"]
+    return out
 
 coll = api("/api/collections/users")
-opts = coll.get("options") or {}
-methods = opts.get("authMethods") or []
+# PocketBase 0.22 (wanderer-db fork): the collection record carries a
+# top-level `oauth2` field {providers: [...], mappedFields, enabled} —
+# NOT `options.authMethods` (0.23+). Unknown PATCH fields are silently
+# ignored, so the shape must match the server.
+oauth2 = coll.get("oauth2") or {}
+providers = oauth2.get("providers") or []
 
 provider = {
     "name": slot,
@@ -94,19 +102,30 @@ provider = {
     "state": {},
 }
 
-existing = next((m for m in methods if m.get("name") == slot), None)
+existing = next((p for p in providers if p.get("name") == slot), None)
 if existing:
     provider["id"] = existing["id"]
     provider["collectionId"] = existing.get("collectionId", coll["id"])
-    methods = [provider if m.get("name") == slot else m for m in methods]
+    providers = [provider if p.get("name") == slot else p for p in providers]
     print("[*] Slot '%s' exists — updating in place" % slot)
 else:
-    methods.append(provider)
+    providers.append(provider)
     print("[*] Slot '%s' is new — adding" % slot)
 
-opts["authMethods"] = methods
-api("/api/collections/users", "PATCH", {"options": opts})
-print("[+] OIDC provider '%s' saved (button label on the Wanderer login page)" % slot)
+oauth2["providers"] = providers
+oauth2["enabled"] = True
+api("/api/collections/users", "PATCH", {"oauth2": oauth2})
+
+# read back: PocketBase strips unknown params fields — verify they stuck
+check = api("/api/collections/users").get("oauth2") or {}
+saved = next((p for p in check.get("providers", []) if p.get("name") == slot), None)
+if not saved:
+    sys.exit("[ERR] provider not present after PATCH")
+missing = [k for k in provider["params"] if k not in saved.get("params", {})]
+if missing:
+    sys.exit("[ERR] params dropped by server (shape mismatch): %s" % missing)
+print("[+] OIDC provider '%s' saved and enabled (button label on the"
+      " Wanderer login page)" % slot)
 PY
 
 echo
