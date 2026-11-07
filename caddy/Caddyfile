@@ -6,6 +6,18 @@
 {
 	email {env.ACME_EMAIL}
 	acme_ca {env.ACME_CA}
+	# Trust the caddy-proxy bridge for X-Forwarded-For: the cloudflared tunnel
+	# container (caddy-proxy) sends XFF with the REAL client IP, so Caddy
+	# resolves remote_ip to the client, not the shared tunnel source —
+	# forward_auth then passes real IPs and Authelia `regulation` ip-mode bans
+	# per client. 2.11 syntax: `trusted_proxies` takes an IP-range-source
+	# module (`static`); `trusted_proxies_static` is NOT a 2.11.7 option name
+	# (confirmed via caddy validate). CIDR = pinned caddy-proxy subnet
+	# (ensure_proxy_network.sh); keep in sync (see docs/operations.md
+	# troubleshooting).
+	servers {
+		trusted_proxies static 10.89.0.0/24
+	}
 }
 
 # Shared wildcard-cert config for all TLS sites

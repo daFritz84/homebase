@@ -22,22 +22,26 @@ set -euo pipefail
 # Missing items are generated and printed on stderr — save them to Bitwarden
 # under the same names before the next run.
 #
-# The OIDC client secrets for Homepage (item: authelia-oidc-homepage-secret)
-# and Home Assistant (item: authelia-oidc-homeassistant-secret) are
-# fetched/generated and argon2-hashed via the authelia image: the digests go
-# into .env.secret as HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
-# HA_OIDC_CLIENT_SECRET_HASH (injected into configuration.yml by the template
-# filter — the committed file keeps its placeholders), the RAW values are
-# printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET and for
+# The OIDC client secrets for Homepage (item: authelia-oidc-homepage-secret),
+# Home Assistant (item: authelia-oidc-homeassistant-secret) and Cloudflare
+# Access (item: authelia-oidc-cloudflare-secret) are fetched/generated and
+# argon2-hashed via the authelia image: the digests go into .env.secret as
+# HOMEPAGE_OIDC_CLIENT_SECRET_HASH / HA_OIDC_CLIENT_SECRET_HASH /
+# CLOUDFLARE_OIDC_CLIENT_SECRET_HASH (injected into configuration.yml by the
+# template filter — the committed file keeps its placeholders), the RAW
+# values are printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET, for
 # homeassistant/config/secrets.yaml as ha_oidc_client_secret (gitignored —
-# never commit).
+# never commit), and for the Cloudflare Access OIDC IdP form (dashboard) as
+# the client secret.
 #
-# The Authelia login password (LDIF_LOGIN_PASSWORD, for the LDIF
-# userPassword) is generated once, kept in .env.secret across re-runs, and
-# printed on first generation — save it to Bitwarden (authelia-login-password).
-# render-ldif.sh hashes it (with LDAP_ADMIN_PASSWORD) into the rendered LDIF.
-# Both names avoid the AUTHELIA_ prefix on purpose: Authelia validates every
-# AUTHELIA_* env var as a config key and warns "not expected" on these.
+# The Authelia login passwords (LDIF_LOGIN_PASSWORD for uid=sseifried,
+# LDIF_PARTNER_PASSWORD for uid=partner, for the LDIF userPassword) are
+# generated once, kept in .env.secret across re-runs, and printed on first
+# generation — save them to Bitwarden (authelia-login-password /
+# authelia-partner-login-password). render-ldif.sh hashes them (with
+# LDAP_ADMIN_PASSWORD) into the rendered LDIF. Both names avoid the AUTHELIA_
+# prefix on purpose: Authelia validates every AUTHELIA_* env var as a config
+# key and warns "not expected" on these.
 #
 # WARNING: AUTHELIA_STORAGE_ENCRYPTION_KEY encrypts 2FA secrets in the sqlite
 # DB at rest. Rotating it after factors exist forces every user to re-enroll.
@@ -122,15 +126,23 @@ AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
 # keeps its placeholders) ---
 provision_oidc_client authelia-oidc-homepage-secret Homepage OIDC_HOMEPAGE_SECRET OIDC_HOMEPAGE_HASH
 provision_oidc_client authelia-oidc-homeassistant-secret Home-Assistant OIDC_HA_SECRET OIDC_HA_HASH
+provision_oidc_client authelia-oidc-cloudflare-secret Cloudflare-Access OIDC_CF_SECRET OIDC_CF_HASH
 
-# --- Authelia login password (LDIF userPassword): generated once, preserved
-# across re-runs from the existing env file; render-ldif.sh hashes it ---
+# --- Authelia login passwords (LDIF userPassword): generated once, preserved
+# across re-runs from the existing env file; render-ldif.sh hashes them ---
 LDIF_LOGIN_PASSWORD=""
 [ -f "${ENV_FILE}" ] && LDIF_LOGIN_PASSWORD="$(grep '^LDIF_LOGIN_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
 LOGIN_PW_GENERATED=0
 if [ -z "${LDIF_LOGIN_PASSWORD}" ]; then
   LDIF_LOGIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
   LOGIN_PW_GENERATED=1
+fi
+LDIF_PARTNER_PASSWORD=""
+[ -f "${ENV_FILE}" ] && LDIF_PARTNER_PASSWORD="$(grep '^LDIF_PARTNER_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+PARTNER_PW_GENERATED=0
+if [ -z "${LDIF_PARTNER_PASSWORD}" ]; then
+  LDIF_PARTNER_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
+  PARTNER_PW_GENERATED=1
 fi
 
 # Basic sanity checks
@@ -139,6 +151,7 @@ fi
 [ -n "${AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET}" ] || { echo "[ERR] Empty AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET"; exit 1; }
 [ -n "${LDAP_ADMIN_PASSWORD}" ] || { echo "[ERR] Empty LDAP_ADMIN_PASSWORD"; exit 1; }
 [ -n "${LDIF_LOGIN_PASSWORD}" ] || { echo "[ERR] Empty LDIF_LOGIN_PASSWORD"; exit 1; }
+[ -n "${LDIF_PARTNER_PASSWORD}" ] || { echo "[ERR] Empty LDIF_PARTNER_PASSWORD"; exit 1; }
 
 # Write env file atomically (secrets -> owner-only). Re-running is idempotent
 # as long as the keys live in Bitwarden; restart the stack after any change.
@@ -150,7 +163,9 @@ fi
   printf 'LDAP_ADMIN_PASSWORD=%s\n' "${LDAP_ADMIN_PASSWORD}"
   printf 'HOMEPAGE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HOMEPAGE_HASH}"
   printf 'HA_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HA_HASH}"
+  printf 'CLOUDFLARE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_CF_HASH}"
   printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
+  printf 'LDIF_PARTNER_PASSWORD=%s\n' "${LDIF_PARTNER_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
@@ -162,9 +177,17 @@ echo "       ${OIDC_HOMEPAGE_SECRET}"
 echo "    -> paste the RAW OIDC value as ha_oidc_client_secret in"
 echo "       homeassistant/config/secrets.yaml (gitignored — never commit):"
 echo "       ${OIDC_HA_SECRET}"
+echo "    -> paste the RAW OIDC value as the client secret of the Authelia OIDC"
+echo "       IdP in the Cloudflare Access dashboard (Access → Authentication →"
+echo "       OIDC IdPs; client_id cloudflare-access):"
+echo "       ${OIDC_CF_SECRET}"
 if [ "${LOGIN_PW_GENERATED}" = 1 ]; then
   echo "    -> NEW Authelia login password — save to Bitwarden (authelia-login-password):"
   echo "       ${LDIF_LOGIN_PASSWORD}"
+fi
+if [ "${PARTNER_PW_GENERATED}" = 1 ]; then
+  echo "    -> NEW partner login password — save to Bitwarden (authelia-partner-login-password):"
+  echo "       ${LDIF_PARTNER_PASSWORD}"
 fi
 
 echo
