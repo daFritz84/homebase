@@ -149,6 +149,16 @@ systemctl --user restart podman-compose@cloudflared
 > `podman-compose up -d --force-recreate` (named volumes keep all data).
 > Prove it with `podman inspect <container> --format "{{json .Config.Env}}"`.
 
+> **Unit restarts can be a no-op (config changes ignored):** the
+> `podman-compose@` unit's start path is `podman pod start pod_<project>` —
+> a no-op on an already-running pod, so `systemctl --user restart` has been
+> observed leaving containers running with the OLD config (diagnosed
+> 2026-11-07: an authelia `configuration.yml` change stayed invisible for
+> ~1h of restarts; `podman inspect <container> --format
+> "{{.State.StartedAt}}"` proved the container never restarted). Reliable
+> for config-only changes: `podman restart <container>` (verify
+> `StartedAt` moved).
+
 4. Verify
 
 ```bash
@@ -285,6 +295,14 @@ Notes:
   `ldapwhoami` (it accepts no base DN — such a check fails forever and marks
   slapd unhealthy). Check `podman inspect authelia_openldap_1 --format
   '{{json .State.Health}}'` and `podman logs authelia_openldap_1`.
+- **Config change has no effect after `systemctl --user restart
+  podman-compose@<project>`** — the unit's start path is `podman pod start
+  pod_<project>`, a no-op on a running pod; the container keeps running
+  with the old config (authelia kept rejecting a fixed OIDC client setting
+  for ~1h this way, 2026-11-07). Check `podman inspect <container>
+  --format "{{.State.StartedAt}}"` — if it predates your restart, the
+  container never restarted. Fix: `podman restart <container>` (config
+  changes) or `podman-compose up -d --force-recreate` (env changes).
 - **Tunnel down / dashboard shows `connector has never connected`** —
   `podman logs --tail=50 cloudflared_cloudflared_1`: `credentials.json`
   missing/unreadable (re-run `cloudflared/provision-cloudflared-secrets.sh`
