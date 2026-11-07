@@ -29,6 +29,29 @@ git add <paths> && git diff --staged && git commit && git push
 Caddyfile validation runs over SSH (AGENTS.md); CI (`.github/workflows/ci.yml`) gates the rest —
 red CI = stop.
 
+## Validate local changes on the server (branch checkout)
+
+Never `scp` local files to the server — validate the **committed branch** in the server's checkout.
+The server key is read-only: `git fetch` + `git checkout` are allowed, push / commit /
+`git reset --hard` / `git clean` are not. `.env*` and secrets are gitignored, so a checkout leaves
+them in place.
+
+Workstation: commit and push the branch (§1). Server — check it out, validate, return to `main`
+(a checkout rewrites files the live units read on restart, so keep the window short):
+
+```bash
+ssh chef@192.168.178.249 'cd ~/src/homebase && \
+  git stash push -- adguard-home/config/AdGuardHome.yaml && \
+  git fetch origin && git checkout -B <branch> origin/<branch>'
+# run the AGENTS.md §Validation probes against the branch
+ssh chef@192.168.178.249 'cd ~/src/homebase && \
+  git checkout main && git stash pop && git branch -D <branch>'
+```
+
+The stash isolates the AdGuard drift so `checkout` cannot clobber it; `git stash pop` restores it
+after returning to `main`. If the branch touches that file, or `checkout` refuses (other dirty
+tracked files), **stop** — never force it. Pass → merge/PR to `main`, deploy main (§2–§4).
+
 ## 2. Server: pull
 
 ```bash
