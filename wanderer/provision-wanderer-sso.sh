@@ -108,8 +108,11 @@ provider = {
 
 existing = next((p for p in providers if p.get("name") == slot), None)
 if existing:
-    provider["id"] = existing["id"]
-    provider["collectionId"] = existing.get("collectionId", coll["id"])
+    # the fork's provider JSON carries no id/collectionId — carry over any
+    # bookkeeping keys it does have
+    for key in ("id", "collectionId"):
+        if key in existing:
+            provider[key] = existing[key]
     providers = [provider if p.get("name") == slot else p for p in providers]
     print("[*] Slot '%s' exists — updating in place" % slot)
 else:
