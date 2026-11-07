@@ -12,8 +12,9 @@ Debian VM on Proxmox, `192.168.178.249`, user `chef`, checkout `/home/chef/src/h
 rewrite history there. Services run as `systemctl --user podman-compose@<project>` units + linger.
 
 The **workstation** is whichever clone is editing this repo — the only place to commit and push.
-One-way flow: **branch → validate → commit → push → (server) `git pull --rebase --autostash` →
-`systemctl --user restart podman-compose@<project>`**. Runbook: `deploy` skill.
+One-way flow: **branch → commit → push → validate on the server (deploy skill) → merge/PR →
+(server) `git pull --rebase --autostash` → `systemctl --user restart
+podman-compose@<project>`**. Runbook: `deploy` skill.
 
 ## Services (dir → unit · data that cannot be rebuilt)
 
@@ -27,6 +28,10 @@ One-way flow: **branch → validate → commit → push → (server) `git pull -
 LAN IP.
 
 ## Validation
+
+Validate against the **server's checkout**, never by `scp`-ing local files over: push the branch,
+check it out on the server (deploy skill "Validate local changes on the server"), run the probes,
+return the server to `main`.
 
 Probe before assuming: `command -v podman podman-compose docker shellcheck yamllint hadolint`.
 Sandboxed editor sessions (e.g. Flatpak) usually have none of them — validate over SSH instead:
