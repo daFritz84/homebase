@@ -23,16 +23,18 @@ set -euo pipefail
 # under the same names before the next run.
 #
 # The OIDC client secrets for Homepage (item: authelia-oidc-homepage-secret),
-# Home Assistant (item: authelia-oidc-homeassistant-secret) and Cloudflare
-# Access (item: authelia-oidc-cloudflare-secret) are fetched/generated and
-# argon2-hashed via the authelia image: the digests go into .env.secret as
+# Home Assistant (item: authelia-oidc-homeassistant-secret), Wanderer (item:
+# authelia-oidc-wanderer-secret) and Cloudflare Access (item:
+# authelia-oidc-cloudflare-secret) are fetched/generated and argon2-hashed
+# via the authelia image: the digests go into .env.secret as
 # HOMEPAGE_OIDC_CLIENT_SECRET_HASH / HA_OIDC_CLIENT_SECRET_HASH /
-# CLOUDFLARE_OIDC_CLIENT_SECRET_HASH (injected into configuration.yml by the
-# template filter — the committed file keeps its placeholders), the RAW
-# values are printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET, for
-# homeassistant/config/secrets.yaml as ha_oidc_client_secret (gitignored —
-# never commit), and for the Cloudflare Access OIDC IdP form (dashboard) as
-# the client secret.
+# WANDERER_OIDC_CLIENT_SECRET_HASH / CLOUDFLARE_OIDC_CLIENT_SECRET_HASH
+# (injected into configuration.yml by the template filter — the committed
+# file keeps its placeholders), the RAW values are printed for homepage/.env
+# as HOMEPAGE_OIDC_CLIENT_SECRET, for homeassistant/config/secrets.yaml as
+# ha_oidc_client_secret (gitignored — never commit), for the PocketBase admin
+# UI (Wanderer SSO), and for the Cloudflare Access OIDC IdP form (dashboard)
+# as the client secret.
 #
 # The Authelia login passwords (LDIF_LOGIN_PASSWORD for uid=sseifried,
 # LDIF_PARTNER_PASSWORD for uid=partner, for the LDIF userPassword) are
@@ -126,6 +128,7 @@ AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD="${LDAP_ADMIN_PASSWORD}"
 # keeps its placeholders) ---
 provision_oidc_client authelia-oidc-homepage-secret Homepage OIDC_HOMEPAGE_SECRET OIDC_HOMEPAGE_HASH
 provision_oidc_client authelia-oidc-homeassistant-secret Home-Assistant OIDC_HA_SECRET OIDC_HA_HASH
+provision_oidc_client authelia-oidc-wanderer-secret Wanderer OIDC_WANDERER_SECRET OIDC_WANDERER_HASH
 provision_oidc_client authelia-oidc-cloudflare-secret Cloudflare-Access OIDC_CF_SECRET OIDC_CF_HASH
 
 # --- Authelia login passwords (LDIF userPassword): generated once, preserved
@@ -163,6 +166,7 @@ fi
   printf 'LDAP_ADMIN_PASSWORD=%s\n' "${LDAP_ADMIN_PASSWORD}"
   printf 'HOMEPAGE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HOMEPAGE_HASH}"
   printf 'HA_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HA_HASH}"
+  printf 'WANDERER_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_WANDERER_HASH}"
   printf 'CLOUDFLARE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_CF_HASH}"
   printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
   printf 'LDIF_PARTNER_PASSWORD=%s\n' "${LDIF_PARTNER_PASSWORD}"
@@ -177,6 +181,10 @@ echo "       ${OIDC_HOMEPAGE_SECRET}"
 echo "    -> paste the RAW OIDC value as ha_oidc_client_secret in"
 echo "       homeassistant/config/secrets.yaml (gitignored — never commit):"
 echo "       ${OIDC_HA_SECRET}"
+echo "    -> paste the RAW OIDC value as the Client Secret of the Authelia"
+echo "       OAuth2/OIDC provider in the PocketBase admin UI (Wanderer SSO,"
+echo "       client_id wanderer):"
+echo "       ${OIDC_WANDERER_SECRET}"
 echo "    -> paste the RAW OIDC value as the client secret of the Authelia OIDC"
 echo "       IdP in the Cloudflare Access dashboard (Access → Authentication →"
 echo "       OIDC IdPs; client_id cloudflare-access):"

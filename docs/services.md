@@ -350,6 +350,52 @@ curl -k https://wanderer.sseifried.link
 podman logs --tail=20 wanderer_search_1   # Meilisearch must come up healthy
 ```
 
+### Wanderer SSO (Authelia OIDC via PocketBase)
+
+Wanderer's own account system (PocketBase) federates to Authelia via generic
+OIDC: the login page gets an **Authelia button**, and because the
+`authelia_session` cookie covers `sseifried.link`, the OIDC redirect is
+authorized **silently** — one login end to end (internet via Access, LAN via
+split DNS). The wall (forward_auth) and the app login are separate layers;
+this closes the second one.
+
+- **Authelia client:** `wanderer` in `authelia/config/configuration.yml`
+  (confidential, PKCE S256, `client_secret_post` — PocketBase posts
+  credentials in the token body; argon2 digest from `.env.secret`, RAW
+  secret = Bitwarden `authelia-oidc-wanderer-secret`, printed by
+  `provision-authelia-secrets.sh`). Redirect:
+  `https://wanderer.sseifried.link/login/redirect` (PocketBase's fixed
+  callback path).
+- **PocketBase admin UI** (the `db` service has no host port — port-forward
+  it, then tunnel):
+
+```bash
+podman port-forward wanderer_db_1 localhost:8090:8090 &
+# workstation: ssh -L 8090:localhost:8090 chef@192.168.178.249
+# browser: http://localhost:8090/_/
+```
+
+  users collection → gear → Options → **OAuth2** → add provider:
+  Name `authelia` (slot name → `OIDC_*` env vars + button label), Type
+  **OIDC**, Client ID `wanderer`, Client Secret = RAW value, Auth URL
+  `https://authelia.sseifried.link/api/oidc/authorization`, Token URL
+  `https://authelia.sseifried.link/api/oidc/token`, API URL
+  `https://authelia.sseifried.link/api/oidc/userinfo`, Scopes
+  `openid profile email`, **PKCE: enabled** (the client requires S256),
+  Email attribute `email`, Username attribute `preferred_username`,
+  Verified attribute `email_verified`.
+- **Account migration (do this BEFORE the first OIDC login):** OIDC logins
+  create NEW PocketBase users — accounts are never linked by email, and
+  trails belong to the user record. Log in once via OIDC (creates a fresh
+  account), open it in the admin UI, copy its **Provider ID** (= Authelia's
+  `sub` claim), attach that credential (auth-method `authelia` + Provider
+  ID) to your EXISTING account, delete the fresh account. Your trails stay
+  on the old account. The partner needs no migration — their first OIDC
+  login creates their account (username `partner`, own trails).
+- **Optional:** disable PocketBase password auth (users → Options →
+  Identity/Password toggle) once SSO works — keep it as break-glass if
+  Authelia-down app access matters.
+
 ### Meilisearch upgrades
 
 The `data.ms` format is **not forward-compatible** — a newer engine refuses to
@@ -504,8 +550,9 @@ forward_auth — gated by its OIDC client's `authorization_policy` + the
 component's `roles`: only `homebase-admins` is admitted, admins-only as the
 old wall rule). Cockpit has **no rule and no forward_auth** — it stays
 outside Authelia entirely. Session cookie domain `sseifried.link` → one
-login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`
-and `cloudflare-access` (Cloudflare Access federation — the raw client
+login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`,
+`wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
+`cloudflare-access` (Cloudflare Access federation — the raw client
 secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
 `scopes: openid/email/profile` — the `email` claim feeds the Access policy
 allowlist). Second factors: TOTP + WebAuthn passkeys, enrolled at
@@ -829,7 +876,8 @@ cloudflared container (caddy-proxy) ── tunnel (outbound) ── CF Edge
 Caddy ── forward_auth wall (authelia_session cookie from the federation
   │      login → passes: ONE login end to end)
   ▼
-wanderer:3000 (own account login on top)
+wanderer:3000 (PocketBase OIDC SSO → the Authelia button is silent, see
+  "Wanderer SSO")
 
 LAN path unchanged: AdGuard split DNS → Caddy :443 (LE wildcard cert).
 ```
@@ -928,10 +976,12 @@ podman logs --tail=50 cloudflared_cloudflared_1   # connector registered
 
 Browser → `https://wanderer.sseifried.link` → Access → Authelia login
 (`uid=partner`, password = Bitwarden `authelia-partner-login-password`,
-handed out out-of-band) → Wanderer signup (private instance, own trails
-only). After onboarding set `PUBLIC_DISABLE_SIGNUP: "true"` in
-`wanderer/compose.yaml`, commit and redeploy — registration is no longer
-needed and the app is now internet-published (reversible).
+handed out out-of-band) → wall passes → Wanderer login page → **Authelia
+button** → account auto-created (username `partner`, own trails — private
+instance). After onboarding set `PUBLIC_DISABLE_SIGNUP: "true"` in
+`wanderer/compose.yaml`, commit and redeploy — email/password registration
+is no longer needed and the app is now internet-published (OIDC logins keep
+working; reversible).
 
 ### Rollback
 
