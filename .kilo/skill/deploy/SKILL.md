@@ -64,7 +64,7 @@ Conflicts → stop and report; never resolve on the server.
 
 | Change | Command, in the service dir on the server |
 | --- | --- |
-| config/code only | `systemctl --user restart podman-compose@<project>` |
+| config/code only | `podman restart <container>` — verify `podman inspect <container> --format "{{.State.StartedAt}}"` moved; `systemctl --user restart podman-compose@<project>` can be a **no-op** on a running pod (ExecStartPre is `podman pod start`) |
 | image tag bump | `podman-compose pull`, then unit restart |
 | Caddy image rebuild | `podman-compose build` (bump `CB_VERSION` and the plugin pin in `caddy/Dockerfile` together) |
 | new/changed `.env` / `.env.secret` key | `podman-compose up -d --force-recreate` (unit restart does **not** re-read env) |

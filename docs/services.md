@@ -69,7 +69,8 @@ clone, on a branch, tested with podman-compose directly:
 3. **Commit & push** — the server deploy key is read-only; commits always
    originate from the workstation (see [host-setup.md](host-setup.md#git-deployment)).
 4. **Deploy on the server**: `git pull --rebase --autostash`, then restart the
-   systemd unit (`systemctl --user restart podman-compose@<project>`) — for every project.
+   service's containers (`podman restart <container>` — a unit restart can be a
+   no-op on a running pod, see [operations.md](operations.md)) — for every project.
 5. **AdGuard drift**: UI changes on the server rewrite `AdGuardHome.yaml` —
    sync the server file back to the workstation, review, commit, push
    (see [operations.md](operations.md)).
