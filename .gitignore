@@ -35,5 +35,11 @@ authelia/config/notifier/
 # — secrets, never commit; the template config/bootstrap.ldif is the source
 authelia/config/bootstrap.rendered.ldif
 
+# Cloudflare Tunnel credentials JSON (Bitwarden item
+# cloudflared-tunnel-credentials via provision-cloudflared-secrets.sh) —
+# account-level secret, never commit; the ingress allowlist config.yml IS
+# committed (the auditable exposure surface)
+cloudflared/credentials.json
+
 # Kilo working plans (local migration notes, not part of the stack)
 .kilo/plans/
