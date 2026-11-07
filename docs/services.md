@@ -536,9 +536,10 @@ podman run --rm -v "$(pwd)/config/keys:/keys" docker.io/authelia/authelia:4.39.2
    Then render the LDIF: `config/bootstrap.ldif` is a committed **template**
    whose `{REPLACE_ME}` `userPassword` placeholders are deployment secrets —
    `./render-ldif.sh` fills them with `{SSHA}` hashes computed from
-   `.env.secret` via `slappasswd` (the openldap image; the password goes to
-   stdin, `-s -`, never argv) into the gitignored
-   `config/bootstrap.rendered.ldif`:
+   `.env.secret` with `python3` `hashlib` (SHA1(pw+salt)‖salt — the exact
+   scheme slapd verifies; never the openldap image's `slappasswd`, whose
+   output slapd 2.4.57 rejects on simple bind, see "4.39 schema notes")
+   into the gitignored `config/bootstrap.rendered.ldif`:
 
 ```bash
 ./render-ldif.sh
@@ -745,9 +746,15 @@ files use the current (4.39.28) schema:
   `--password` (transient argv).
 - LDAP `userPassword` schemes: Authelia logs users in by **binding as them**,
   so SLAPD verifies the hash. osixia 1.5.0 ships OpenLDAP 2.4.57 — no argon2
-  support — so LDIF passwords use `{SSHA}` via `slappasswd` (the openldap
-  image, `-s -` on stdin) — `./render-ldif.sh` does this from `.env.secret`
-  into the gitignored rendered LDIF. Argon2 digests are only for the OIDC
+  support — so LDIF passwords use `{SSHA}` — `./render-ldif.sh` hashes with
+  `python3` `hashlib` (SHA1(pw+salt)‖salt, 4-byte salt) from `.env.secret`
+  into the gitignored rendered LDIF. **Never hash via the openldap image's
+  `slappasswd`**: its `{SSHA}` payload is self-consistent under
+  `slappasswd -v` (offline checks pass) but slapd 2.4.57 rejects it on
+  simple bind — every user login 49s, while the `cn=admin` entry appears
+  fine because osixia's startup rewrites the admin password with slapd's
+  internal pw module (diagnosed 2026-11-07: manual SHA1(pw+salt) ≠ payload
+  of the image's hashes). Argon2 digests are only for the OIDC
   `client_secret`, injected into `configuration.yml` from `.env.secret` by
   the `template` filter (`{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}` —
   indexed `AUTHELIA_..._CLIENTS_0_...` env overrides are rejected by 4.39:

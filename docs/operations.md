@@ -263,6 +263,15 @@ Notes:
   [services.md](services.md), "HA SSO (hass-oidc-auth)". Fallback meanwhile:
   HA's own login form — `http://127.0.0.1:8123/?skip_oidc_redirect=true`
   from the host, or `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`.
+- **Portal login: 49 Invalid Credentials for every user** — the directory's
+  `userPassword` hashes were rendered with the openldap image's
+  `slappasswd`, whose `{SSHA}` payload slapd 2.4.57 rejects on simple bind
+  (`slappasswd -v` accepts its own hashes, so offline verification passes —
+  the trap). `render-ldif.sh` hashes with `python3` hashlib SSHA; fix a live
+  directory with `ldapmodify replace: userPassword` (via `-Y EXTERNAL
+  -H ldapi:///`) using a freshly rendered hash. The `cn=admin` entry is
+  unaffected (osixia rewrites it with slapd's internal pw module at
+  startup). See [services.md](services.md), "4.39 schema notes".
 - **authelia crash-loops at first start** — podman-compose **ignores**
   `depends_on: condition: service_healthy` (start ordering only), so authelia
   starts while slapd is still bootstrapping, fails its LDAP connection and
