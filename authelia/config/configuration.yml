@@ -143,7 +143,11 @@ identity_providers:
           - 'https://green-mouse-0fd5.cloudflareaccess.com/cdn-cgi/access/callback'
         grant_types: ['authorization_code']
         response_types: ['code']
-        token_endpoint_auth_method: 'client_secret_post'
+        # Cloudflare Access authenticates at the token endpoint with HTTP
+        # Basic (client_secret_basic) — verified via the Authelia log
+        # ("request ... using 'client_secret_basic', client configured for
+        # 'client_secret_post'"). The homeassistant client keeps post.
+        token_endpoint_auth_method: 'client_secret_basic'
         # If the federation test shows Access sends no PKCE, drop require_pkce.
 
 session:
