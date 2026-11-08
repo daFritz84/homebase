@@ -1,0 +1,72 @@
+# jellyfin — media server (movies & TV, https://jellyfin.org)
+# ---
+# No Authelia wall, on purpose: Jellyfin API/mobile clients (Infuse, Swiftfin,
+# …) authenticate with X-Emby-Token / Authorization headers per request and
+# can never pass a forward_auth cookie wall; Jellyfin's own login gates
+# access. LAN/VPN-only exposure via AdGuard split DNS — NEVER add
+# jellyfin.sseifried.link to cloudflared/config.yml (same doctrine as
+# cockpit/adguard/homepage/homeassistant/navidrome).
+# The official image runs as root (Config.User empty — verified via
+# `podman image inspect jellyfin/jellyfin:12.4 --format "{{.Config.User}}"`),
+# and we keep it: under rootless Podman container root maps to host `chef`,
+# the only mapping that can carry chef's supplementary groups to the render
+# node /dev/dri/renderD128 (root:render 660) — see the group_add note under
+# `devices:` for the keep-groups requirement. A uid-1000 (subuid) process
+# cannot open it. Hence NO `user:` directive (unlike navidrome). Data dirs
+# are host-user-owned — no `podman unshare chown` ritual (homeassistant
+# pattern).
+# VAAPI: the image ships the Intel VA-API stack inside the self-contained
+# jellyfin-ffmpeg prefix (/usr/lib/jellyfin-ffmpeg/lib/dri: iHD + i965
+# drivers, plus libva/libva-drm/libigdgmm/libigfxcmrt/libdrm_intel) —
+# verified by probe. The system /usr/lib/x86_64-linux-gnu/dri does NOT
+# exist; ffmpeg finds its drivers via the bundled prefix. Host prerequisite:
+# chef in the `render` group + user manager restart (see docs/services.md).
+# ./media is a PLACEHOLDER bind mount: swap the line to the NFS mount point
+# when the real media volume is decided (same follow-up as navidrome's
+# ./music).
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:12.4
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    devices:
+      - /dev/dri
+    # Rootless Podman drops the process's supplementary groups by default, so
+    # the render group never reaches the container: /dev/dri/renderD128 shows
+    # as nobody:nogroup (host root:render is unmapped in chef's userns) and
+    # ffmpeg fails "No VA display found" (DAC: 660, owner/group unmapped).
+    # keep-groups passes chef's groups through: render maps to the unmapped
+    # 65534 (nogroup) — exactly the node's group — so group-rw opens it.
+    # Verified: ffmpeg -vaapi_device hwupload on the bundled iHD driver.
+    group_add:
+      - keep-groups
+    volumes:
+      - ./data:/config
+      - ./cache:/cache
+      - ./media:/media:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - jellyfin
+    healthcheck:
+      # Web root: Jellyfin 12.4 answers 302 -> /web/ (login/setup page);
+      # curl -f accepts 3xx, so this passes (verified: exit 0, container
+      # healthy). The image's built-in HEALTHCHECK curls $HEALTHCHECK_URL
+      # (http://localhost:8096/health) — 200 on 12.4 (no api_key needed
+      # anymore, unlike 10.x), but the compose healthcheck is explicit and
+      # independent of the image's env. curl ships in the image (verified).
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/"]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+networks:
+  caddy-proxy:
+    external: true

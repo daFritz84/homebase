@@ -40,6 +40,14 @@
         container: navidrome_navidrome_1
         showStats: true
 
+    - Jellyfin:
+        icon: jellyfin
+        href: https://jellyfin.sseifried.link
+        description: Media server (movies & TV, VAAPI)
+        server: homebase-podman
+        container: jellyfin_jellyfin_1
+        showStats: true
+
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
         icon: home-assistant
