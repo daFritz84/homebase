@@ -601,7 +601,7 @@ mkdir -p data cache media
 
 ```bash
 podman-compose up -d
-podman exec jellyfin_jellyfin_1 curl -fsS http://localhost:8096/   # web root -> 200 (login page)
+podman exec jellyfin_jellyfin_1 curl -fsS http://localhost:8096/   # web root -> 302 to /web/ (login/setup page)
 podman healthcheck run jellyfin_jellyfin_1                          # exit 0
 ls -l data                                                          # files owned by chef (root→chef mapping)
 ```
