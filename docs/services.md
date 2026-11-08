@@ -579,7 +579,7 @@ secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
 and all four OIDC clients run `two_factor`: a **WebAuthn passkey stored in
 Bitwarden** (primary, registered from the desktop Chrome/Edge Bitwarden
 extension; asserted via the vault on mobile) plus a **TOTP backup factor**,
-enrolled at `https://authelia.sseifried.link/portal` — see "MFA enrollment".
+enrolled in the login's 2FA step — see "MFA enrollment".
 `enable_passkey_login` stays false: login remains password + second factor,
 not passwordless. Passkeys work through the tunnel: rp_id `sseifried.link`,
 real domain. Recovery: [operations.md](operations.md), "Authelia MFA
@@ -712,7 +712,8 @@ podman logs --tail=20 authelia_authelia_1
 ```
 
    Then in a browser: log in at `https://authelia.sseifried.link/portal`
-   (enroll TOTP + a passkey), open AdGuard → lands back authenticated; open
+   (the 2FA step of a walled-app login offers TOTP + passkey registration,
+   see "MFA enrollment"), open AdGuard → lands back authenticated; open
    Home Assistant → its login page redirects to Authelia → lands in HA as
    admin (**no second login** — native OIDC SSO, see "HA SSO").
 
@@ -747,28 +748,38 @@ Password changes = re-render (`./render-ldif.sh`) + `ldapmodify`
 
 ### MFA enrollment
 
-Two factors are enrolled at `https://authelia.sseifried.link/portal` (login:
-`uid=sseifried`, password = Bitwarden `authelia-login-password`); the
-`two_factor` policies (all walled-app rules + all four OIDC clients) make
-them mandatory at login:
+Two factors are enforced (`two_factor` on all walled-app rules + all four
+OIDC clients). The portal console offers device registration **only when a
+`two_factor` policy applies to the session** — with zero registered methods
+the **login's 2FA step** presents the registration prompt (the portal's
+"Two factor authentication" page alone just lists the 2FA-protected apps,
+it registers nothing). Enrollment therefore happens in the login flow:
+open a walled app (e.g. `https://adguard.sseifried.link`), log in
+(`uid=sseifried`, password = Bitwarden `authelia-login-password`), and at
+the method-selection step choose **register a device**:
 
 - **Passkey (primary):** desktop Chrome/Edge with the Bitwarden extension
   (vault unlocked, WebAuthn/passkey support enabled in the extension
-  settings). Portal → Security Keys → Register → description `Bitwarden`.
-  Device registration requires **elevation** (4.38+): a one-time code is
-  sent via the notifier — with the filesystem notifier it lands in
-  `authelia/config/notifier/notification.txt` on the server. Open a second
-  SSH window and `tail -f` that file **before** starting the ceremony (the
-  elevation OTP TTL is ~2 minutes), submit the code promptly, and the
-  browser WebAuthn picker offers **Bitwarden** — the credential is created
-  inside the vault (discoverable + backup-eligible, so the mobile Bitwarden
-  app can assert it after vault sync).
-- **TOTP (backup):** portal → Register TOTP → elevation (same OTP
-  mechanism) → scan the QR with an authenticator app → **save the secret to
-  a Bitwarden item** (`authelia-totp-sseifried`, per the existing
+  settings). Choose the WebAuthn security-key registration → description
+  `Bitwarden`. Device registration requires **elevation** (4.38+): a
+  one-time code is sent via the notifier — with the filesystem notifier it
+  lands in `authelia/config/notifier/notification.txt` on the server. Open
+  a second SSH window and `tail -f` that file **before** starting the
+  ceremony (the elevation OTP TTL is ~2 minutes), submit the code promptly,
+  and the browser WebAuthn picker offers **Bitwarden** — the credential is
+  created inside the vault (discoverable + backup-eligible, so the mobile
+  Bitwarden app can assert it after vault sync).
+- **TOTP (backup):** choose the one-time-password registration → elevation
+  (same OTP mechanism) → scan the QR with an authenticator app → **save the
+  secret to a Bitwarden item** (`authelia-totp-sseifried`, per the existing
   convention) → confirm the code. Losing the passkey → log in with TOTP;
   losing both → CLI factor reset, see [operations.md](operations.md),
   "Authelia MFA recovery".
+
+With factors enrolled and the `two_factor` policies active, the portal
+console (avatar menu → Two factor authentication) lists the protected apps
+and offers device management (register more / delete — deletes also require
+elevation, OTP to the same notifier file).
 
 Config notes (`webauthn:` in `configuration.yml`):
 `attestation_conveyance_preference: 'none'` (Bitwarden self-attests); the
