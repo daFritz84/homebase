@@ -272,19 +272,20 @@ Notes:
   Note: `redir` does not support negated named matchers (`@!name`/`!@name`); use an explicit
   `not` matcher.
 - **New `*.sseifried.link` site: cert never issues, log loops `timed out
-  waiting for record to fully propagate` (last error: `<nil>`)** — the
-  caddy-dns/cloudflare plugin checks propagation by querying **1.1.1.1**
-  directly. The TXT publishes fine (verify: `dig TXT
-  _acme-challenge.<host>.sseifried.link @198.41.192.4` from the host), but
+  waiting for record to fully propagate` (last error: `<nil>`)** — with no
+  `resolvers` configured, certmagic's propagation check queries the zone's
+  authoritative NS directly; Cloudflare NS hostnames rotate over many
+  anycast IPs and a degraded PoP (port 53 timeout/REFUSED from this
+  network) makes every check time out. The fix is in the Caddyfile `(tls)`
+  snippet: `resolvers 1.1.1.1` (recursive check; plugin README). Verify
+  the TXT publishes fine: `dig +norecurse TXT
+  _acme-challenge.<host>.sseifried.link @<zone-NS-IP>`. Secondary effect:
   each failed attempt's cleanup deletes the TXT, seeding a **1800s NXDOMAIN
-  negative cache** (SOA minimum TTL) at the 1.1.1.1 PoP the container's
-  flows hit; every retry (60/120/300s backoff) lands inside that window and
-  re-seeds it — a self-sustaining loop. Break it: `systemctl --user stop
-  podman-compose@caddy` (so no attempt re-seeds), wait out the TTL (~30 min,
-  `dig TXT ... @1.1.1.1` goes from NXDOMAIN to the value), then start the
-  unit — the first attempt then passes. The AdGuard wildcard rewrite
-  (`*.sseifried.link`) shadows `_acme-challenge.*` for LAN resolvers, but
-  the plugin bypasses them (direct 1.1.1.1), so no AdGuard change is needed.
+  negative cache** (SOA minimum TTL) at recursive resolvers, so attempts
+  keep failing after the primary cause is fixed — break the loop by
+  stopping the unit until the TTL expires, or plant a short-TTL keeper TXT
+  (`_acme-challenge.<host>`, any content, TTL 60) so the name never goes
+  NXDOMAIN; delete the keeper once the cert issues.
 - **502s / `connection refused` from containers to host services after network changes**
   (`podman system migrate`, network recreation) — netavark rules/subnets go stale
   (the `caddy-proxy` subnet changed from 10.88.0.0/16 to 10.89.0.0/24 once). Try
