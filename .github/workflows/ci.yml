@@ -29,12 +29,12 @@ jobs:
         env:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
-          touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret
+          touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret stirling-pdf/.env.secret
           # cloudflared needs no stub: no env_file (credentials.json is a
           # bind-mount, and volume targets need not exist for `config`)
           # navidrome needs no stub: no env_file (config lives in the image ENV)
           # jellyfin needs no stub: no env_file (config lives in data/jellyfin.xml)
-          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin; do
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin stirling-pdf; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

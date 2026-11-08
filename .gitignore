@@ -38,6 +38,12 @@ navidrome/data/
 jellyfin/data/
 jellyfin/cache/
 
+# Stirling PDF runtime data (data/configs: settings.yml + built-in user DB +
+# nightly DB backups + generated keys; data/storage: user-saved files) —
+# data, not code; covered by backup-stirling-pdf-data.sh. data/logs is
+# rebuildable.
+stirling-pdf/data/
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/
