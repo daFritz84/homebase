@@ -98,7 +98,7 @@ identity_providers:
         # (HOMEPAGE_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh)
         client_secret: '{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}'
         public: false
-        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (after enrolling passkey + TOTP)
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
         scopes:
           - 'openid'
@@ -120,7 +120,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other rules)
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
         scopes: ['openid', 'profile', 'email', 'groups']
         redirect_uris:
@@ -140,7 +140,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other clients)
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
         # wanderer requests exactly openid/profile/email
         scopes: ['openid', 'profile', 'email']
@@ -161,7 +161,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other clients)
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
         # the email claim feeds the Access policy email allowlist — the
         # policy email must equal the LDAP `mail` attribute exactly
@@ -215,18 +215,18 @@ access_control:
   # from ACL; Homepage and Home Assistant are native OIDC clients, gated by
   # their clients' authorization_policy + the app-side role checks).
   rules:
-    # walled apps. one_factor until the Bitwarden passkey (primary) + TOTP
-    # (backup) are enrolled at the portal (docs/services.md "MFA
-    # enrollment"); Phase 3 flips these rules + the OIDC clients'
-    # authorization_policy to two_factor.
+    # walled apps. two_factor ENFORCED: Bitwarden passkey (primary) + TOTP
+    # (backup) — with zero registered methods the login's 2FA step presents
+    # the registration prompt (docs/services.md "MFA enrollment"; recovery:
+    # docs/operations.md "Authelia MFA recovery").
     - domain: 'adguard.sseifried.link'
-      policy: 'one_factor'
+      policy: 'two_factor'
       subject: 'group:homebase-admins'
     # Wanderer is the one app published to the internet via the Cloudflare
     # Tunnel (cloudflared/config.yml); admins-only since the partner
     # account was removed (2026-11-08, stack is single-user).
     - domain: 'wanderer.sseifried.link'
-      policy: 'one_factor'
+      policy: 'two_factor'
       subject: 'group:homebase-admins'
     # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
     # proxies it directly (PAM + TOTP), default-deny never applies
