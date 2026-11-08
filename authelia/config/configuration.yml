@@ -91,6 +91,17 @@ identity_providers:
         use: 'sig'
         key: |
           {{- fileContent "/config/keys/oidc.key" | nindent 10 }}
+    claims_policies:
+      # Escape hatch for Cloudflare Access (Authelia docs: integration/
+      # openid-connect/clients/cloudflare-zerotrust/, tested v4.39.28):
+      # "Claims Hydration" is a known CF bug — Access reads claims from the
+      # ID token and never calls the UserInfo endpoint, so 4.39's minimal
+      # ID token (scope claims live on UserInfo) has no email and the
+      # federation login fails with "User email was not returned".
+      # Minimal set: email feeds the Access email-domain condition,
+      # preferred_username shows in the Access session.
+      cloudflare-access:
+        id_token: ['email', 'email_verified', 'preferred_username']
     clients:
       - client_id: 'homepage'
         client_name: 'Homepage'
@@ -165,6 +176,8 @@ identity_providers:
         consent_mode: 'auto'
         # the email claim feeds the Access policy email-domain condition
         # (@sseifried.link) — the claim comes from the LDAP `mail` attribute
+        # and lands in the ID token via the claims_policy escape hatch above
+        claims_policy: 'cloudflare-access'
         scopes: ['openid', 'email', 'profile']
         redirect_uris:
           # Zero Trust team domain (green-mouse-0fd5) — Access redirects the
