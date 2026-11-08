@@ -30,6 +30,14 @@ wanderer/data/
 # transcodes) — data, not code; covered by backup-navidrome-data.sh
 navidrome/data/
 
+# Jellyfin runtime data (jellyfin.xml incl. VAAPI settings, users, password
+# hashes, API keys, plugin DB) — data, not code; covered by
+# backup-jellyfin-data.sh. cache/ (transcodes, artwork) is rebuildable.
+# media/ is NOT ignored: the tracked .gitkeep keeps the bind source present
+# in every checkout (navidrome's music/ pattern).
+jellyfin/data/
+jellyfin/cache/
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/
