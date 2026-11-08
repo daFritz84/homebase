@@ -16,6 +16,7 @@ systemctl --user status podman-compose@homepage
 systemctl --user status podman-compose@wanderer
 systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@jellyfin
+systemctl --user status podman-compose@stirling-pdf
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -85,6 +86,30 @@ creation and after library/user/plugin changes, at least monthly — and
 the service, `rm -rf data && tar xzf <archive>`, start. The script
 (re)starts the containers directly, so the unit shows `inactive` afterwards
 — `systemctl --user start podman-compose@jellyfin` to re-adopt the pod.
+
+### Stirling PDF data backups
+
+Stirling PDF's `stirling-pdf/data/configs/` is the irreplaceable,
+secret-bearing artifact: `settings.yml`, the built-in user DB, nightly DB
+backups and the generated keys; `data/storage/` holds user-saved files.
+Run from the service checkout on the server:
+
+```bash
+cd stirling-pdf && ./backup-stirling-pdf-data.sh
+```
+
+The script stops the service, archives `data/` (owner-only, mode `0600`;
+the rebuildable `data/logs` is excluded) to
+`~/.local/share/stirling-pdf/backups/stirling-pdf-data-<date>.tar.gz`, and
+restarts it. It archives via `podman unshare tar czf … data/` (navidrome
+pattern): the app writes uid-1000-owned mode-700 dirs that the host user
+cannot read — a plain `tar` fails on them; namespace uid 0 has DAC override
+over the mapped range. Cadence: right after admin/account setup (configs/
+then holds keys + user DB) and **before every image bump** (DB migrations
+are forward-only). Restore: stop the service, `rm -rf data && tar xzf
+<archive>`, `podman unshare chown -R 1000:1000 data`, start. The script
+(re)starts the containers directly, so the unit shows `inactive` afterwards
+— `systemctl --user start podman-compose@stirling-pdf` to re-adopt the pod.
 
 ### Home Assistant config backups
 

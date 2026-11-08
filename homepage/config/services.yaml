@@ -48,6 +48,14 @@
         container: jellyfin_jellyfin_1
         showStats: true
 
+    - Stirling PDF:
+        icon: stirling-pdf
+        href: https://stirling.sseifried.link
+        description: PDF editor & processor (merge, OCR, sign, convert)
+        server: homebase-podman
+        container: stirling-pdf_stirling-pdf_1
+        showStats: true
+
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
         icon: home-assistant

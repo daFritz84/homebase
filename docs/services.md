@@ -12,6 +12,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Wanderer (Trail Database)](#wanderer-trail-database)
 - [Navidrome (Music Streaming)](#navidrome-music-streaming)
 - [Jellyfin (Media Server)](#jellyfin-media-server)
+- [Stirling PDF (PDF Editor)](#stirling-pdf-pdf-editor)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
 - [Cloudflare Tunnel (cloudflared)](#cloudflare-tunnel-cloudflared)
@@ -672,6 +673,174 @@ into a `RequiresMountsFor=<mount point>` drop-in for the generated
 `podman-compose@jellyfin` unit. Media files must be world-readable
 (NFS `root_squash` → the container reads via `o+r`).
 
+## Stirling PDF (PDF Editor)
+
+Self-hosted PDF editor/processor
+([Stirling-PDF](https://github.com/Stirling-Tools/Stirling-PDF)) — merge,
+split, OCR, sign, convert. Compose file: `stirling-pdf/compose.yaml`. Unit:
+`podman-compose@stirling-pdf` (shared pattern above).
+
+Single container on `caddy-proxy` (alias `stirling`), container port 8080,
+no host ports — served by Caddy at `https://stirling.sseifried.link`.
+
+**No Authelia wall, on purpose:** Stirling's REST API authenticates with
+per-request API keys (`X-API-Key`) that can never pass a `forward_auth`
+cookie wall (navidrome/jellyfin doctrine). Stirling v3 is a **native
+Authelia OIDC client** (Home Assistant pattern, see below) — the app's own
+login gates access. Exposure is LAN/VPN-only via AdGuard split DNS;
+`*.sseifried.link` is already covered by the existing wildcard rewrite, so
+AdGuard needs **no change**. `stirling.sseifried.link` is absent from
+`cloudflared/config.yml` — **never add it** (same doctrine as
+cockpit/adguard/homepage/homeassistant/navidrome/jellyfin).
+
+**Native Authelia OIDC client:** the `stirling-pdf` client is registered in
+`authelia/config/configuration.yml` (confidential + PKCE S256, argon2 digest
+from `authelia/.env.secret` via the template filter,
+`STIRLING_OIDC_CLIENT_SECRET_HASH`); the app side is the `SECURITY_OAUTH2_*`
+env in `stirling-pdf/compose.yaml` (issuer `https://authelia.sseifried.link`
+with discovery, clientid `stirling-pdf`, the RAW client secret from
+`.env.secret`). The OIDC callback URL is fixed by Spring Security:
+`https://stirling.sseifried.link/login/oauth2/code/stirling` (provider name
+`stirling`). `useAsUsername=preferred_username` maps the LDAP uid
+(`sseifried`) to the local username; `autoCreateUser` creates the account on
+first login. `loginMethod=all` keeps the app's password form reachable at
+`/login?all` (break-glass), `ssoAutoLogin=true` sends browsers straight to
+Authelia — one portal login end-to-end. No `access_control` rule: rules
+apply only to walled (forward-auth) apps.
+
+**Runs as uid/gid 1000** (upstream docs; probe before the first start:
+`podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'`
+→ `1000`). Container uid 1000 maps into the subuid range — chown `data/`
+once before first start (`podman unshare chown -R 1000:1000 data`,
+navidrome ritual). If the probe shows an **empty** `Config.User` (root,
+jellyfin case), add `user: "1000:1000"` + `PUID`/`PGID=1000` env to
+`compose.yaml` and keep the chown ritual.
+
+Secrets: `stirling-pdf/.env.secret` (gitignored, 0600, provisioned by
+`provision-stirling-pdf-secrets.sh` from Bitwarden) —
+`SECURITY_INITIALLOGIN_USERNAME/PASSWORD` preset the first admin (the
+upstream default `admin`/`stirling` must never survive; the keys are
+**ignored once users exist**, so set them before the first start) and
+`SECURITY_OAUTH2_CLIENTSECRET` (the RAW OIDC client secret; the argon2
+digest lives in `authelia/.env.secret` — same Bitwarden item
+`authelia-oidc-stirling-pdf-secret`).
+
+Data that cannot be rebuilt:
+
+| Path | Content |
+| --- | --- |
+| `stirling-pdf/data/configs/` | `settings.yml`, **built-in user DB**, nightly DB backups, generated keys |
+| `stirling-pdf/data/storage/` | user-saved files (app "saved files" feature, on by default) |
+
+`data/logs` is rebuildable. Covered by `backup-stirling-pdf-data.sh` (see
+[operations.md](operations.md), "Stirling PDF data backups"); run it right
+after admin/account setup and **before every image bump** — DB migrations
+are forward-only.
+
+Non-secret settings live in `compose.yaml` as env (every env key maps to a
+`settings.yml` key): `SYSTEM_ENABLEANALYTICS=false` kills the PostHog/Scarf
+telemetry; `SYSTEM_BACKENDURL`/`SYSTEM_FRONTENDURL` must match the public
+URL. Memory limit **4g** (upstream recommendation): the JVM heap defaults to
+~25% of the limit, and the LibreOffice/OCR subprocesses run **outside** the
+JVM — watch for OOM-kills on large scans and raise the limit if needed.
+Free plan: 5 users max, OIDC on every plan.
+
+### First run
+
+The steps below run in the service checkout — on the server that is the
+`~/src/homebase` clone.
+
+1. Probe + dirs + chown (the `caddy-proxy` network must exist —
+   `../caddy/ensure_proxy_network.sh`):
+
+```bash
+cd stirling-pdf
+podman pull docker.io/stirlingtools/stirling-pdf:3.3.0
+podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'  # expect 1000 (see above)
+free -h  # confirm headroom for the 4g limit
+mkdir -p data/configs data/logs data/customFiles data/pipeline data/storage data/tessdata
+podman unshare chown -R 1000:1000 data
+```
+
+2. Provision secrets (Bitwarden unlocked). The OIDC client must exist in
+   Authelia **before** Stirling starts (issuer discovery at startup):
+   re-run `../authelia/provision-authelia-secrets.sh` (writes
+   `STIRLING_OIDC_CLIENT_SECRET_HASH`), then **`podman-compose up -d
+   --force-recreate`** in `authelia/` (new `.env.secret` key — a unit
+   restart does NOT re-read env), verify the portal is healthy, then:
+
+```bash
+cd ../stirling-pdf && ./provision-stirling-pdf-secrets.sh
+```
+
+3. Start and verify:
+
+```bash
+podman-compose up -d
+podman exec stirling-pdf_stirling-pdf_1 curl -fsS http://localhost:8080/api/v1/info/status  # JSON (no sign-in endpoint)
+podman healthcheck run stirling-pdf_stirling-pdf_1                                          # exit 0
+podman exec stirling-pdf_stirling-pdf_1 ls /usr/share/tessdata  # probe: see the tessdata note below
+```
+
+4. Caddy last: validate + restart `podman-compose@caddy`. Verify:
+
+```bash
+curl -k https://stirling.sseifried.link  # -> 302 to /login (SSO auto-login -> Authelia portal)
+```
+
+5. Browser: open `https://stirling.sseifried.link` → Authelia portal (2FA)
+   → lands in Stirling, account `sseifried` auto-created. Break-glass:
+   `/login?all` → `admin` / Bitwarden `stirling-pdf-admin-password`; as
+   admin, promote `sseifried` to **Admin** (Settings → Workspace → Users).
+
+6. Deploy with the shared pattern above (unit: `podman-compose@stirling-pdf`):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@stirling-pdf
+```
+
+7. Back up right after account setup (configs/ now holds keys + user DB):
+   `./backup-stirling-pdf-data.sh`.
+
+8. Homepage: the card appears; restart `podman-compose@homepage` (config is
+   bind-mounted).
+
+**tessdata probe:** if `ls /usr/share/tessdata` is empty and OCR fails,
+drop the `./data/tessdata:/usr/share/tessdata` bind — the mount can hide
+the image's bundled `eng.traineddata`. Add `deu.traineddata` to that dir
+for German OCR.
+
+### Upgrade procedure
+
+Pin the tag in `compose.yaml`; `./backup-stirling-pdf-data.sh` **before
+every bump** (DB migrations are forward-only); `podman-compose pull` + unit
+restart.
+
+### Troubleshooting
+
+- **ssoAutoLogin × loginMethod contradiction:** the upstream OAuth-SSO docs
+  say auto-login redirects **only when `loginMethod` is `oauth2`/`saml2`**,
+  while the v3.3.0 release notes say it works with password login enabled.
+  The stack ships `loginMethod=all` + `ssoAutoLogin=true` and step 4 expects
+  `302 → Authelia`. If it returns a 200 login page instead: set
+  `SECURITY_LOGINMETHOD=oauth2` and **verify `/login?all` still reaches the
+  password form** (release notes promise it) before accepting — never "fix"
+  the missing redirect by removing the break-glass form.
+- **Spring↔Authelia quirks:** if the callback 400s on PKCE, drop
+  `require_pkce` from the client; if a claim is null ("Attribute value for
+  … cannot be null"), set `SECURITY_OAUTH2_DEBUGLOGGING=true` once, inspect
+  the claims, pick a present `useAsUsername`, turn it off.
+  `preferred_username` arrives via Authelia's UserInfo endpoint (Spring
+  merges it) — no `claims_policy` needed.
+- **Issuer down at Stirling startup** → startup issuer error/crash-loop;
+  `restart: unless-stopped` self-heals once authelia is up
+  (authelia-before-stirling ordering, same as walled apps).
+- **`SECURITY_INITIALLOGIN_*` are ignored once users exist** — set them
+  before the first start.
+- **API-key clients work** (proves no wall): create a key in Settings,
+  `curl -H "X-API-Key: …" -F "file=@x.pdf" https://stirling.sseifried.link/api/v1/...`.
+
 ## Home Assistant (Home Automation)
 
 Home automation platform ([home-assistant](https://www.home-assistant.io/)).
@@ -1198,10 +1367,13 @@ ingress would hit Caddy's `:80` redirect and loop at the edge.
 
 `cloudflared/config.yml` is the committed, auditable public-exposure
 allowlist: **wanderer + authelia ONLY**, fallback `http_status:404`.
-`cockpit`/`adguard`/`homepage`/`homeassistant` are deliberately absent —
-**never add them** (user decision: admin tools stay LAN/VPN-only). Cockpit's
-exclusion is enforced 4-fold: absent from the allowlist, 404 fallback, no
-public DNS record (NXDOMAIN from the internet), TLS-only site + PAM.
+`cockpit`/`adguard`/`homepage`/`homeassistant`/`navidrome`/`jellyfin`/
+`stirling` are deliberately absent — **never add them** (user decision:
+admin tools stay LAN/VPN-only; navidrome/jellyfin/stirling additionally
+gate on their own app logins, which a cookie wall could not serve).
+Cockpit's exclusion is enforced 4-fold: absent from the allowlist, 404
+fallback, no public DNS record (NXDOMAIN from the internet), TLS-only site
++ PAM.
 
 ### Workstation setup (one-time, manual)
 

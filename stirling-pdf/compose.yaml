@@ -1,0 +1,88 @@
+# stirling-pdf — self-hosted PDF editor/processor (https://github.com/Stirling-Tools/Stirling-PDF)
+# ---
+# No Authelia wall, on purpose: Stirling's REST API authenticates with
+# per-request API keys (X-API-Key) that can never pass a forward_auth cookie
+# wall (navidrome/jellyfin doctrine); Stirling v3 is a native Authelia OIDC
+# client (Home Assistant pattern): login redirects to Authelia (SSO
+# auto-login, one login end-to-end), the app's own password form stays
+# break-glass at /login?all. LAN/VPN-only exposure via AdGuard split DNS —
+# NEVER add stirling.sseifried.link to cloudflared/config.yml (same doctrine
+# as cockpit/adguard/homepage/homeassistant/navidrome/jellyfin).
+# Secrets come from .env.secret (gitignored, 0600, provisioned by
+# provision-stirling-pdf-secrets.sh) via env_file — no ${VAR:?}
+# interpolation, so `docker compose config` passes with a touched
+# .env.secret (CI). SECURITY_OAUTH2_CLIENTSECRET is the RAW OIDC client
+# secret of the `stirling-pdf` Authelia client; the matching argon2 digest
+# lives in authelia/.env.secret (template-filter injection into
+# configuration.yml — see provision-authelia-secrets.sh).
+# The image runs as uid/gid 1000 (upstream docs; probe before the first
+# start: podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0
+# --format '{{.Config.User}}'). Container uid 1000 maps into the subuid
+# range — chown data/ once before first start
+# (`podman unshare chown -R 1000:1000 data`, see docs/services.md). If the
+# probe shows an EMPTY Config.User (root, jellyfin case), add
+# `user: "1000:1000"` + PUID/PGID=1000 env here and keep the chown ritual.
+# data/configs holds settings.yml + the built-in user DB + nightly DB
+# backups + generated keys (irreplaceable — backup-stirling-pdf-data.sh);
+# data/storage holds user-saved files. 4g memory limit (upstream
+# recommendation): the JVM heap defaults to ~25% of the limit, and the
+# LibreOffice/OCR subprocesses run OUTSIDE the JVM — watch for OOM-kills on
+# large scans.
+
+services:
+  stirling-pdf:
+    image: docker.io/stirlingtools/stirling-pdf:3.3.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      # kills the PostHog/Scarf telemetry
+      SYSTEM_ENABLEANALYTICS: "false"
+      # must match the public URL Caddy serves
+      SYSTEM_BACKENDURL: https://stirling.sseifried.link
+      SYSTEM_FRONTENDURL: https://stirling.sseifried.link
+      # loginMethod=all: OIDC + the app's password form (break-glass via
+      # /login?all); ssoAutoLogin sends browsers straight to Authelia
+      SECURITY_ENABLELOGIN: "true"
+      SECURITY_LOGINMETHOD: "all"
+      SECURITY_SSOAUTOLOGIN: "true"
+      # native Authelia OIDC client (issuer discovery; the callback URL is
+      # fixed by Spring Security: /login/oauth2/code/<provider>)
+      SECURITY_OAUTH2_ENABLED: "true"
+      SECURITY_OAUTH2_PROVIDER: "stirling"
+      SECURITY_OAUTH2_ISSUER: https://authelia.sseifried.link
+      SECURITY_OAUTH2_CLIENTID: "stirling-pdf"
+      SECURITY_OAUTH2_SCOPES: "openid, profile, email"
+      # LDAP uid (sseifried) becomes the local username
+      SECURITY_OAUTH2_USEASUSERNAME: "preferred_username"
+      SECURITY_OAUTH2_AUTOCREATEUSER: "true"
+      SECURITY_OAUTH2_BLOCKREGISTRATION: "false"
+    volumes:
+      - ./data/configs:/configs
+      - ./data/logs:/logs
+      - ./data/customFiles:/customFiles
+      - ./data/pipeline:/pipeline
+      - ./data/storage:/storage
+      # extra OCR languages (deu.traineddata); probe at first start: if the
+      # image's bundled eng.traineddata lives elsewhere and OCR fails, drop
+      # this bind (an empty mount hides the bundled data) — docs/services.md
+      - ./data/tessdata:/usr/share/tessdata
+    networks:
+      caddy-proxy:
+        aliases:
+          - stirling
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/v1/info/status"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+networks:
+  caddy-proxy:
+    external: true
