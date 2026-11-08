@@ -369,6 +369,16 @@ Notes:
   token). A mangled client secret shows as "client secret did not match" at
   the token endpoint instead — CF form-mangles `+`/`/` in base64 secrets,
   use hex (`openssl rand -hex 24`).
+- **431 Request Header Fields Too Large after a successful Access login** —
+  Authelia's `server.buffers.read` (default 4096) caps the header block of
+  Caddy's forward-auth subrequest: browser Cookie (`CF_Authorization` ~1 KiB
+  after Access login) + `Cf-Access-Jwt-Assertion` (~1 KiB) + `X-Forwarded-*`
+  ≈ 4.3 KiB > 4 KiB → Authelia 431s, Caddy relays (the 35-byte text/plain
+  body is Authelia's; Node's raw 431 has no body). Fix:
+  `server.buffers.read: 16384` in `authelia/config/configuration.yml`
+  (PR #63). Diagnose with Caddy: global `servers { log_credentials }` +
+  site `log` shows the real Cookie size; `upstream roundtrip` DEBUG shows
+  the subrequest headers.
 - **`http://<published-hostname>` → 400 Bad Request** — the request reaches
   the origin through the tunnel with `X-Forwarded-Proto: http` and the wall
   refuses it (Authelia: "Target URL ... has an insecure scheme 'http'",
