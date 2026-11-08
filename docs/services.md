@@ -995,16 +995,30 @@ records this stack ever creates.
    `authelia/provision-authelia-secrets.sh` (Bitwarden
    `authelia-oidc-cloudflare-secret`). Requires the portal public → do this
    after the tunnel is up.
-3. Access → **Applications**: self-hosted `wanderer.sseifried.link`
-   (session duration default 24h).
+3. Access → **Applications**: self-hosted public hostname
+   `wanderer.sseifried.link` (session duration default 24h), identity
+   provider: **Authelia only**, **Apply instant authentication: on**
+   (single IdP → browsers redirect straight to the Authelia login, no
+   Cloudflare login page).
 4. Access **policy** on the app: action **Accept**, usage **Login** with
-   the Authelia IdP. No email-allowlist condition (user decision: the gate
-   is the Authelia login itself — only authorized LDAP accounts exist),
-   no WARP/service tokens, no email-OTP.
+   the Authelia IdP, condition: **email domain `@sseifried.link`** — the
+   only LDAP `mail` domain (single-user stack; the partner's `@gmx.at`
+   address left with the account). No per-address allowlist, no
+   WARP/service tokens, no email-OTP: the gate is the Authelia login
+   itself (now `two_factor`) — the domain condition only mirrors the
+   directory.
 5. Zone → SSL/TLS → Edge Certificates → **Always Use HTTPS: on** —
    `http://<published>` requests otherwise reach the origin through the
    tunnel with `X-Forwarded-Proto: http` and the wall 400s them
    (Authelia rejects insecure redirect targets, fail-closed).
+
+> **The Access application IS the gate:** deleting the app (or its policy)
+> leaves the published tunnel hostname reachable by anyone — the tunnel
+> route alone gates nothing; only the Authelia wall stays (observed
+> 2026-11-08: app absent → unauthenticated edge requests hit the origin
+> wall directly, no `cdn-cgi/access/login` challenge). Verify after any
+> dashboard change: `curl -sI https://wanderer.sseifried.link` (public
+> path) → 302 to `green-mouse-0fd5.cloudflareaccess.com/cdn-cgi/access/login/...`.
 
 ### First run (server)
 
