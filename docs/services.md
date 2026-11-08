@@ -708,13 +708,14 @@ first login. `loginMethod=all` keeps the app's password form reachable at
 Authelia — one portal login end-to-end. No `access_control` rule: rules
 apply only to walled (forward-auth) apps.
 
-**Runs as uid/gid 1000** (upstream docs; probe before the first start:
-`podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'`
-→ `1000`). Container uid 1000 maps into the subuid range — chown `data/`
-once before first start (`podman unshare chown -R 1000:1000 data`,
-navidrome ritual). If the probe shows an **empty** `Config.User` (root,
-jellyfin case), add `user: "1000:1000"` + `PUID`/`PGID=1000` env to
-`compose.yaml` and keep the chown ritual.
+**Runs as uid/gid 1000, on purpose:** the image's `Config.User` is
+**empty** (probe 2026-11-08: `podman image inspect
+docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'`
+→ empty — root, the jellyfin case; the upstream docs claim uid 1000, the
+s6 entrypoint only setuid's the app via `PUID`/`PGID`), so `compose.yaml`
+pins `user: "1000:1000"` + `PUID`/`PGID=1000` env. Container uid 1000 maps
+into the subuid range — chown `data/` once before first start
+(`podman unshare chown -R 1000:1000 data`, navidrome ritual).
 
 Secrets: `stirling-pdf/.env.secret` (gitignored, 0600, provisioned by
 `provision-stirling-pdf-secrets.sh` from Bitwarden) —
@@ -756,8 +757,8 @@ The steps below run in the service checkout — on the server that is the
 ```bash
 cd stirling-pdf
 podman pull docker.io/stirlingtools/stirling-pdf:3.3.0
-podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'  # expect 1000 (see above)
-free -h  # confirm headroom for the 4g limit
+podman image inspect docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'  # probed 2026-11-08: empty (root) — see the uid note above
+free -h  # probed 2026-11-08: 15 GiB total, ~13 GiB available — 4g limit has headroom
 mkdir -p data/configs data/logs data/customFiles data/pipeline data/storage data/tessdata
 podman unshare chown -R 1000:1000 data
 ```
