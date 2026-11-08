@@ -20,13 +20,20 @@
 	}
 }
 
-# Shared wildcard-cert config for all TLS sites
+# Shared wildcard-cert config for all TLS sites.
+# resolvers: the DNS-01 propagation check defaults to querying the zone's
+# authoritative NS directly; Cloudflare NS hostnames rotate over many anycast
+# IPs and a degraded PoP (port 53 timeout/REFUSED) from this network makes
+# every check time out ("timed out waiting for record to fully propagate").
+# Setting a recursive resolver (plugin README) switches the check to 1.1.1.1,
+# which is reachable and sees Cloudflare's publishes instantly.
 (tls) {
 	tls {
 		issuer acme {
 			email {env.ACME_EMAIL}
 			dir {env.ACME_CA}
 			dns cloudflare {env.CF_API_TOKEN}
+			resolvers 1.1.1.1
 		}
 	}
 }
