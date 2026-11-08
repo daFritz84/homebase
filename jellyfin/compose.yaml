@@ -9,11 +9,12 @@
 # The official image runs as root (Config.User empty — verified via
 # `podman image inspect jellyfin/jellyfin:12.4 --format "{{.Config.User}}"`),
 # and we keep it: under rootless Podman container root maps to host `chef`,
-# and only that mapping carries chef's supplementary groups — the render node
-# /dev/dri/renderD128 is root:render 660, so VAAPI works ONLY through the
-# root→chef mapping; a uid-1000 (subuid) process cannot open it. Hence NO
-# `user:` directive (unlike navidrome). Data dirs are host-user-owned — no
-# `podman unshare chown` ritual (homeassistant pattern).
+# the only mapping that can carry chef's supplementary groups to the render
+# node /dev/dri/renderD128 (root:render 660) — see the group_add note under
+# `devices:` for the keep-groups requirement. A uid-1000 (subuid) process
+# cannot open it. Hence NO `user:` directive (unlike navidrome). Data dirs
+# are host-user-owned — no `podman unshare chown` ritual (homeassistant
+# pattern).
 # VAAPI: the image ships the Intel VA-API stack inside the self-contained
 # jellyfin-ffmpeg prefix (/usr/lib/jellyfin-ffmpeg/lib/dri: iHD + i965
 # drivers, plus libva/libva-drm/libigdgmm/libigfxcmrt/libdrm_intel) —
@@ -32,6 +33,15 @@ services:
       - no-new-privileges=true
     devices:
       - /dev/dri
+    # Rootless Podman drops the process's supplementary groups by default, so
+    # the render group never reaches the container: /dev/dri/renderD128 shows
+    # as nobody:nogroup (host root:render is unmapped in chef's userns) and
+    # ffmpeg fails "No VA display found" (DAC: 660, owner/group unmapped).
+    # keep-groups passes chef's groups through: render maps to the unmapped
+    # 65534 (nogroup) — exactly the node's group — so group-rw opens it.
+    # Verified: ffmpeg -vaapi_device hwupload on the bundled iHD driver.
+    group_add:
+      - keep-groups
     volumes:
       - ./data:/config
       - ./cache:/cache
