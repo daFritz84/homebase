@@ -24,9 +24,10 @@ homeassistant:
 # authelia/provision-authelia-secrets.sh). discovery_url uses the public URL:
 # HA is host-networked, AdGuard split DNS resolves it, TLS via Caddy.
 # roles.user set => identities in neither group are REJECTED — admins-only,
-# reproducing the old wall rule (group:homebase-admins); revisit for Phase 2
-# (uid=partner). default_redirect sends browsers straight to Authelia; the
-# break-glass HA login form stays reachable at /?skip_oidc_redirect=true.
+# reproducing the old wall rule (group:homebase-admins); the stack is
+# single-user (uid=partner removed 2026-11-08). default_redirect sends
+# browsers straight to Authelia; the break-glass HA login form stays
+# reachable at /?skip_oidc_redirect=true.
 auth_oidc:
   client_id: 'homeassistant'
   client_secret: !secret ha_oidc_client_secret
