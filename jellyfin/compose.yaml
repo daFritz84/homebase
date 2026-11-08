@@ -41,10 +41,12 @@ services:
         aliases:
           - jellyfin
     healthcheck:
-      # The image's built-in HEALTHCHECK curls $HEALTHCHECK_URL
-      # (http://localhost:8096/health) — that endpoint needs an api_key and
-      # answers 401, so curl -f fails; the web root serves the login page
-      # (200). curl ships in the image (verified).
+      # Web root: Jellyfin 12.4 answers 302 -> /web/ (login/setup page);
+      # curl -f accepts 3xx, so this passes (verified: exit 0, container
+      # healthy). The image's built-in HEALTHCHECK curls $HEALTHCHECK_URL
+      # (http://localhost:8096/health) — 200 on 12.4 (no api_key needed
+      # anymore, unlike 10.x), but the compose healthcheck is explicit and
+      # independent of the image's env. curl ships in the image (verified).
       test: ["CMD", "curl", "-fsS", "http://localhost:8096/"]
       interval: 15s
       retries: 10
