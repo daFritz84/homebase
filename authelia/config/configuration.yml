@@ -12,11 +12,12 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
 #     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
-#     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH env vars (.env.secret, written by
+#     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH / STIRLING_OIDC_CLIENT_SECRET_HASH
+#     env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
 #     "configuration environment variable not expected". Missing env var ->
@@ -151,6 +152,30 @@ identity_providers:
         access_token_signed_response_alg: 'none'
         userinfo_signed_response_alg: 'none'
         token_endpoint_auth_method: 'client_secret_post'
+      - client_id: 'stirling-pdf'
+        client_name: 'Stirling PDF'
+        # argon2 digest injected from .env.secret by the template filter
+        # (STIRLING_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh);
+        # the RAW secret goes to stirling-pdf/.env.secret as
+        # SECURITY_OAUTH2_CLIENTSECRET (provision-stirling-pdf-secrets.sh)
+        client_secret: '{{ env "STIRLING_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
+        consent_mode: 'auto'
+        # Stirling requests exactly openid/profile/email
+        scopes: ['openid', 'profile', 'email']
+        redirect_uris:
+          # Spring Security's fixed OIDC callback path:
+          # /login/oauth2/code/<provider> (provider = SECURITY_OAUTH2_PROVIDER
+          # in stirling-pdf/compose.yaml)
+          - 'https://stirling.sseifried.link/login/oauth2/code/stirling'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # Spring Security authenticates at the token endpoint with HTTP Basic
+        # (its default; homeassistant/wanderer use post)
+        token_endpoint_auth_method: 'client_secret_basic'
       - client_id: 'wanderer'
         client_name: 'Wanderer (PocketBase OIDC SSO)'
         # argon2 digest injected from .env.secret by the template filter
@@ -232,11 +257,12 @@ access_control:
   # No `networks` definitions: they are only consumed by the `networks`
   # criteria of rules, and no rule references one — LAN-only exposure is
   # enforced by AdGuard split DNS + the VPN, not by Authelia policy.
-  # No bypass rules for authelia./homepage./homeassistant.: rules are only
-  # evaluated for forward-auth requests, and no Caddy site block forward-auths
-  # those domains (authelia serves its own portal — its endpoints are exempt
-  # from ACL; Homepage and Home Assistant are native OIDC clients, gated by
-  # their clients' authorization_policy + the app-side role checks).
+  # No bypass rules for authelia./homepage./homeassistant./stirling.: rules
+  # are only evaluated for forward-auth requests, and no Caddy site block
+  # forward-auths those domains (authelia serves its own portal — its
+  # endpoints are exempt from ACL; Homepage, Home Assistant and Stirling PDF
+  # are native OIDC clients, gated by their clients' authorization_policy +
+  # the app-side role checks).
   rules:
     # walled apps. two_factor ENFORCED: Bitwarden passkey (primary) + TOTP
     # (backup) — with zero registered methods the login's 2FA step presents

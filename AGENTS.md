@@ -20,7 +20,9 @@ podman-compose@<project>`**. Runbook: `deploy` skill.
 
 `caddy`→`@caddy` · `adguard-home`→`@adguard-home` · `homepage`→`@homepage` ·
 `wanderer`→`@wanderer` (`wanderer/data/`) · `navidrome`→`@navidrome` (`navidrome/data/navidrome.db`) ·
-`jellyfin`→`@jellyfin` (`jellyfin/data/`) · `homeassistant`→`@homeassistant`
+`jellyfin`→`@jellyfin` (`jellyfin/data/`) · `stirling-pdf`→`@stirling-pdf`
+(`stirling-pdf/data/configs/` user DB+keys, `stirling-pdf/data/storage/`) ·
+`homeassistant`→`@homeassistant`
 (`config/.storage/`, `secrets.yaml`) · `authelia`→`@authelia` (LDAP users, sqlite factors,
 `config/keys/`) · `cloudflared`→`@cloudflared` (tunnel credentials JSON, gitignored).
 Images, tags, ports: read each `compose.yaml`.

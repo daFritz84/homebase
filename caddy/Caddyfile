@@ -122,6 +122,17 @@ jellyfin.sseifried.link {
 	reverse_proxy jellyfin:8096
 }
 
+# Stirling PDF (PDF editor/processor) — NO forward_auth wall, on purpose: the
+# REST API authenticates with per-request API keys that can never pass a
+# forward_auth cookie wall (navidrome/jellyfin doctrine); Stirling is a native
+# Authelia OIDC client (like Home Assistant): login redirects to Authelia
+# (SSO auto-login), the app's password form stays break-glass at /login?all.
+# LAN/VPN-only exposure (AdGuard split DNS) — never add to the tunnel allowlist.
+stirling.sseifried.link {
+	import tls
+	reverse_proxy stirling:8080
+}
+
 # AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)
 adguard.sseifried.link {
 	import tls
