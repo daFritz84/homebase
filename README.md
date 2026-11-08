@@ -11,7 +11,7 @@ The full setup guide lives in [`docs/`](docs/) — this README is a quick entry 
 | Service    | Compose file                       | Purpose                                    |
 | ---------- | ---------------------------------- | ------------------------------------------ |
 | Caddy      | `caddy/compose.yaml`              | Reverse proxy + TLS (LE DNS-01/Cloudflare) |
-| Adguard Home | `adguard-home/compose.yaml`        | DNS server with blocking & filtering       |
+| AdGuard Home | `adguard-home/compose.yaml`        | DNS server with blocking & filtering       |
 | Homepage   | `homepage/compose.yaml`             | Service dashboard                          |
 | Wanderer   | `wanderer/compose.yaml`             | Self-hosted trail database                 |
 | Navidrome  | `navidrome/compose.yaml`            | Personal music streaming (Subsonic API)    |
@@ -51,7 +51,7 @@ See [`docs/host-setup.md`](docs/host-setup.md) for the full installation and con
 ## Documentation
 
 - [`docs/host-setup.md`](docs/host-setup.md) — provision the host: Proxmox VM & iGPU passthrough, Debian base, packages, firewall, static IP, Podman, Git deploy keys, Bitwarden CLI
-- [`docs/services.md`](docs/services.md) — deploy the stack: shared podman-compose systemd pattern, Caddy, Cockpit, Adguard Home, Wanderer, Navidrome, Jellyfin, Home Assistant, Authelia (SSO), Cloudflare Tunnel
+- [`docs/services.md`](docs/services.md) — deploy the stack: shared podman-compose systemd pattern, Caddy, Cockpit, AdGuard Home, Wanderer, Navidrome, Jellyfin, Home Assistant, Authelia (SSO), Cloudflare Tunnel
 - [`docs/operations.md`](docs/operations.md) — operate the stack: update procedure, data backups, inspiration
 - [`homepage/config/README.md`](homepage/config/README.md) — Homepage dashboard configuration
 - [`docs/podman.md`](docs/podman.md) — Podman cheatsheet
