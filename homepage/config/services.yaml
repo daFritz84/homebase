@@ -32,6 +32,14 @@
         container: wanderer_web_1
         showStats: true
 
+    - Navidrome:
+        icon: navidrome
+        href: https://navidrome.sseifried.link
+        description: Personal music streaming (Subsonic API)
+        server: homebase-podman
+        container: navidrome_navidrome_1
+        showStats: true
+
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
         icon: home-assistant

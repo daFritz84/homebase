@@ -14,6 +14,7 @@ systemctl --user status podman-compose@caddy
 systemctl --user status podman-compose@adguard-home
 systemctl --user status podman-compose@homepage
 systemctl --user status podman-compose@wanderer
+systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -39,6 +40,25 @@ The script stops the service, archives `data/` to
 `~/.local/share/wanderer/backups/wanderer-data-<date>.tar.gz`, and restarts it.
 Cadence: after every significant trail import, at least monthly. Restore: stop the
 service, `rm -rf data && tar xzf <archive>`, start.
+
+### Navidrome data backups
+
+Navidrome's `navidrome/data/navidrome.db` is the irreplaceable,
+secret-bearing artifact: users, playlists, share tokens and the
+auto-generated session/password secrets live in the SQLite DB. Run from the
+service checkout on the server:
+
+```bash
+cd navidrome && ./backup-navidrome-data.sh
+```
+
+The script stops the service, archives `data/` (excluding the rebuildable
+`data/cache`) to
+`~/.local/share/navidrome/backups/navidrome-data-<date>.tar.gz`, and restarts
+it. Cadence: after admin creation and every significant playlist/share change,
+at least monthly — and **before every image bump** (DB migrations are
+forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+`podman unshare chown 1000:1000 data`, start.
 
 ### Home Assistant config backups
 
