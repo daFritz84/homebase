@@ -24,17 +24,20 @@ set -euo pipefail
 #
 # The OIDC client secrets for Homepage (item: authelia-oidc-homepage-secret),
 # Home Assistant (item: authelia-oidc-homeassistant-secret), Wanderer (item:
-# authelia-oidc-wanderer-secret) and Cloudflare Access (item:
-# authelia-oidc-cloudflare-secret) are fetched/generated and argon2-hashed
+# authelia-oidc-wanderer-secret), Cloudflare Access (item:
+# authelia-oidc-cloudflare-secret) and Stirling PDF (item:
+# authelia-oidc-stirling-pdf-secret) are fetched/generated and argon2-hashed
 # via the authelia image: the digests go into .env.secret as
 # HOMEPAGE_OIDC_CLIENT_SECRET_HASH / HA_OIDC_CLIENT_SECRET_HASH /
-# WANDERER_OIDC_CLIENT_SECRET_HASH / CLOUDFLARE_OIDC_CLIENT_SECRET_HASH
-# (injected into configuration.yml by the template filter — the committed
-# file keeps its placeholders), the RAW values are printed for homepage/.env
-# as HOMEPAGE_OIDC_CLIENT_SECRET, for homeassistant/config/secrets.yaml as
-# ha_oidc_client_secret (gitignored — never commit), for the PocketBase admin
-# UI (Wanderer SSO), and for the Cloudflare Access OIDC IdP form (dashboard)
-# as the client secret.
+# WANDERER_OIDC_CLIENT_SECRET_HASH / CLOUDFLARE_OIDC_CLIENT_SECRET_HASH /
+# STIRLING_OIDC_CLIENT_SECRET_HASH (injected into configuration.yml by the
+# template filter — the committed file keeps its placeholders), the RAW
+# values are printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET, for
+# homeassistant/config/secrets.yaml as ha_oidc_client_secret (gitignored —
+# never commit), for the PocketBase admin UI (Wanderer SSO), for the
+# Cloudflare Access OIDC IdP form (dashboard) as the client secret, and for
+# stirling-pdf/.env.secret as SECURITY_OAUTH2_CLIENTSECRET (fetched from the
+# same Bitwarden item by provision-stirling-pdf-secrets.sh).
 #
 # The Authelia login password (LDIF_LOGIN_PASSWORD for uid=sseifried, for
 # the LDIF userPassword) is generated once, kept in .env.secret across
@@ -129,6 +132,7 @@ provision_oidc_client authelia-oidc-homepage-secret Homepage OIDC_HOMEPAGE_SECRE
 provision_oidc_client authelia-oidc-homeassistant-secret Home-Assistant OIDC_HA_SECRET OIDC_HA_HASH
 provision_oidc_client authelia-oidc-wanderer-secret Wanderer OIDC_WANDERER_SECRET OIDC_WANDERER_HASH
 provision_oidc_client authelia-oidc-cloudflare-secret Cloudflare-Access OIDC_CF_SECRET OIDC_CF_HASH
+provision_oidc_client authelia-oidc-stirling-pdf-secret Stirling-PDF OIDC_STIRLING_SECRET OIDC_STIRLING_HASH
 
 # --- Authelia login passwords (LDIF userPassword): generated once, preserved
 # across re-runs from the existing env file; render-ldif.sh hashes them ---
@@ -159,6 +163,7 @@ fi
   printf 'HA_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_HA_HASH}"
   printf 'WANDERER_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_WANDERER_HASH}"
   printf 'CLOUDFLARE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_CF_HASH}"
+  printf 'STIRLING_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_STIRLING_HASH}"
   printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
@@ -179,6 +184,10 @@ echo "    -> paste the RAW OIDC value as the client secret of the Authelia OIDC"
 echo "       IdP in the Cloudflare Access dashboard (Access → Authentication →"
 echo "       OIDC IdPs; client_id cloudflare-access):"
 echo "       ${OIDC_CF_SECRET}"
+echo "    -> the RAW OIDC value for Stirling PDF (client_id stirling-pdf) lands"
+echo "       in stirling-pdf/.env.secret as SECURITY_OAUTH2_CLIENTSECRET via"
+echo "       provision-stirling-pdf-secrets.sh (same Bitwarden item):"
+echo "       ${OIDC_STIRLING_SECRET}"
 if [ "${LOGIN_PW_GENERATED}" = 1 ]; then
   echo "    -> NEW Authelia login password — save to Bitwarden (authelia-login-password):"
   echo "       ${LDIF_LOGIN_PASSWORD}"
