@@ -362,6 +362,13 @@ Notes:
   `authelia-oidc-cloudflare-secret`; the email-domain condition must cover
   the Authelia `email` claim (the LDAP `mail` attribute in
   `authelia/config/bootstrap.ldif`).
+- **Access federation login "User email was not returned"** — Access reads
+  claims from the ID token only (CF "Claims Hydration" bug, see
+  [services.md](services.md) "Federation notes"): the `cloudflare-access`
+  client must keep `claims_policy: 'cloudflare-access'` (email in the ID
+  token). A mangled client secret shows as "client secret did not match" at
+  the token endpoint instead — CF form-mangles `+`/`/` in base64 secrets,
+  use hex (`openssl rand -hex 24`).
 - **`http://<published-hostname>` → 400 Bad Request** — the request reaches
   the origin through the tunnel with `X-Forwarded-Proto: http` and the wall
   refuses it (Authelia: "Target URL ... has an insecure scheme 'http'",
