@@ -82,6 +82,48 @@ copy the sqlite file into the `authelia_authelia-db` volume and
 `config/keys/` while authelia is still stopped, then `podman-compose up -d`
 the rest.
 
+### Authelia MFA recovery
+
+Second factors (Bitwarden passkey primary + TOTP backup, see
+[services.md](services.md), "MFA enrollment") are enforced: `two_factor` on
+every walled-app rule and all four OIDC clients. Recovery paths:
+
+- **Passkey lost** (vault lockout, extension breakage): at the 2FA step pick
+  **TOTP** — no server action needed. Re-enroll a passkey from the portal
+  afterwards (the elevation OTP is written to
+  `~/src/homebase/authelia/config/notifier/notification.txt` — `tail -f` it
+  over SSH **before** starting the ceremony, the code TTL is ~2 minutes).
+- **Both factors lost** (e.g. Bitwarden + phone gone): SSH in (always
+  available; Cockpit and the HA break-glass form are unaffected), then from
+  `~/src/homebase/authelia`:
+
+```bash
+systemctl --user stop podman-compose@authelia
+podman run --rm --env-file .env.secret -v "$PWD/config:/config" \
+  -e X_AUTHELIA_CONFIG_FILTERS=template docker.io/authelia/authelia:4.39.28 \
+  authelia storage user webauthn delete sseifried --all --config /config/configuration.yml
+podman run --rm --env-file .env.secret -v "$PWD/config:/config" \
+  -e X_AUTHELIA_CONFIG_FILTERS=template docker.io/authelia/authelia:4.39.28 \
+  authelia storage user totp delete sseifried --config /config/configuration.yml
+systemctl --user start podman-compose@authelia
+```
+
+  Log in at the portal — the `two_factor` policy forces re-registration at
+  login.
+- **Self-service delete** (factor present, want to remove it): portal device
+  management requires elevation; the OTP code is written to
+  `~/src/homebase/authelia/config/notifier/notification.txt` — read it over
+  SSH.
+- **DB restore**: `backup-authelia.sh` archive +
+  `./provision-authelia-secrets.sh` (unlocked vault) to recreate
+  `.env.secret` (the storage encryption key is Bitwarden-only) — see
+  "Authelia backups" above.
+
+Factor verification (passkey): the same `podman run` pattern with
+`authelia storage user webauthn list sseifried` (stop the unit first on
+`SQLITE_BUSY` — the service holds the DB). 4.39 has no `totp list` — verify
+TOTP in the portal UI and by completing a test login that selects TOTP.
+
 ### Update the stack
 
 1. Update the repository
