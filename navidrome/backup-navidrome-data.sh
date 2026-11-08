@@ -36,7 +36,10 @@ echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving data/ (excluding data/cache) -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" --exclude='data/cache' data/
+# podman unshare: the app creates dirs (data/plugins) mode 700 owned by
+# container uid 1000 (= subuid 100999) — the host user cannot read them;
+# namespace uid 0 has DAC override over the whole mapped range.
+podman unshare tar czf "${ARCHIVE}" --exclude='data/cache' data/
 
 trap - EXIT
 restore_service

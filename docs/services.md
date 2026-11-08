@@ -488,7 +488,7 @@ podman unshare chown 1000:1000 data
 
 ```bash
 podman-compose up -d
-podman exec navidrome_navidrome_1 curl -fsS http://localhost:4533/ping  # -> OK
+podman exec navidrome_navidrome_1 curl -fsS http://localhost:4533/ping  # -> "." (the body is a single dot)
 podman healthcheck run navidrome_navidrome_1                            # exit 0
 ```
 
