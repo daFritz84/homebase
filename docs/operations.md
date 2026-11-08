@@ -14,6 +14,7 @@ systemctl --user status podman-compose@caddy
 systemctl --user status podman-compose@adguard-home
 systemctl --user status podman-compose@homepage
 systemctl --user status podman-compose@wanderer
+systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -39,6 +40,27 @@ The script stops the service, archives `data/` to
 `~/.local/share/wanderer/backups/wanderer-data-<date>.tar.gz`, and restarts it.
 Cadence: after every significant trail import, at least monthly. Restore: stop the
 service, `rm -rf data && tar xzf <archive>`, start.
+
+### Navidrome data backups
+
+Navidrome's `navidrome/data/navidrome.db` is the irreplaceable,
+secret-bearing artifact: users, playlists, share tokens and the
+auto-generated session/password secrets live in the SQLite DB. Run from the
+service checkout on the server:
+
+```bash
+cd navidrome && ./backup-navidrome-data.sh
+```
+
+The script stops the service, archives `data/` (excluding the rebuildable
+`data/cache`) to
+`~/.local/share/navidrome/backups/navidrome-data-<date>.tar.gz`, and restarts
+it. Cadence: after admin creation and every significant playlist/share change,
+at least monthly — and **before every image bump** (DB migrations are
+forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+`podman unshare chown 1000:1000 data`, start. The script (re)starts the
+containers directly, so the unit shows `inactive` afterwards —
+`systemctl --user start podman-compose@navidrome` to re-adopt the pod.
 
 ### Home Assistant config backups
 
@@ -249,6 +271,21 @@ Notes:
   `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
   Note: `redir` does not support negated named matchers (`@!name`/`!@name`); use an explicit
   `not` matcher.
+- **New `*.sseifried.link` site: cert never issues, log loops `timed out
+  waiting for record to fully propagate` (last error: `<nil>`)** — with no
+  `resolvers` configured, certmagic's propagation check queries the zone's
+  authoritative NS directly; Cloudflare NS hostnames rotate over many
+  anycast IPs and a degraded PoP (port 53 timeout/REFUSED from this
+  network) makes every check time out. The fix is in the Caddyfile `(tls)`
+  snippet: `resolvers 1.1.1.1` (recursive check; plugin README). Verify
+  the TXT publishes fine: `dig +norecurse TXT
+  _acme-challenge.<host>.sseifried.link @<zone-NS-IP>`. Secondary effect:
+  each failed attempt's cleanup deletes the TXT, seeding a **1800s NXDOMAIN
+  negative cache** (SOA minimum TTL) at recursive resolvers, so attempts
+  keep failing after the primary cause is fixed — break the loop by
+  stopping the unit until the TTL expires, or plant a short-TTL keeper TXT
+  (`_acme-challenge.<host>`, any content, TTL 60) so the name never goes
+  NXDOMAIN; delete the keeper once the cert issues.
 - **502s / `connection refused` from containers to host services after network changes**
   (`podman system migrate`, network recreation) — netavark rules/subnets go stale
   (the `caddy-proxy` subnet changed from 10.88.0.0/16 to 10.89.0.0/24 once). Try
