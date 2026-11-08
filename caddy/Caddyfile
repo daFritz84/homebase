@@ -85,7 +85,7 @@ authelia.sseifried.link {
 	reverse_proxy authelia:9091
 }
 
-# Wanderer (trail database) — behind the Authelia wall (one_factor for
+# Wanderer (trail database) — behind the Authelia wall (two_factor for
 # homebase-admins; Wanderer's own account login stays on top of it)
 wanderer.sseifried.link {
 	import tls
@@ -95,7 +95,7 @@ wanderer.sseifried.link {
 	}
 }
 
-# AdGuard Home — behind the Authelia wall (one_factor for homebase-admins)
+# AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)
 adguard.sseifried.link {
 	import tls
 	route {
