@@ -412,8 +412,7 @@ podman run -d --rm --name pb-admin-proxy --network wanderer-internal \
   account), open it in the admin UI, copy its **Provider ID** (= Authelia's
   `sub` claim), attach that credential (auth-method `oidc` + Provider ID)
   to your EXISTING account, delete the fresh account. Your trails stay
-  on the old account. The partner needs no migration — their first OIDC
-  login creates their account (username `partner`, own trails).
+  on the old account.
 - **Optional:** disable PocketBase password auth (users → Options →
   Identity/Password toggle) once SSO works — keep it as break-glass if
   Authelia-down app access matters.
@@ -562,9 +561,9 @@ authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `one_factor` for `group:homebase-admins` on AdGuard and for
-`group:homebase-admins` **or** `group:homebase-users` on Wanderer (the
-internet-published app, shared with the partner); no rules for the Authelia
+**default deny**; `two_factor` for `group:homebase-admins` on AdGuard and
+Wanderer (the internet-published app — admins-only since the partner
+account was removed, 2026-11-08); no rules for the Authelia
 portal (its endpoints are exempt from ACL), Homepage (no forward_auth — its
 own OIDC gate enforces auth: Authelia authorizes the `homepage` OIDC client,
 and Homepage admits any identity Authelia authorizes) or Home Assistant (no
@@ -574,14 +573,17 @@ old wall rule). Cockpit has **no rule and no forward_auth** — it stays
 outside Authelia entirely. Session cookie domain `sseifried.link` → one
 login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`,
 `wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
-    `cloudflare-access` (Cloudflare Access federation — the raw client
-    secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
-    `scopes: openid/email/profile`). Second factors: TOTP + WebAuthn passkeys, enrolled at
-`https://authelia.sseifried.link/portal` — **optional for now**: policies run
-`one_factor`; flip the walled-app rules + the `homepage`/`homeassistant`/
-`cloudflare-access` OIDC clients' `authorization_policy` to `two_factor`
-after enrolling (passkeys work through the tunnel: rp_id `sseifried.link`,
-real domain).
+`cloudflare-access` (Cloudflare Access federation — the raw client
+secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
+`scopes: openid/email/profile`). Second factors: **enforced** — every rule
+and all four OIDC clients run `two_factor`: a **WebAuthn passkey stored in
+Bitwarden** (primary, registered from the desktop Chrome/Edge Bitwarden
+extension; asserted via the vault on mobile) plus a **TOTP backup factor**,
+enrolled at `https://authelia.sseifried.link/portal` — see "MFA enrollment".
+`enable_passkey_login` stays false: login remains password + second factor,
+not passwordless. Passkeys work through the tunnel: rp_id `sseifried.link`,
+real domain. Recovery: [operations.md](operations.md), "Authelia MFA
+recovery".
 
 ### First run
 
@@ -604,10 +606,9 @@ cd authelia
    `CLOUDFLARE_OIDC_CLIENT_SECRET_HASH`, injected into `configuration.yml`
    by the `template` filter (indexed `AUTHELIA_..._CLIENTS_0_...` env
    overrides are NOT supported — 4.39 rejects them), so the committed file
-   keeps its placeholders — and the generated Authelia **login passwords**
-   (`LDIF_LOGIN_PASSWORD` for `uid=sseifried`, `LDIF_PARTNER_PASSWORD` for
-   `uid=partner`, printed on first generation: save them to Bitwarden as
-   `authelia-login-password` / `authelia-partner-login-password`). It also
+   keeps its placeholders — and the generated Authelia **login password**
+   (`LDIF_LOGIN_PASSWORD` for `uid=sseifried`, printed on first generation:
+   save it to Bitwarden as `authelia-login-password`). It also
    prints the **raw** OIDC client secrets: for `homepage/.env` as
    `HOMEPAGE_OIDC_CLIENT_SECRET`, for `homeassistant/config/secrets.yaml`
    as `ha_oidc_client_secret` (gitignored — never commit), and as the
@@ -734,19 +735,53 @@ rule still denies it). Grant membership with `ldapmodify`:
 ```bash
 podman exec -i authelia_openldap_1 ldapmodify -x \
   -D "cn=admin,dc=sseifried,dc=link" -W <<EOF
-dn: cn=homebase-users,ou=groups,dc=sseifried,dc=link
+dn: cn=homebase-admins,ou=groups,dc=sseifried,dc=link
 changetype: modify
 add: member
-member: uid=partner,ou=users,dc=sseifried,dc=link
+member: uid=<uid>,ou=users,dc=sseifried,dc=link
 EOF
 ```
 
 Password changes = re-render (`./render-ldif.sh`) + `ldapmodify`
 (`replace: userPassword` with the freshly rendered `{SSHA}` hash).
-`uid=partner` (homebase-users) is in the LDIF — the Wanderer-sharing partner
-account (internet access via Cloudflare Access, see "Cloudflare Tunnel");
-its login password is Bitwarden `authelia-partner-login-password`, handed
-out out-of-band.
+
+### MFA enrollment
+
+Two factors are enrolled at `https://authelia.sseifried.link/portal` (login:
+`uid=sseifried`, password = Bitwarden `authelia-login-password`); the
+`two_factor` policies (all walled-app rules + all four OIDC clients) make
+them mandatory at login:
+
+- **Passkey (primary):** desktop Chrome/Edge with the Bitwarden extension
+  (vault unlocked, WebAuthn/passkey support enabled in the extension
+  settings). Portal → Security Keys → Register → description `Bitwarden`.
+  Device registration requires **elevation** (4.38+): a one-time code is
+  sent via the notifier — with the filesystem notifier it lands in
+  `authelia/config/notifier/notification.txt` on the server. Open a second
+  SSH window and `tail -f` that file **before** starting the ceremony (the
+  elevation OTP TTL is ~2 minutes), submit the code promptly, and the
+  browser WebAuthn picker offers **Bitwarden** — the credential is created
+  inside the vault (discoverable + backup-eligible, so the mobile Bitwarden
+  app can assert it after vault sync).
+- **TOTP (backup):** portal → Register TOTP → elevation (same OTP
+  mechanism) → scan the QR with an authenticator app → **save the secret to
+  a Bitwarden item** (`authelia-totp-sseifried`, per the existing
+  convention) → confirm the code. Losing the passkey → log in with TOTP;
+  losing both → CLI factor reset, see [operations.md](operations.md),
+  "Authelia MFA recovery".
+
+Config notes (`webauthn:` in `configuration.yml`):
+`attestation_conveyance_preference: 'none'` (Bitwarden self-attests); the
+FIDO metadata service stays **disabled** (the Bitwarden AAGUID is not in
+MDS3 — enabling `validate_entry` would likely reject registration);
+`prohibit_backup_eligibility` must stay false (Bitwarden passkeys are
+synced/backup-eligible). `enable_passkey_login` stays false: login remains
+password + second factor, not passwordless.
+
+Verify server-side: `authelia storage user webauthn list sseifried` (CLI
+pattern in [operations.md](operations.md), "Authelia MFA recovery"; 4.39 has
+no `totp list` — check TOTP in the portal UI). After enrollment run
+`./backup-authelia.sh` — the sqlite DB now holds the irreplaceable factors.
 
 ### HA SSO (hass-oidc-auth)
 
@@ -767,8 +802,7 @@ ha_oidc_client_secret` in gitignored `secrets.yaml`).
 - **Admins-only policy** (reproduces the old wall rule
   `group:homebase-admins`): `roles.admin: 'homebase-admins'` **and**
   `roles.user: 'homebase-admins'` — configuring `roles.user` makes the
-  component **reject** identities in neither group. Phase 2 `uid=partner`
-  (homebase-users) stays out of HA until a role is added then.
+  component **reject** identities in neither group.
 - **Account migration (done):** `features.automatic_user_linking: true`
   (TEMPORARY) links the first OIDC login to the existing HA user whose
   username credential exactly matches the `preferred_username` claim (LDAP
@@ -811,13 +845,17 @@ Home Assistant keeps serving (native OIDC client, not walled) — only its
 login redirect to Authelia fails; existing HA sessions keep working, and
 the break-glass form is `http://127.0.0.1:8123/?skip_oidc_redirect=true`
 from the host. Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
-`systemctl --user restart podman-compose@authelia`. Lockout guard: TOTP
-secrets live in Bitwarden, factors in the sqlite DB, users in LDAP — the
-factors DB and users are covered by `backup-authelia.sh`, the
+`systemctl --user restart podman-compose@authelia`. Lockout guard: the
+passkey lives in the **Bitwarden vault** and the TOTP secret in a Bitwarden
+item (`authelia-totp-sseifried`), the factor records in the sqlite DB, users
+in LDAP — the factors DB and users are covered by `backup-authelia.sh`, the
 `AUTHELIA_STORAGE_ENCRYPTION_KEY` that decrypts the factors DB is
 **Bitwarden-only** (not in the archive): a restore needs
 `./provision-authelia-secrets.sh` (unlocked vault) to recreate
 `.env.secret`, see [operations.md](operations.md), "Authelia backups".
+Losing both factors → [operations.md](operations.md), "Authelia MFA
+recovery" (SSH CLI reset); SSH, Cockpit and the HA break-glass form stay
+outside Authelia, so lockout is never total.
 
 ### 4.39 schema notes
 
@@ -876,7 +914,7 @@ files use the current (4.39.28) schema:
 
 ## Cloudflare Tunnel (cloudflared)
 
-Outbound-only remote access for the **work laptop + partner** without a VPN:
+Outbound-only remote access for the **work laptop** without a VPN:
 a locally-managed Cloudflare Tunnel publishes **only**
 `wanderer.sseifried.link` and `authelia.sseifried.link` (the portal is
 required: the wall redirects there and the Access federation login lives
@@ -885,7 +923,7 @@ federation only** (no email-OTP). Compose file: `cloudflared/compose.yaml`.
 Unit: `podman-compose@cloudflared` (shared pattern above).
 
 ```
-Work laptop / partner (public DNS, no VPN)
+Work laptop (public DNS, no VPN)
   │ https://wanderer.sseifried.link
   ▼
 Cloudflare Edge ── Access policy (Accept + Authelia IdP login)
@@ -992,17 +1030,6 @@ podman logs --tail=50 cloudflared_cloudflared_1   # connector registered
    cockpit.sseifried.link adguard.sseifried.link homepage.sseifried.link
    homeassistant.sseifried.link` → **NXDOMAIN** (cockpit guarantee).
 
-### Partner onboarding
-
-Browser → `https://wanderer.sseifried.link` → Access → Authelia login
-(`uid=partner`, password = Bitwarden `authelia-partner-login-password`,
-handed out out-of-band) → wall passes → Wanderer login page → **Authelia
-button** → account auto-created (username `partner`, own trails — private
-instance). After onboarding set `PUBLIC_DISABLE_SIGNUP: "true"` in
-`wanderer/compose.yaml`, commit and redeploy — email/password registration
-is no longer needed and the app is now internet-published (OIDC logins keep
-working; reversible).
-
 ### Rollback
 
 Dashboard: delete the public hostname(s) (DNS records) → stop the unit
@@ -1015,8 +1042,9 @@ changes: the LAN path never depended on the tunnel.
   authenticate). LAN, VPN, SSH, Cockpit unaffected — break-glass unchanged.
 - The portal is internet-published (inherent: the wall redirects + the
   federation login live there). The login page is the public auth surface;
-  Authelia `regulation` rate-limits it. `one_factor` kept per user decision —
-  flip to `two_factor` with the documented follow-up (enroll TOTP/passkeys).
+  Authelia `regulation` rate-limits it. Second factors are **enforced**
+  (`two_factor` on every rule and OIDC client — Bitwarden passkey + TOTP
+  backup, see "MFA enrollment").
 - Session lifetime: Access 24h vs `authelia_session` 12h/2h inactivity → the
   wall re-prompts at the portal after Authelia expiry. Expected.
 - PKCE: the `cloudflare-access` client requires `S256`; if the federation

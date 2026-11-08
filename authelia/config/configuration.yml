@@ -21,8 +21,7 @@
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
 #     "configuration environment variable not expected". Missing env var ->
 #     empty client_secret -> validation fails closed.
-#   - {REPLACE_ME} in bootstrap.ldif (three: cn=admin + uid=sseifried +
-#     uid=partner): {SSHA}
+#   - {REPLACE_ME} in bootstrap.ldif (two: cn=admin + uid=sseifried): {SSHA}
 #     hashes via slappasswd (slapd verifies LDIF passwords; osixia 1.5.0's
 #     OpenLDAP 2.4.57 cannot verify argon2) — ./render-ldif.sh fills them
 #     from .env.secret into the gitignored config/bootstrap.rendered.ldif
@@ -74,6 +73,13 @@ totp:
 webauthn:
   # rp_id is derived from the session cookie domain (sseifried.link)
   display_name: 'Homebase'
+  # Bitwarden passkeys self-attest — 'none' avoids indirect-attestation
+  # edge cases. The FIDO metadata service stays DISABLED (4.39 default):
+  # the Bitwarden AAGUID is not in MDS3, so enabling validate_entry would
+  # likely reject registration. prohibit_backup_eligibility must stay
+  # false (the default): Bitwarden passkeys are synced inside the vault
+  # (backup-eligible) — the mobile Bitwarden app asserts them after sync.
+  attestation_conveyance_preference: 'none'
 
 identity_providers:
   oidc:
@@ -92,7 +98,7 @@ identity_providers:
         # (HOMEPAGE_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh)
         client_secret: '{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}'
         public: false
-        authorization_policy: 'one_factor' # flip to two_factor after enrolling factors
+        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (after enrolling passkey + TOTP)
         consent_mode: 'auto'
         scopes:
           - 'openid'
@@ -114,7 +120,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip to two_factor with the other rules
+        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other rules)
         consent_mode: 'auto'
         scopes: ['openid', 'profile', 'email', 'groups']
         redirect_uris:
@@ -134,7 +140,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip with the others in the two_factor follow-up
+        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other clients)
         consent_mode: 'auto'
         # wanderer requests exactly openid/profile/email
         scopes: ['openid', 'profile', 'email']
@@ -155,7 +161,7 @@ identity_providers:
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
-        authorization_policy: 'one_factor' # flip with the others in the two_factor follow-up
+        authorization_policy: 'one_factor' # flip to two_factor in Phase 3 (with the other clients)
         consent_mode: 'auto'
         # the email claim feeds the Access policy email allowlist — the
         # policy email must equal the LDAP `mail` attribute exactly
@@ -209,19 +215,18 @@ access_control:
   # from ACL; Homepage and Home Assistant are native OIDC clients, gated by
   # their clients' authorization_policy + the app-side role checks).
   rules:
-    # walled apps. one_factor for now (no factors enrolled); flip these
-    # rules + the OIDC clients' authorization_policy to two_factor after
-    # enrolling TOTP + a passkey at the portal.
+    # walled apps. one_factor until the Bitwarden passkey (primary) + TOTP
+    # (backup) are enrolled at the portal (docs/services.md "MFA
+    # enrollment"); Phase 3 flips these rules + the OIDC clients'
+    # authorization_policy to two_factor.
     - domain: 'adguard.sseifried.link'
       policy: 'one_factor'
       subject: 'group:homebase-admins'
-    # Wanderer is also for the partner (uid=partner, homebase-users) — it is
-    # the one app published to the internet via the Cloudflare Tunnel
-    # (cloudflared/config.yml); AdGuard stays admins-only.
+    # Wanderer is the one app published to the internet via the Cloudflare
+    # Tunnel (cloudflared/config.yml); admins-only since the partner
+    # account was removed (2026-11-08, stack is single-user).
     - domain: 'wanderer.sseifried.link'
       policy: 'one_factor'
-      subject:
-        - 'group:homebase-admins'
-        - 'group:homebase-users'
+      subject: 'group:homebase-admins'
     # cockpit.sseifried.link: NO rule — the site has no forward_auth, Caddy
     # proxies it directly (PAM + TOTP), default-deny never applies
