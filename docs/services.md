@@ -1074,6 +1074,13 @@ changes: the LAN path never depended on the tunnel.
   wall re-prompts at the portal after Authelia expiry. Expected.
 - PKCE: the `cloudflare-access` client requires `S256`; if the federation
   test shows Access sends no PKCE, drop `require_pkce`.
+- Claims hydration: Access reads claims from the **ID token** and never calls
+  the UserInfo endpoint (known CF bug — Authelia guide
+  `integration/openid-connect/clients/cloudflare-zerotrust/`, tested
+  v4.39.28). 4.39's minimal ID token carries no email, so the federation
+  login fails with "User email was not returned" unless the client keeps
+  `claims_policy: 'cloudflare-access'` (id_token: `email`, `email_verified`,
+  `preferred_username` — the documented escape hatch, PR #61). Do not remove.
 - Real client IPs: cloudflared sends `X-Forwarded-For`; Caddy trusts the
   `caddy-proxy` CIDR (`servers { trusted_proxies static 10.89.0.0/24 }` in
   the Caddyfile global block — 2.11 IP-range-source syntax;
