@@ -302,9 +302,21 @@ Notes:
   netavark had registered for the `caddy-proxy` bridge; existing networks are
   not re-registered. The durable fix is architectural: bridge containers reach
   host services via `host.containers.internal` (pasta `--map-guest-addr` →
-  host loopback, firewalld-trusted), not the LAN IP — see
-  [services.md](services.md) "Split DNS" note. Verify from a bridge container:
-  `podman exec caddy curl -s -o /dev/null -w '%{http_code}' http://host.containers.internal:8095`.
+   host loopback, firewalld-trusted), not the LAN IP — see
+   [services.md](services.md) "Split DNS" note. Verify from a bridge container:
+   `podman exec caddy curl -s -o /dev/null -w '%{http_code}' http://host.containers.internal:8095`.
+ - **`host.containers.internal` flaky after reboots — works after `podman restart`,
+   breaks after container recreates; Caddy logs `lookup host.containers.internal:
+   i/o timeout`** — podman does NOT inject the name into `/etc/hosts` for containers
+   on user-defined networks (aardvark answers `NXDOMAIN` for
+   `host.containers.internal.dns.podman`), so the query leaks to upstream DNS where
+   the Fritzbox wildcard-answers with our public IPv6 — reachable only while that
+   answer is current (prefix changes at reboot). `caddy/compose.yaml` pins
+   `extra_hosts: host.containers.internal:169.254.1.2` (pasta `--map-guest-addr`).
+   If the relay itself is dead (every container gets `Network unreachable`/timeout
+   on `169.254.1.2:<port>` while pasta runs): stop all compose stacks — pasta exits
+   with the last container — then start them in dependency order (AdGuard, Authelia,
+   rest, Caddy last); the rootless netns is recreated fresh.
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.
