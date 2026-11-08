@@ -708,14 +708,19 @@ first login. `loginMethod=all` keeps the app's password form reachable at
 Authelia — one portal login end-to-end. No `access_control` rule: rules
 apply only to walled (forward-auth) apps.
 
-**Runs as uid/gid 1000, on purpose:** the image's `Config.User` is
-**empty** (probe 2026-11-08: `podman image inspect
+**Root entrypoint, app drops to uid 1000 — NO `user:` directive:** the
+image's `Config.User` is empty (probe 2026-11-08: `podman image inspect
 docker.io/stirlingtools/stirling-pdf:3.3.0 --format '{{.Config.User}}'`
-→ empty — root, the jellyfin case; the upstream docs claim uid 1000, the
-s6 entrypoint only setuid's the app via `PUID`/`PGID`), so `compose.yaml`
-pins `user: "1000:1000"` + `PUID`/`PGID=1000` env. Container uid 1000 maps
-into the subuid range — chown `data/` once before first start
-(`podman unshare chown -R 1000:1000 data`, navidrome ritual).
+→ empty) and the s6 entrypoint **must start as root**: with
+`user: "1000:1000"` it dies crash-looping on `ln: failed to create
+symbolic link '/usr/local/bin/diagnostics': Permission denied` (observed
+2026-11-08, first start). The entrypoint writes `/usr/local/bin` symlinks
+and chowns the app dirs as root, then setuid's the Java app to
+`PUID`/`PGID` (image ENV default 1000, pinned in `compose.yaml`). Under
+rootless Podman container root maps to host `chef` (jellyfin mapping);
+the app process runs as uid 1000 = subuid range — chown `data/` once
+before first start (`podman unshare chown -R 1000:1000 data`, navidrome
+ritual).
 
 Secrets: `stirling-pdf/.env.secret` (gitignored, 0600, provisioned by
 `provision-stirling-pdf-secrets.sh` from Bitwarden) —
