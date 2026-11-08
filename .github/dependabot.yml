@@ -6,6 +6,7 @@ updates:
       - "/homeassistant"
       - "/homepage"
       - "/wanderer"
+      - "/navidrome"
       - "/caddy"
       - "/adguard-home"
       - "/authelia"
