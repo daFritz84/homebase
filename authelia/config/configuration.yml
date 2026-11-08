@@ -163,8 +163,8 @@ identity_providers:
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
-        # the email claim feeds the Access policy email allowlist — the
-        # policy email must equal the LDAP `mail` attribute exactly
+        # the email claim feeds the Access policy email-domain condition
+        # (@sseifried.link) — the claim comes from the LDAP `mail` attribute
         scopes: ['openid', 'email', 'profile']
         redirect_uris:
           # Zero Trust team domain (green-mouse-0fd5) — Access redirects the
