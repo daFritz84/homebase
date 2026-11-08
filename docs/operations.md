@@ -15,6 +15,7 @@ systemctl --user status podman-compose@adguard-home
 systemctl --user status podman-compose@homepage
 systemctl --user status podman-compose@wanderer
 systemctl --user status podman-compose@navidrome
+systemctl --user status podman-compose@jellyfin
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -61,6 +62,29 @@ forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
 `podman unshare chown 1000:1000 data`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards —
 `systemctl --user start podman-compose@navidrome` to re-adopt the pod.
+
+### Jellyfin data backups
+
+Jellyfin's `jellyfin/data/` is the irreplaceable, secret-bearing artifact:
+`jellyfin.xml` (incl. the VAAPI/transcoding settings), users, password
+hashes, API keys and the plugin DB. Run from the service checkout on the
+server:
+
+```bash
+cd jellyfin && ./backup-jellyfin-data.sh
+```
+
+The script stops the service, archives `data/` (owner-only, mode `0600`;
+the sibling `cache/` is rebuildable and excluded by construction) to
+`~/.local/share/jellyfin/backups/jellyfin-data-<date>.tar.gz`, and restarts
+it. No `podman unshare` needed — the image runs as root and rootless Podman
+maps container root to the host user, so `data/` is host-user-owned
+(services.md, "Jellyfin (Media Server)"). Cadence: right after admin
+creation and after library/user/plugin changes, at least monthly — and
+**before every image bump** (DB migrations are forward-only). Restore: stop
+the service, `rm -rf data && tar xzf <archive>`, start. The script
+(re)starts the containers directly, so the unit shows `inactive` afterwards
+— `systemctl --user start podman-compose@jellyfin` to re-adopt the pod.
 
 ### Home Assistant config backups
 
@@ -179,6 +203,12 @@ podman-compose pull
 cd ../wanderer
 podman-compose pull
 
+cd ../navidrome
+podman-compose pull
+
+cd ../jellyfin
+podman-compose pull
+
 cd ../homeassistant
 podman-compose pull
 
@@ -201,6 +231,8 @@ systemctl --user restart podman-compose@caddy
 systemctl --user restart podman-compose@adguard-home
 systemctl --user restart podman-compose@homepage
 systemctl --user restart podman-compose@wanderer
+systemctl --user restart podman-compose@navidrome
+systemctl --user restart podman-compose@jellyfin
 systemctl --user restart podman-compose@homeassistant
 systemctl --user restart podman-compose@authelia
 systemctl --user restart podman-compose@cloudflared
@@ -231,6 +263,8 @@ podman logs --tail=50 <caddy-container>
 podman logs --tail=50 <adguard-home-container>
 podman logs --tail=50 <homepage-container>
 podman logs --tail=50 <wanderer-web-container>
+podman logs --tail=50 navidrome_navidrome_1
+podman logs --tail=50 jellyfin_jellyfin_1
 podman logs --tail=50 <homeassistant-container>
 podman logs --tail=50 authelia_authelia_1
 podman logs --tail=50 authelia_openldap_1
@@ -433,10 +467,10 @@ Notes:
 
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
-[host-setup.md](host-setup.md)) starts all seven user units — `podman-compose@caddy`,
+[host-setup.md](host-setup.md)) starts all nine user units — `podman-compose@caddy`,
 `podman-compose@adguard-home`, `podman-compose@homepage`, `podman-compose@wanderer`,
-`podman-compose@homeassistant`, `podman-compose@authelia` and
-`podman-compose@cloudflared` — no manual action is needed.
+`podman-compose@navidrome`, `podman-compose@jellyfin`, `podman-compose@homeassistant`,
+`podman-compose@authelia` and `podman-compose@cloudflared` — no manual action is needed.
 
 ## Appstore as Inspiration
 
