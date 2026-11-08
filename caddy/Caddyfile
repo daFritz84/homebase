@@ -111,6 +111,17 @@ navidrome.sseifried.link {
 	reverse_proxy navidrome:4533
 }
 
+# Jellyfin (media server) — NO forward_auth wall, on purpose: Jellyfin
+# API/mobile clients (Infuse, Swiftfin, …) send X-Emby-Token / Authorization
+# headers per request and can never pass a forward_auth cookie wall;
+# Jellyfin's own login gates access. LAN/VPN-only exposure (AdGuard split
+# DNS) — never add to the tunnel allowlist. Caddy passes WebSockets through
+# by default (required by the Jellyfin web client).
+jellyfin.sseifried.link {
+	import tls
+	reverse_proxy jellyfin:8096
+}
+
 # AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)
 adguard.sseifried.link {
 	import tls

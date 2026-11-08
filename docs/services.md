@@ -11,6 +11,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [AdGuard Home (DNS-Server)](#adguard-home-dns-server)
 - [Wanderer (Trail Database)](#wanderer-trail-database)
 - [Navidrome (Music Streaming)](#navidrome-music-streaming)
+- [Jellyfin (Media Server)](#jellyfin-media-server)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
 - [Cloudflare Tunnel (cloudflared)](#cloudflare-tunnel-cloudflared)
@@ -519,6 +520,132 @@ stay disabled by default (`ND_SCANNER_SCHEDULE` = `0`; cron/`@every` syntax) —
 new files need a manual scan (Settings → Start Scan) unless the schedule is
 set later. The in-container file watcher is on by default
 (`ND_SCANNER_WATCHERWAIT` `5s`).
+
+## Jellyfin (Media Server)
+
+Media server ([jellyfin](https://jellyfin.org)) — movies & TV library with
+transcoding. Compose file: `jellyfin/compose.yaml`. Unit:
+`podman-compose@jellyfin` (shared pattern above).
+
+Single container on `caddy-proxy` (alias `jellyfin`), no host ports — served
+by Caddy at `https://jellyfin.sseifried.link`.
+
+**No Authelia wall, on purpose:** Jellyfin API/mobile clients (Infuse,
+Swiftfin, …) authenticate with `X-Emby-Token` / `Authorization` headers per
+request and can never pass a `forward_auth` cookie wall — Jellyfin's own
+login is the gate. Exposure is LAN/VPN-only via AdGuard split DNS;
+`*.sseifried.link` is already covered by the existing wildcard rewrite, so
+AdGuard needs **no change**. `jellyfin.sseifried.link` is absent from
+`cloudflared/config.yml` — **never add it** (same doctrine as
+cockpit/adguard/homepage/homeassistant/navidrome). Caddy passes WebSockets
+through by default (required by the Jellyfin web client).
+
+**Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
+official image has an empty `Config.User` (probe:
+`podman image inspect jellyfin/jellyfin:12.4 --format "{{.Config.User}}"` →
+empty). Under rootless Podman, container root maps to host `chef`, the only
+mapping that can carry chef's supplementary groups to the render node
+`/dev/dri/renderD128` (`root:render 660`); a uid-1000 (subuid) process
+cannot open it. Consequence: `data/`/`cache/` are host-user-owned — **no
+`podman unshare chown` ritual** (homeassistant pattern).
+
+**`group_add: keep-groups` is required for VAAPI:** rootless Podman drops
+the process's supplementary groups by default, so the `render` group never
+reaches the container — `/dev/dri/renderD128` shows as `nobody:nogroup`
+(host `root:render` is unmapped in chef's userns) and ffmpeg fails with
+`No VA display found for device /dev/dri/renderD128` (DAC: mode 660,
+owner/group unmapped → 65534). `keep-groups` passes chef's groups through:
+`render` maps to the unmapped 65534 (`nogroup`) — exactly the node's group —
+so group-rw opens it. Verified: `ffmpeg -vaapi_device /dev/dri/renderD128
+... hwupload` succeeds on the bundled iHD driver; without the flag it fails.
+
+**VAAPI (Intel Quick Sync):** `devices: [/dev/dri]`. The iGPU is an
+**Intel HD Graphics 530 (Skylake, Gen9)** passed through to the VM
+(`lspci`: `Intel Corporation HD Graphics 530 (rev 06)`; see
+[host-setup.md](host-setup.md) "iGPU passthrough"). Gen9 codec set: H.264,
+HEVC 8-bit (encode+decode), MPEG-2, VP8/VP9 low-power decode — **no AV1**
+(Gen11+/TGL only). The image ships the Intel VA-API stack inside the
+self-contained jellyfin-ffmpeg prefix (probe:
+`ls /usr/lib/jellyfin-ffmpeg/lib/dri` → `iHD_drv_video.so` +
+`i965_drv_video.so`, plus `libva`/`libva-drm`/`libigdgmm`/`libigfxcmrt`/
+`libdrm_intel` in `/usr/lib/jellyfin-ffmpeg/lib`) — the system
+`/usr/lib/x86_64-linux-gnu/dri` does NOT exist in the image; ffmpeg finds
+its drivers via the bundled prefix, so no extra packages are needed.
+
+**Host prerequisite (one-time):** `chef` must be in the `render` group and
+the systemd **user manager** must pick it up — a plain re-login is not
+enough for the user manager, reboot the VM (all units autostart, `onboot`):
+
+```bash
+sudo usermod -aG render chef
+sudo reboot   # user manager + linger restart
+```
+
+Verify after reboot: `id chef` must list `render`. Without it the container's
+root mapping lacks the group and ffmpeg logs
+`/dev/dri/renderD128: Permission denied`.
+
+Data that cannot be rebuilt: `jellyfin/data/` — `jellyfin.xml` (incl. the
+VAAPI/transcoding settings), users, password hashes, API keys and the plugin
+DB. Covered by `backup-jellyfin-data.sh` (see
+[operations.md](operations.md), "Jellyfin data backups"); run it right after
+admin creation and **before every image bump** — DB migrations are
+forward-only. `cache/` (transcodes, artwork) is rebuildable.
+
+### First run
+
+The steps below run in the service checkout — on the server that is the
+`~/src/homebase` clone.
+
+1. Create the dirs (host-user-owned — no chown, see the root-mapping note
+   above):
+
+```bash
+cd jellyfin
+mkdir -p data cache media
+```
+
+2. Start and verify (the `caddy-proxy` network must exist —
+   `../caddy/ensure_proxy_network.sh`):
+
+```bash
+podman-compose up -d
+podman exec jellyfin_jellyfin_1 curl -fsS http://localhost:8096/   # web root -> 302 to /web/ (login/setup page)
+podman healthcheck run jellyfin_jellyfin_1                          # exit 0
+ls -l data                                                          # files owned by chef (root→chef mapping)
+```
+
+3. Open `https://jellyfin.sseifried.link` — the setup wizard creates the
+   admin, language, and the "Movies" + "Shows" libraries pointing at `/media`
+   (empty placeholder → a scan completes with zero items). Disable Jellyfin's
+   own remote connections (Settings → Network): the LAN path is Caddy.
+
+4. Enable VAAPI: Dashboard → Playback → Transcoding → Hardware acceleration
+   **VA-API**, device `/dev/dri/renderD128`, Intel presets; enable the codecs
+   the Gen9 iGPU supports (H.264, HEVC, MPEG-2, VP8/VP9 low-power — no AV1).
+   Save, restart the container. Prove it: force a transcode (web player,
+   quality below source) — the dashboard "Now Playing" shows
+   `(va-api)` and the CPU stays idle-ish.
+
+5. Deploy with the shared pattern above (unit: `podman-compose@jellyfin`):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@jellyfin
+```
+
+6. Back up right after admin creation (the DB now holds the secrets):
+   `./backup-jellyfin-data.sh`.
+
+### Media volume (follow-up)
+
+`./media` is a **placeholder** on the VM disk — do NOT put media there. Same
+plan as navidrome's music volume above: NFS export mounted on the VM (fstab +
+`x-systemd.automount`), then swap the single `./media:/media:ro` volume line
+in `jellyfin/compose.yaml` to the mount point; the mount dependency goes
+into a `RequiresMountsFor=<mount point>` drop-in for the generated
+`podman-compose@jellyfin` unit. Media files must be world-readable
+(NFS `root_squash` → the container reads via `o+r`).
 
 ## Home Assistant (Home Automation)
 

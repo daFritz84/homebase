@@ -33,7 +33,8 @@ jobs:
           # cloudflared needs no stub: no env_file (credentials.json is a
           # bind-mount, and volume targets need not exist for `config`)
           # navidrome needs no stub: no env_file (config lives in the image ENV)
-          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome; do
+          # jellyfin needs no stub: no env_file (config lives in data/jellyfin.xml)
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"
