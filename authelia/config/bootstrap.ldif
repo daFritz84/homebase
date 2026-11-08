@@ -2,9 +2,8 @@
 # ---
 # TEMPLATE — the {REPLACE_ME} userPassword placeholders below are deployment
 # secrets and are NEVER filled in this committed file. ./render-ldif.sh fills
-# them from .env.secret ({SSHA} hashes of LDAP_ADMIN_PASSWORD,
-# LDIF_LOGIN_PASSWORD and LDIF_PARTNER_PASSWORD) into the gitignored
-# config/bootstrap.rendered.ldif.
+# them from .env.secret ({SSHA} hashes of LDAP_ADMIN_PASSWORD and
+# LDIF_LOGIN_PASSWORD) into the gitignored config/bootstrap.rendered.ldif.
 # Apply the RENDERED file (and re-runnable with `ldapadd -c` for new entries;
 # existing entries are skipped with an "already exists" error). Run from the
 # authelia directory: the LDIF is piped from the host checkout, because the
@@ -34,10 +33,9 @@
 # storing the publicly committed literal as a plaintext login password.
 #
 # groupOfNames requires at least one member, so the admin is also a member of
-# homebase-users. The partner (uid=partner, homebase-users) is a third
-# inetOrgPerson entry below — re-running the ldapadd ritual creates the user,
-# but membership lives in the GROUP entry: ldapadd only issues ADD ops, so
-# the existing group add is skipped by -c and the new member: line is
+# homebase-users. Adding a user: re-running the ldapadd ritual creates the
+# user, but membership lives in the GROUP entry: ldapadd only issues ADD ops,
+# so the existing group add is skipped by -c and the new member: line is
 # silently NOT applied. Grant the membership with ldapmodify (changetype:
 # modify / add: member on the group DN) — see docs/services.md, "User
 # management (LDIF ritual)".
@@ -87,25 +85,6 @@ changetype: add
 objectClass: groupOfNames
 cn: homebase-admins
 member: uid=sseifried,ou=users,dc=sseifried,dc=link
-
-# Partner — homebase-users only (AdGuard/HA stay admins-only); the one app
-# shared with the partner is Wanderer (published via the Cloudflare Tunnel,
-# gated by the Authelia federation login — no Access email-allowlist, user
-# decision). mail is the Authelia `email` claim (identity shown in Access
-# sessions and app accounts), kept as the partner's real address.
-dn: uid=partner,ou=users,dc=sseifried,dc=link
-changetype: add
-objectClass: inetOrgPerson
-uid: partner
-cn: Stefan Seifried
-sn: Seifried
-givenName: Stefan
-displayName: Stefan Seifried
-mail: s.seifried@gmx.at
-# {scheme} prefix -> slapd rejects the unknown scheme on add (fail-closed).
-# Hash of LDIF_PARTNER_PASSWORD (Bitwarden authelia-partner-login-password)
-# via render-ldif.sh — hand the password to the partner out-of-band.
-userPassword: {REPLACE_ME}
 
 dn: cn=homebase-users,ou=groups,dc=sseifried,dc=link
 changetype: add

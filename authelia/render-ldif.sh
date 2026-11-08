@@ -33,8 +33,7 @@ command -v python3 >/dev/null || { echo "[ERR] python3 not found (SSHA hashing)"
 get() { grep "^$1=" .env.secret | head -n1 | cut -d= -f2-; }
 ADMIN_PW="$(get LDAP_ADMIN_PASSWORD)"
 LOGIN_PW="$(get LDIF_LOGIN_PASSWORD)"
-PARTNER_PW="$(get LDIF_PARTNER_PASSWORD)"
-[ -n "${ADMIN_PW}" ] && [ -n "${LOGIN_PW}" ] && [ -n "${PARTNER_PW}" ] || { echo "[ERR] LDAP_ADMIN_PASSWORD / LDIF_LOGIN_PASSWORD / LDIF_PARTNER_PASSWORD missing in .env.secret"; exit 1; }
+[ -n "${ADMIN_PW}" ] && [ -n "${LOGIN_PW}" ] || { echo "[ERR] LDAP_ADMIN_PASSWORD / LDIF_LOGIN_PASSWORD missing in .env.secret"; exit 1; }
 
 hash() { python3 -c 'import base64, hashlib, os, sys
 pw = sys.argv[1].encode()
@@ -42,19 +41,17 @@ salt = os.urandom(4)
 print("{SSHA}" + base64.b64encode(hashlib.sha1(pw + salt).digest() + salt).decode())' "$1"; }
 ADMIN_HASH="$(hash "${ADMIN_PW}")"
 LOGIN_HASH="$(hash "${LOGIN_PW}")"
-PARTNER_HASH="$(hash "${PARTNER_PW}")"
 
 umask 077
-python3 - "${ADMIN_HASH}" "${LOGIN_HASH}" "${PARTNER_HASH}" <<'PY'
+python3 - "${ADMIN_HASH}" "${LOGIN_HASH}" <<'PY'
 import sys
-ah, lh, ph = sys.argv[1], sys.argv[2], sys.argv[3]
+ah, lh = sys.argv[1], sys.argv[2]
 t = open('config/bootstrap.ldif').read()
-# positional: placeholders appear in file order — cn=admin, uid=sseifried,
-# uid=partner (assert pins that order; adding a user = extend this split)
+# positional: placeholders appear in file order — cn=admin, uid=sseifried
+# (assert pins that order; adding a user = extend this split)
 parts = t.split('userPassword: {REPLACE_ME}')
-assert len(parts) == 4, f"expected 3 userPassword placeholders, found {len(parts) - 1}"
-out = (parts[0] + 'userPassword: ' + ah + parts[1] + 'userPassword: ' + lh
-       + parts[2] + 'userPassword: ' + ph + parts[3])
+assert len(parts) == 3, f"expected 2 userPassword placeholders, found {len(parts) - 1}"
+out = (parts[0] + 'userPassword: ' + ah + parts[1] + 'userPassword: ' + lh + parts[2])
 # the template header documents {REPLACE_ME} in prose — only active LDIF
 # lines (non-#) must be placeholder-free
 assert all('{REPLACE_ME}' not in l for l in out.splitlines() if not l.lstrip().startswith('#')), "unfilled placeholder on an active LDIF line"
