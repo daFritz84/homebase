@@ -20,13 +20,20 @@
 	}
 }
 
-# Shared wildcard-cert config for all TLS sites
+# Shared wildcard-cert config for all TLS sites.
+# resolvers: the DNS-01 propagation check defaults to querying the zone's
+# authoritative NS directly; Cloudflare NS hostnames rotate over many anycast
+# IPs and a degraded PoP (port 53 timeout/REFUSED) from this network makes
+# every check time out ("timed out waiting for record to fully propagate").
+# Setting a recursive resolver (plugin README) switches the check to 1.1.1.1,
+# which is reachable and sees Cloudflare's publishes instantly.
 (tls) {
 	tls {
 		issuer acme {
 			email {env.ACME_EMAIL}
 			dir {env.ACME_CA}
 			dns cloudflare {env.CF_API_TOKEN}
+			resolvers 1.1.1.1
 		}
 	}
 }
@@ -93,6 +100,15 @@ wanderer.sseifried.link {
 		import authelia-fa
 		reverse_proxy wanderer:3000
 	}
+}
+
+# Navidrome (music streaming) — NO forward_auth wall, on purpose: Subsonic API
+# clients (Symfonium, dSub, …) send their own Basic auth per request and can
+# never pass a forward_auth cookie wall; Navidrome's own login gates access.
+# LAN/VPN-only exposure (AdGuard split DNS) — never add to the tunnel allowlist.
+navidrome.sseifried.link {
+	import tls
+	reverse_proxy navidrome:4533
 }
 
 # AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)
