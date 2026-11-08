@@ -37,6 +37,16 @@
 
 server:
   address: 'tcp://:9091/'
+  # buffers.read default is 4096 bytes and caps the request header block the
+  # Go server accepts (431 above it). The Cloudflare Access federation blows
+  # past it: Caddy's forward-auth subrequest carries the browser Cookie
+  # (CF_Authorization ~1 KiB after Access login) + Cf-Access-Jwt-Assertion
+  # (~1 KiB) + X-Forwarded-* => ~4.3 KiB > 4 KiB => Authelia answers 431 and
+  # Caddy relays it (wanderer 431 after Access login, observed 2026-11-08;
+  # threshold probed: 200/400 at ~3.5 KiB, 431 at ~4.5 KiB). 16 KiB = 4x
+  # observed usage.
+  buffers:
+    read: 16384
 
 log:
   level: 'info'
