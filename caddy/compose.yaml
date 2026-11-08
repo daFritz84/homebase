@@ -17,6 +17,15 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Pin the host-loopback relay explicitly: podman does NOT add
+    # host.containers.internal to /etc/hosts for containers on user-defined
+    # networks, and aardvark answers NXDOMAIN for it — the name then leaks to
+    # upstream DNS where the Fritzbox wildcard-answers with our public IPv6
+    # (works only while that prefix is current -> flaky 502s after reboots).
+    # 169.254.1.2 is pasta's --map-guest-addr in the rootless netns, relayed
+    # to the host loopback (see Caddyfile "AdGuard pattern" comments).
+    extra_hosts:
+      - "host.containers.internal:169.254.1.2"
     networks:
       - caddy-proxy
 
