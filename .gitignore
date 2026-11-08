@@ -25,6 +25,11 @@ homeassistant/config/home-assistant_v2.db*
 # plugins) — data, not code; covered by backup-wanderer-data.sh
 wanderer/data/
 
+# Navidrome runtime data (navidrome.db: users, playlists, share tokens and the
+# auto-generated session/password secrets; plus rebuildable caches: scans,
+# transcodes) — data, not code; covered by backup-navidrome-data.sh
+navidrome/data/
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/

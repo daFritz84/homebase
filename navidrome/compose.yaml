@@ -1,0 +1,47 @@
+# navidrome — personal music streaming server (Subsonic API, https://www.navidrome.org)
+# ---
+# No Authelia wall, on purpose: Subsonic API clients (Symfonium, dSub, …) send
+# their own Basic auth per request and can never pass a forward_auth cookie
+# wall; Navidrome's own login gates access. LAN/VPN-only exposure via AdGuard
+# split DNS — NEVER add navidrome.sseifried.link to cloudflared/config.yml
+# (same doctrine as cockpit/adguard/homepage/homeassistant).
+# The image runs as root (no USER directive in its Dockerfile; PUID/PGID are
+# ignored), so the upstream-recommended posture applies: `user:` +
+# ND_ENFORCENONROOTUSER (the app itself refuses uid 0). Container uid 1000
+# maps into the subuid range — chown data/ once before first start
+# (`podman unshare chown 1000:1000 data`, see docs/services.md).
+# Folders/port come from the image ENV (ND_DATAFOLDER=/data,
+# ND_MUSICFOLDER=/music, ND_PORT=4533) — no folder env needed here.
+# ./music is a PLACEHOLDER bind mount: swap the line to the NFS mount point
+# when the real music volume is decided (follow-up in docs/services.md).
+
+services:
+  navidrome:
+    image: navidrome/navidrome:0.64.2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    user: "1000:1000"
+    environment:
+      ND_ENFORCENONROOTUSER: "true"
+    volumes:
+      - ./data:/data
+      - ./music:/music:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - navidrome
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4533/ping"]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+networks:
+  caddy-proxy:
+    external: true

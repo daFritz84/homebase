@@ -32,7 +32,8 @@ jobs:
           touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret
           # cloudflared needs no stub: no env_file (credentials.json is a
           # bind-mount, and volume targets need not exist for `config`)
-          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared; do
+          # navidrome needs no stub: no env_file (config lives in the image ENV)
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"
