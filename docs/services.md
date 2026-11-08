@@ -543,12 +543,21 @@ through by default (required by the Jellyfin web client).
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
 `podman image inspect jellyfin/jellyfin:12.4 --format "{{.Config.User}}"` →
-empty). Under rootless Podman, container root maps to host `chef`, and only
-that mapping inherits chef's supplementary groups — the render node
-`/dev/dri/renderD128` is `root:render 660`, so VAAPI works ONLY through the
-root→chef mapping; a uid-1000 (subuid) process cannot open it. Consequence:
-`data/`/`cache/` are host-user-owned — **no `podman unshare chown` ritual**
-(homeassistant pattern).
+empty). Under rootless Podman, container root maps to host `chef`, the only
+mapping that can carry chef's supplementary groups to the render node
+`/dev/dri/renderD128` (`root:render 660`); a uid-1000 (subuid) process
+cannot open it. Consequence: `data/`/`cache/` are host-user-owned — **no
+`podman unshare chown` ritual** (homeassistant pattern).
+
+**`group_add: keep-groups` is required for VAAPI:** rootless Podman drops
+the process's supplementary groups by default, so the `render` group never
+reaches the container — `/dev/dri/renderD128` shows as `nobody:nogroup`
+(host `root:render` is unmapped in chef's userns) and ffmpeg fails with
+`No VA display found for device /dev/dri/renderD128` (DAC: mode 660,
+owner/group unmapped → 65534). `keep-groups` passes chef's groups through:
+`render` maps to the unmapped 65534 (`nogroup`) — exactly the node's group —
+so group-rw opens it. Verified: `ffmpeg -vaapi_device /dev/dri/renderD128
+... hwupload` succeeds on the bundled iHD driver; without the flag it fails.
 
 **VAAPI (Intel Quick Sync):** `devices: [/dev/dri]`. The iGPU is an
 **Intel HD Graphics 530 (Skylake, Gen9)** passed through to the VM
