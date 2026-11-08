@@ -24,6 +24,8 @@ ARCHIVE="${BACKUP_DIR}/stirling-pdf-data-$(date +%F-%H%M).tar.gz"
 
 [ -d data ] || { echo "[ERR] No data/ directory next to compose.yaml — run from the service checkout"; exit 1; }
 
+# Archive contains secrets (user DB, generated keys) — owner-only.
+umask 077
 mkdir -p "${BACKUP_DIR}"
 
 restore_service() {
