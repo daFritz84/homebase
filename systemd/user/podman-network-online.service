@@ -1,0 +1,13 @@
+[Unit]
+Description=Wait for host network before rootless podman (pasta) starts
+Documentation=file:///home/chef/src/homebase/docs/operations.md
+After=basic.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=300
+ExecStart=/bin/sh -c 'for i in $(seq 1 120); do ip route get 1.1.1.1 >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
+
+[Install]
+WantedBy=default.target

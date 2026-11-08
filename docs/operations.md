@@ -350,7 +350,14 @@ Notes:
    If the relay itself is dead (every container gets `Network unreachable`/timeout
    on `169.254.1.2:<port>` while pasta runs): stop all compose stacks — pasta exits
    with the last container — then start them in dependency order (AdGuard, Authelia,
-   rest, Caddy last); the rootless netns is recreated fresh.
+   rest, Caddy last); the rootless netns is recreated fresh. Root cause: linger
+   starts the user manager before the host has an IP/default route, so pasta
+   (`--config-net`) copies a route-less config. Durable fix: the
+   `podman-network-online` gate unit + `podman-compose@` drop-in in `systemd/`
+   (install via `./systemd/install-user-units.sh`, see
+   [services.md](services.md) "Boot ordering gate") order every compose unit
+   behind a usable default route. If it recurs after the gate is installed,
+   check `systemctl --user status podman-network-online`.
 - **All rootless containers fail with `newgidmap: write to gid_map failed`** — duplicate
   ranges in `/etc/subgid` (e.g. from appending a range that already existed). Keep exactly
   one `chef:<range>` line matching `/etc/subuid`, then `podman system migrate`.

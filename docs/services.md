@@ -47,6 +47,31 @@ For the unit to work outside a login session, linger must be enabled once
 sudo loginctl enable-linger 'chef'
 ```
 
+### Boot ordering gate (required)
+
+Linger starts the user manager at boot **before the host network is up**. The first
+container then creates the rootless netns and pasta copies an address-less, route-less
+host config, so `host.containers.internal` (`169.254.1.2`) and all outbound traffic
+from bridge containers are dead until the stacks are recreated (see
+[operations.md](operations.md) "pasta relay dead after reboot").
+
+The repo tracks a user-scope oneshot gate (`systemd/user/podman-network-online.service`,
+waits for a usable default route) plus a drop-in that orders every
+`podman-compose@<project>` instance behind it
+(`systemd/user/podman-compose@.service.d/network-online.conf`). Install once, as the
+service user, from the repo root:
+
+```bash
+./systemd/install-user-units.sh
+```
+
+Verify:
+
+```bash
+systemctl --user is-enabled podman-network-online
+systemctl --user show podman-compose@caddy -p After | tr ' ' '\n' | grep podman-network-online
+```
+
 Inspect the resulting pod with podman:
 
 ```bash
