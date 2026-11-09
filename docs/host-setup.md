@@ -316,10 +316,11 @@ sudo apt install bitwarden-cli
 
 Jellyfin's media lives on the TrueNAS box as two subfolders of the SMB share `share`
 (`//truenas.local/share/Filme`, `//truenas.local/share/Serien`). They are mounted
-**on demand** on the host via systemd automounts: mount on first access, unmount after
-60 s idle — the NAS can power off/spin down between uses. Containers see plain bind
-mounts (`/media/filme`, `/media/serien`, ro); the Jellyfin-side design and library
-setup are in [services.md](services.md) "Jellyfin → Media volume (CIFS automount)".
+**on demand** on the host via systemd automounts: mount on first access, host-side
+copies unmount after 60 s idle. Container-triggered mounts persist for the
+container's lifetime on kernel 6.12 (NAS power-management consequences + the
+disk-spin-down strategy): [services.md](services.md)
+"Jellyfin → Media volume (CIFS automount)".
 
 ### Packages
 
@@ -392,8 +393,9 @@ tuple is a single fstab line):
   systemd mounts; access from inside the container triggers it too).
 - `nofail` + automount — boot and the jellyfin unit are never blocked by NAS availability.
 - `x-systemd.mount-timeout=30` — bounded hang when the NAS is offline.
-- `x-systemd.idle-timeout=60` — unmount 60 s after last access; open files (playback)
-  keep the mount busy.
+- `x-systemd.idle-timeout=60` — unmount 60 s after last access (host-side copy;
+  open files, e.g. playback, keep the mount busy; the container's copy persists,
+  see the services.md link above).
 - `vers` omitted — kernel negotiates (Debian 13 default SMB2.1; TrueNAS min SMB2.0.2).
   Documented fallback: `vers=3.1.1`.
 
@@ -416,12 +418,14 @@ mount | grep cifs
 stat -c '%u %g %a' /srv/media/filme  # 1000 1000 750 (same for serien)
 sleep 65 && mount | grep cifs        # idle unmount
 ls /srv/media/filme                  # remounts
-# container-side trigger (production path) — with the rshared binds the
-# mount is visible in BOTH the container and the host mount table, and the
-# idle unmount propagates to both:
+# container-side trigger (production path): the kernel mounts in the
+# container's namespace; with the rshared binds the mount is visible in
+# the host mount table too. The container's copy persists (host expire
+# only unmounts the host copy) — see services.md "Verified mount
+# lifecycle":
 podman exec jellyfin_jellyfin_1 ls /media/filme
 podman exec jellyfin_jellyfin_1 grep -c cifs /proc/mounts   # 2
-mount | grep -c cifs                                         # 2 (propagated)
+mount | grep -c cifs                                        # 2 (visible via rshared)
 ```
 
 Troubleshooting (NAS offline, credential rotation, mDNS/firewalld):

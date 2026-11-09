@@ -22,17 +22,19 @@
 # exist; ffmpeg finds its drivers via the bundled prefix. Host prerequisite:
 # chef in the `render` group + user manager restart (see docs/services.md).
 # Media: /srv/media/{filme,serien} are host-side CIFS automounts of the
-# TrueNAS SMB shares (fstab + x-systemd.automount, 60s idle-timeout — the
-# NAS spins down between uses; setup in docs/host-setup.md "NAS media
-# mounts"). The binds are ro AND rshared: kernel >= 6.12 mounts the CIFS
-# share on-demand in the ACCESSING process's namespace (cifs
-# upcall_target=app) — a container access would land in the container's
-# private tree where the host autofs expire never reaches it (NAS never
-# spins down). rshared propagates container-triggered mounts to the host
-# (idle expire applies, unmount propagates back) and host mounts into the
-# container. Verified on the server 2026-11-09. The generated
-# podman-compose@jellyfin unit needs the RequiresMountsFor drop-in
-# documented in docs/services.md "Media volume (CIFS automount)".
+# TrueNAS SMB shares (fstab + x-systemd.automount; setup in docs/host-setup.md
+# "NAS media mounts"). The binds are ro AND rshared: kernel >= 6.12 mounts
+# the CIFS share on-demand in the ACCESSING process's namespace (cifs
+# upcall_target=app); rshared makes that container-triggered mount visible
+# in the host mount table, where the autofs idle expire manages the host
+# copy. The container's own copy persists for the container's lifetime
+# (expire shrink + host umount are namespace-local, nsenter umount is
+# blocked by the autofs-managed dentry — all verified on the server
+# 2026-11-09), so the NAS's SMB session stays alive while Jellyfin runs:
+# disks spin down via TrueNAS idle settings, full NAS power-off needs the
+# jellyfin unit stopped. Details + consequences: docs/services.md
+# "Media volume (CIFS automount)". The generated podman-compose@jellyfin
+# unit needs the RequiresMountsFor drop-in documented there.
 
 services:
   jellyfin:
