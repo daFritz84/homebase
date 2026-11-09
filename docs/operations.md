@@ -530,18 +530,25 @@ Notes:
   - **Idle-timeout tuning**: `x-systemd.idle-timeout=60` in the fstab
     options; after editing: `sudo systemctl daemon-reload && sudo systemctl
     restart srv-media-{filme,serien}.automount`.
-  - **Periodic scans wake the NAS**: every scheduled Jellyfin library scan
-    remounts both shares, so the NAS wakes on the scan schedule — the idle
-    unmount only helps *between* scans. Pick the interval deliberately (e.g.
-    daily); do not claim "NAS fully idle" while scans are scheduled.
-  - **NAS never spins down / container mount never unmounts on idle** —
-    kernel ≥ 6.12 mounts the CIFS share on-demand in the *accessing*
-    process's namespace (`upcall_target=app`); with private bind
-    propagation the container-triggered mount is invisible to the host
-    autofs expire. Diagnose: compare
-    `podman exec jellyfin_jellyfin_1 grep -c cifs /proc/mounts` with
-    `mount | grep -c cifs` — a mismatch means propagation is broken (bind
-    lost `rshared` → `podman-compose up -d --force-recreate`).
+  - **Periodic scans wake the NAS disks**: every scheduled Jellyfin library
+    scan performs disk I/O on the NAS (the container mount is persistent,
+    see above), spinning the disks up on the scan schedule. Pick the
+    interval deliberately (e.g. daily); do not claim "NAS fully idle"
+    while Jellyfin and scans are running.
+  - **Container mount never unmounts on idle (by design on kernel 6.12)**
+    — the CIFS `upcall_target=app` mount lands in the container's
+    namespace and persists for the container's lifetime: the autofs
+    expire's shrink path and a plain host `umount` are namespace-local
+    (host copy only), and `nsenter` umount is refused on the
+    autofs-managed dentry (all verified 2026-11-09). The NAS's SMB
+    session therefore stays alive while Jellyfin runs — the NAS cannot
+    fully power off with the jellyfin unit up; **disk** spin-down works
+    via TrueNAS idle settings (idle session = no disk I/O). Full NAS
+    idle: `systemctl --user stop podman-compose@jellyfin`. Diagnose the
+    split view: `podman exec jellyfin_jellyfin_1 grep -c cifs
+    /proc/mounts` (container copies) vs `mount | grep -c cifs` (host
+    copies); a container count > 0 with host 0 is the normal persistent
+    state, not a fault.
 
 ## Power Outage Recovery
 
