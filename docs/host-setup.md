@@ -416,7 +416,12 @@ mount | grep cifs
 stat -c '%u %g %a' /srv/media/filme  # 1000 1000 750 (same for serien)
 sleep 65 && mount | grep cifs        # idle unmount
 ls /srv/media/filme                  # remounts
-podman exec jellyfin_jellyfin_1 ls /media/filme   # container-side trigger (production path)
+# container-side trigger (production path) — with the rshared binds the
+# mount is visible in BOTH the container and the host mount table, and the
+# idle unmount propagates to both:
+podman exec jellyfin_jellyfin_1 ls /media/filme
+podman exec jellyfin_jellyfin_1 grep -c cifs /proc/mounts   # 2
+mount | grep -c cifs                                         # 2 (propagated)
 ```
 
 Troubleshooting (NAS offline, credential rotation, mDNS/firewalld):

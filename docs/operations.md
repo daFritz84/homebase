@@ -534,6 +534,14 @@ Notes:
     remounts both shares, so the NAS wakes on the scan schedule — the idle
     unmount only helps *between* scans. Pick the interval deliberately (e.g.
     daily); do not claim "NAS fully idle" while scans are scheduled.
+  - **NAS never spins down / container mount never unmounts on idle** —
+    kernel ≥ 6.12 mounts the CIFS share on-demand in the *accessing*
+    process's namespace (`upcall_target=app`); with private bind
+    propagation the container-triggered mount is invisible to the host
+    autofs expire. Diagnose: compare
+    `podman exec jellyfin_jellyfin_1 grep -c cifs /proc/mounts` with
+    `mount | grep -c cifs` — a mismatch means propagation is broken (bind
+    lost `rshared` → `podman-compose up -d --force-recreate`).
 
 ## Power Outage Recovery
 
