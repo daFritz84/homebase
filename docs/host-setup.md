@@ -400,8 +400,13 @@ tuple is a single fstab line):
 ```bash
 sudo mkdir -p /srv/media/filme /srv/media/serien
 sudo systemctl daemon-reload
-sudo systemctl enable --now srv-media-filme.automount srv-media-serien.automount
+sudo systemctl start srv-media-filme.automount srv-media-serien.automount
 ```
+
+Do **not** `systemctl enable` the automount units: they are generated from fstab by
+`systemd-fstab-generator` and activated automatically at boot — the fstab entry *is* the
+enablement. `enable` fails with `Unit /run/systemd/generator/srv-media-filme.automount is
+transient or generated` (verified 2026-11-09). `start`/`stop`/`restart` on them work fine.
 
 ### Verify
 
