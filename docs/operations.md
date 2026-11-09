@@ -520,6 +520,17 @@ Notes:
   - **NAS offline**: first access fails after 30 s (mount-timeout) → EIO on
     access; Jellyfin scans log errors; boot, units and all other services
     are unaffected (`nofail` + automount). Next access retries.
+  - **NAS power cycle**: with the NAS off, accesses on the container's
+    persistent mount return EIO (soft mount) after ~60 s (CIFS
+    `echo_interval` detects the dead session). NAS back **with the same
+    IP**: the kernel CIFS client reconnects the session transparently
+    (cached credentials, SMB2 tree reconnect) — media accessible again, no
+    action. NAS back **with a different IP** (the mount pins `addr=`; the
+    current address is a Fritzbox ULA `fd00::/8` that can rotate on router
+    reboot): the container's persistent copy is stuck on the old address →
+    `systemctl --user restart podman-compose@jellyfin` (container restart
+    drops it; next access remounts fresh via mDNS). Host-side copies
+    always self-recover (automount re-triggers).
   - **Manual remount** (after NAS changes): `sudo systemctl stop
     srv-media-{filme,serien}.automount && sudo umount
     /srv/media/{filme,serien} && sudo systemctl start
