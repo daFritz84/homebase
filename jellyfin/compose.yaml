@@ -24,9 +24,15 @@
 # Media: /srv/media/{filme,serien} are host-side CIFS automounts of the
 # TrueNAS SMB shares (fstab + x-systemd.automount, 60s idle-timeout — the
 # NAS spins down between uses; setup in docs/host-setup.md "NAS media
-# mounts"). The binds are ro. The generated podman-compose@jellyfin unit
-# needs the RequiresMountsFor drop-in documented in docs/services.md
-# "Media volume (CIFS automount)".
+# mounts"). The binds are ro AND rshared: kernel >= 6.12 mounts the CIFS
+# share on-demand in the ACCESSING process's namespace (cifs
+# upcall_target=app) — a container access would land in the container's
+# private tree where the host autofs expire never reaches it (NAS never
+# spins down). rshared propagates container-triggered mounts to the host
+# (idle expire applies, unmount propagates back) and host mounts into the
+# container. Verified on the server 2026-11-09. The generated
+# podman-compose@jellyfin unit needs the RequiresMountsFor drop-in
+# documented in docs/services.md "Media volume (CIFS automount)".
 
 services:
   jellyfin:
@@ -48,8 +54,8 @@ services:
     volumes:
       - ./data:/config
       - ./cache:/cache
-      - /srv/media/filme:/media/filme:ro
-      - /srv/media/serien:/media/serien:ro
+      - /srv/media/filme:/media/filme:ro,rshared
+      - /srv/media/serien:/media/serien:ro,rshared
     networks:
       caddy-proxy:
         aliases:
