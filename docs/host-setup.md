@@ -10,6 +10,7 @@ Everything needed to go from a bare Proxmox VM to a running rootless Podman host
 - [Podman](#podman)
 - [Git Deployment](#git-deployment)
 - [Bitwarden CLI](#bitwarden-cli)
+- [NAS media mounts (CIFS automount)](#nas-media-mounts-cifs-automount)
 
 For running services, see [services.md](services.md); for day-2 tasks, see [operations.md](operations.md).
 
@@ -310,3 +311,122 @@ curl -sSL https://raw.githubusercontent.com/upciti/wakemeops/main/assets/install
 ```bash
 sudo apt install bitwarden-cli
 ```
+
+## NAS media mounts (CIFS automount)
+
+Jellyfin's media lives on the TrueNAS box as two subfolders of the SMB share `share`
+(`//truenas.local/share/Filme`, `//truenas.local/share/Serien`). They are mounted
+**on demand** on the host via systemd automounts: mount on first access, host-side
+copies unmount after 60 s idle. Container-triggered mounts persist for the
+container's lifetime on kernel 6.12 (NAS power-management consequences + the
+disk-spin-down strategy): [services.md](services.md)
+"Jellyfin → Media volume (CIFS automount)".
+
+### Packages
+
+```bash
+sudo apt install -y cifs-utils smbclient avahi-daemon libnss-mdns avahi-utils
+```
+
+### Name resolution: `truenas.local` via mDNS
+
+The NAS announces itself via mDNS. `libnss-mdns` resolves `*.local` names through
+`avahi-daemon`, which also caches announcements.
+
+1. `/etc/nsswitch.conf` — change the `hosts:` line to:
+
+```
+hosts:          files mdns_minimal [NOTFOUND=return] dns
+```
+
+2. Enable avahi:
+
+```bash
+sudo systemctl enable --now avahi-daemon
+```
+
+3. **firewalld must allow mDNS** — the `public` zone does not by default: it drops the
+   NAS's multicast announcements (UDP 5353), so passive discovery and cache refresh
+   silently fail (no answer, no error):
+
+```bash
+sudo firewall-cmd --add-service=mdns --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-services   # must include mdns
+```
+
+4. Verify (NAS online):
+
+```bash
+getent hosts truenas.local
+avahi-resolve -n truenas.local
+```
+
+Fallback if TrueNAS ever stops announcing mDNS: swap the fstab sources to
+`truenas.fritz.box` (resolves today, IPv6-only).
+
+### Credentials
+
+Bitwarden item **`TrueNAS SMB`** (Login type: login field = username, password field =
+password). `jellyfin/provision-nas-credentials.sh` writes `/etc/samba/credentials.nas`
+(root:root 0600). The script uses `sudo` → needs a tty, run it in an interactive
+session (`ssh -t chef@192.168.178.249`):
+
+```bash
+cd ~/src/homebase/jellyfin && ./provision-nas-credentials.sh
+```
+
+### fstab + automount units
+
+Append to `/etc/fstab` — **one line per share** (each source/mountpoint/options/freq/pass
+tuple is a single fstab line):
+
+```
+//truenas.local/share/Filme  /srv/media/filme  cifs  credentials=/etc/samba/credentials.nas,ro,uid=1000,gid=1000,file_mode=0640,dir_mode=0750,noatime,iocharset=utf8,_netdev,noauto,nofail,x-systemd.automount,x-systemd.mount-timeout=30,x-systemd.idle-timeout=60  0  0
+//truenas.local/share/Serien /srv/media/serien cifs  credentials=/etc/samba/credentials.nas,ro,uid=1000,gid=1000,file_mode=0640,dir_mode=0750,noatime,iocharset=utf8,_netdev,noauto,nofail,x-systemd.automount,x-systemd.mount-timeout=30,x-systemd.idle-timeout=60  0  0
+```
+
+- `uid=1000,gid=1000` — CIFS synthesizes ownership as `chef`; the rootless container's
+  root maps to `chef` and reads.
+- `ro` — defense-in-depth (Jellyfin never writes to the NAS).
+- `noauto` + `x-systemd.automount` — mount on first access (autofs kernel upcall →
+  systemd mounts; access from inside the container triggers it too).
+- `nofail` + automount — boot and the jellyfin unit are never blocked by NAS availability.
+- `x-systemd.mount-timeout=30` — bounded hang when the NAS is offline.
+- `x-systemd.idle-timeout=60` — unmount 60 s after last access (host-side copy;
+  open files, e.g. playback, keep the mount busy; the container's copy persists,
+  see the services.md link above).
+- `vers` omitted — kernel negotiates (Debian 13 default SMB2.1; TrueNAS min SMB2.0.2).
+  Documented fallback: `vers=3.1.1`.
+
+```bash
+sudo mkdir -p /srv/media/filme /srv/media/serien
+sudo systemctl daemon-reload
+sudo systemctl start srv-media-filme.automount srv-media-serien.automount
+```
+
+Do **not** `systemctl enable` the automount units: they are generated from fstab by
+`systemd-fstab-generator` and activated automatically at boot — the fstab entry *is* the
+enablement. `enable` fails with `Unit /run/systemd/generator/srv-media-filme.automount is
+transient or generated` (verified 2026-11-09). `start`/`stop`/`restart` on them work fine.
+
+### Verify
+
+```bash
+ls /srv/media/filme | head           # triggers the mount
+mount | grep cifs
+stat -c '%u %g %a' /srv/media/filme  # 1000 1000 750 (same for serien)
+sleep 65 && mount | grep cifs        # idle unmount
+ls /srv/media/filme                  # remounts
+# container-side trigger (production path): the kernel mounts in the
+# container's namespace; with the rshared binds the mount is visible in
+# the host mount table too. The container's copy persists (host expire
+# only unmounts the host copy) — see services.md "Verified mount
+# lifecycle":
+podman exec jellyfin_jellyfin_1 ls /media/filme
+podman exec jellyfin_jellyfin_1 grep -c cifs /proc/mounts   # 2
+mount | grep -c cifs                                        # 2 (visible via rshared)
+```
+
+Troubleshooting (NAS offline, credential rotation, mDNS/firewalld):
+[operations.md](operations.md) "NAS media mounts".
