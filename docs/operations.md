@@ -506,6 +506,34 @@ Notes:
   shares one `remote_ip`. Check the Caddyfile global block and the
   `caddy-proxy` subnet (`podman network inspect caddy-proxy`), validate,
   restart `podman-compose@caddy`.
+- **NAS media mounts (CIFS automount, Jellyfin)** — design + host setup:
+  [host-setup.md](host-setup.md) "NAS media mounts (CIFS automount)" and
+  [services.md](services.md) "Jellyfin → Media volume (CIFS automount)".
+  - **`truenas.local` does not resolve** — first check
+    `sudo firewall-cmd --list-services`: it must include `mdns` (the `public`
+    zone drops mDNS multicast UDP 5353 by default → resolution fails
+    silently, no answer). Note `firewall-cmd` queries need sudo — non-root
+    returns empty output, which masks the firewall. Then: `avahi-daemon`
+    active, `/etc/nsswitch.conf` hosts line
+    `files mdns_minimal [NOTFOUND=return] dns`. Fallback: swap the fstab
+    sources to `truenas.fritz.box` (resolves today, IPv6-only).
+  - **NAS offline**: first access fails after 30 s (mount-timeout) → EIO on
+    access; Jellyfin scans log errors; boot, units and all other services
+    are unaffected (`nofail` + automount). Next access retries.
+  - **Manual remount** (after NAS changes): `sudo systemctl stop
+    srv-media-{filme,serien}.automount && sudo umount
+    /srv/media/{filme,serien} && sudo systemctl start
+    srv-media-{filme,serien}.automount`.
+  - **Credential rotation**: re-run `jellyfin/provision-nas-credentials.sh`
+    (over `ssh -t` — sudo needs a tty), then the stop/umount/start sequence
+    above (active mounts keep the old credentials).
+  - **Idle-timeout tuning**: `x-systemd.idle-timeout=60` in the fstab
+    options; after editing: `sudo systemctl daemon-reload && sudo systemctl
+    restart srv-media-{filme,serien}.automount`.
+  - **Periodic scans wake the NAS**: every scheduled Jellyfin library scan
+    remounts both shares, so the NAS wakes on the scan schedule — the idle
+    unmount only helps *between* scans. Pick the interval deliberately (e.g.
+    daily); do not claim "NAS fully idle" while scans are scheduled.
 
 ## Power Outage Recovery
 
