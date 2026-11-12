@@ -13,6 +13,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Navidrome (Music Streaming)](#navidrome-music-streaming)
 - [Jellyfin (Media Server)](#jellyfin-media-server)
 - [Stirling PDF (PDF Editor)](#stirling-pdf-pdf-editor)
+- [BookOrbit (Reading Space)](#bookorbit-reading-space)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
 - [Cloudflare Tunnel (cloudflared)](#cloudflare-tunnel-cloudflared)
@@ -912,6 +913,209 @@ restart.
   before the first start.
 - **API-key clients work** (proves no wall): create a key in Settings,
   `curl -H "X-API-Key: …" -F "file=@x.pdf" https://stirling.sseifried.link/api/v1/...`.
+
+## BookOrbit (Reading Space)
+
+Self-hosted reading space ([BookOrbit](https://bookorbit.app),
+[repo](https://github.com/bookorbit/bookorbit), AGPL-3.0) — ebooks,
+audiobooks, comics, PDFs. Compose file: `bookorbit/compose.yaml`. Unit:
+`podman-compose@bookorbit` (shared pattern above).
+
+**No Authelia wall, on purpose:** OPDS/KOReader/Kobo clients send their own
+credentials per request (feed auth, device tokens) and can never pass a
+`forward_auth` cookie wall — BookOrbit's own
+[auth-proxies docs](https://bookorbit.app/auth-proxies/) document the
+failure (navidrome/jellyfin/stirling doctrine). BookOrbit is a **native
+Authelia OIDC client** (stirling/HA pattern, see "BookOrbit SSO" below) —
+the app's own login gates access. Exposure is LAN/VPN-only via AdGuard
+split DNS; `*.sseifried.link` is already covered by the existing wildcard
+rewrite, so AdGuard needs **no change**. `bookorbit.sseifried.link` is
+absent from `cloudflared/config.yml` — **never add it** (same doctrine as
+cockpit/adguard/homepage/homeassistant/navidrome/jellyfin/stirling-pdf).
+
+**Topology:** `app` + `postgres`; only `app` joins `caddy-proxy` (alias
+`bookorbit`, container port 3000), postgres stays on the internal
+`bookorbit-internal` network. No host ports — served by Caddy at
+`https://bookorbit.sseifried.link`. podman-compose names:
+`bookorbit_app_1`, `bookorbit_postgres_1`. podman-compose ignores
+`depends_on: condition: service_healthy` (start ordering only) — on first
+start the app may crash-loop ~30s until postgres answers;
+`restart: unless-stopped` self-heals (authelia/openldap precedent).
+
+**Root entrypoint, app drops to uid 1000 — NO `user:` directive:** the app
+entrypoint starts as root (`BOOKORBIT_FIX_PERMISSIONS=true`, pinned
+explicitly — upstream default) and repairs `/data` ownership to PUID/PGID
+1000 at startup (caps `CHOWN`/`DAC_OVERRIDE`/`FOWNER`/`SETGID`/`SETUID`),
+then drops to uid 1000. `read_only: true` rootfs + tmpfs `/tmp` (upstream
+posture): if the app needs to write outside `/data` and `/tmp` (watch the
+first-start logs for EACCES/EROFS), drop `read_only` and **record the
+deviation here** (what failed, which path, why the drop is required) — not
+an undocumented compose edit.
+
+Secrets: `bookorbit/.env.secret` (gitignored, 0600, provisioned by
+`provision-bookorbit-secrets.sh` from Bitwarden):
+
+| Key | Bitwarden item | Notes |
+| --- | --- | --- |
+| `POSTGRES_PASSWORD` | `bookorbit-postgres-password` | rotation needs `ALTER USER` in the running DB — the image applies the password only at first init of an empty data dir |
+| `JWT_SECRET` | `bookorbit-jwt-secret` | rotation invalidates all sessions (everyone logged out) |
+| `SETUP_BOOTSTRAP_TOKEN` | `bookorbit-setup-token` | gates the one-time setup wizard — keep it in Bitwarden after first use |
+
+Data that cannot be rebuilt:
+
+| Path | Content |
+| --- | --- |
+| `bookorbit/data/postgres/` | pgvector DB: users, libraries, reading progress, highlights, OIDC links |
+| `bookorbit/data/app/` | covers, Book Dock staging, derived data (partially rebuildable via rescan) |
+
+Covered by `backup-bookorbit-data.sh` (see
+[operations.md](operations.md), "BookOrbit data backups"); run it right
+after setup and **before every image bump** — DB migrations are
+forward-only. The `books/` library volume is NOT covered (same as
+navidrome music/ / jellyfin media/).
+
+### Ownership
+
+- `books/` must be writable by container uid 1000 (uploads/Book Dock
+  finalize): `podman unshare chown 1000:1000 books` once before first
+  start (navidrome ritual).
+- `data/app` is **auto-repaired** at every start by
+  `BOOKORBIT_FIX_PERMISSIONS` — no chown ritual needed.
+- `data/postgres` is chef-owned: the postgres image runs as root and
+  rootless Podman maps container root to host `chef` (jellyfin mapping) —
+  no chown.
+
+### First run
+
+The steps below run in the service checkout — on the server that is the
+`~/src/homebase` clone.
+
+1. **Authelia first** (the OIDC client must exist before BookOrbit's
+   provider test): re-run `../authelia/provision-authelia-secrets.sh`
+   (writes `BOOKORBIT_OIDC_CLIENT_SECRET_HASH`; save a generated
+   `authelia-oidc-bookorbit-secret` to Bitwarden), validate the config
+   offline, then **`podman-compose up -d --force-recreate`** in
+   `authelia/` (new `.env.secret` key — a unit restart does NOT re-read
+   env), verify the portal is healthy. If validation rejects the
+   `bookorbit://oauth2-callback` custom scheme, DROP that redirect URI
+   (iOS app out of scope) and re-validate — never skip validation.
+2. Dirs + books chown (the `caddy-proxy` network must exist —
+   `../caddy/ensure_proxy_network.sh`):
+
+```bash
+cd bookorbit
+mkdir -p data/app data/postgres books
+podman unshare chown 1000:1000 books
+```
+
+3. Provision secrets (Bitwarden unlocked):
+
+```bash
+./provision-bookorbit-secrets.sh
+```
+
+4. Start and verify (expect ~30s app crash-loop until postgres is healthy):
+
+```bash
+podman-compose up -d
+podman healthcheck run bookorbit_postgres_1                      # exit 0
+podman exec bookorbit_app_1 sh -c 'command -v curl wget'         # probe: fills the compose.yaml healthcheck note
+```
+
+5. Probe the app image for a health endpoint (`/api/health`, `/`); if the
+   image ships curl/wget, add the healthcheck to `compose.yaml`, commit,
+   redeploy (upstream ships none).
+6. Caddy last: validate + restart `podman-compose@caddy`. Verify:
+
+```bash
+curl -k https://bookorbit.sseifried.link              # -> app HTML (200)
+curl -kI https://bookorbit.sseifried.link/api/v1/opds # -> 401 + www-authenticate (device auth reaches the app — proves no wall; BookOrbit's own verification recipe)
+```
+
+7. Browser: open `https://bookorbit.sseifried.link` → setup wizard → paste
+   `SETUP_BOOTSTRAP_TOKEN` (read from `.env.secret` on the server, never
+   print) → create admin.
+8. OIDC provider (in-app): Settings → OIDC/SSO → Add Provider — slug
+   `authelia`, issuer `https://authelia.sseifried.link`, client ID
+   `bookorbit`, client secret = RAW value (Bitwarden
+   `authelia-oidc-bookorbit-secret`), scopes `openid profile email` →
+   **Test** must show Connected → enable **Auto-provision users** +
+   **Allow local account linking** → save.
+9. Link + verify SSO: log out → login via the Authelia button → the admin
+   account is linked by `preferred_username` (`sseifried`) → one portal
+   login end-to-end. Keep the password as break-glass.
+10. Library: create a library pointing at `/books` (picker root is
+    `/books`); the scan finds 0 books (placeholder).
+11. Deploy with the shared pattern above (unit: `podman-compose@bookorbit`)
+    and back up (the DB now holds users + OIDC links):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@bookorbit
+./backup-bookorbit-data.sh
+```
+
+12. Homepage: the card appears; restart `podman-compose@homepage` (config
+    is bind-mounted).
+
+### BookOrbit SSO (Authelia OIDC)
+
+BookOrbit is a native Authelia OIDC client — the provider is configured
+**in-app** (Settings → OIDC/SSO), like Wanderer's PocketBase UI: the RAW
+client secret is pasted into the app, never stored in env. The `bookorbit`
+client is registered in `authelia/config/configuration.yml` (confidential
++ PKCE S256, `authorization_policy: two_factor`, argon2 digest from
+`authelia/.env.secret` via the template filter,
+`BOOKORBIT_OIDC_CLIENT_SECRET_HASH`). Redirect URIs:
+`https://bookorbit.sseifried.link/oauth2-callback` (browser) +
+`bookorbit://oauth2-callback` (custom scheme for the BookOrbit iOS app's
+in-app OIDC login — exact per docs, do not modify; drop it if Authelia's
+config validator rejects the scheme). `OIDC_ALLOW_LOCAL_ISSUERS=true` is
+required: the issuer (`authelia.sseifried.link`) resolves to the LAN IP
+from the server and the app's discovery refuses private addresses without
+the flag (the app reaches :443 through the firewalld-opened port, stirling
+precedent). Auto-provision creates accounts on first login; **Allow local
+account linking** links the OIDC identity to the existing local admin by
+`preferred_username` (`sseifried`). The app's password form stays
+break-glass (`DISABLE_LOCAL_AUTH` stays false). No `access_control` rule:
+rules apply only to walled (forward-auth) apps.
+
+Troubleshooting:
+
+- **Token endpoint method:** if the token exchange fails, read the
+  **Authelia log** for the method-mismatch line (cloudflare-access
+  precedent: "request … using 'client_secret_basic', client configured for
+  'client_secret_post'") and pin the observed
+  `token_endpoint_auth_method` — not trial-and-error UI clicks.
+- **Claims delivery:** Authelia 4.39's minimal ID token carries no email
+  (the cloudflare-access client needed a `claims_policy` for exactly this
+  — the `configuration.yml` claims_policies block). If the BookOrbit OIDC
+  login fails with null claims ("Your account has not been set up" /
+  missing email), add a `claims_policy` for the `bookorbit` client putting
+  `email`, `email_verified`, `preferred_username` in the ID token
+  (cloudflare-access precedent) — verify with BookOrbit's **Preview
+  Claims** button before and after.
+
+### Books volume (follow-up)
+
+`./books` is a **placeholder** on the VM disk — do NOT put the library
+there. The real books volume is a user decision; the plan: NFS export
+mounted on the VM (fstab + `x-systemd.automount`), then swap the
+`./books:/books` volume line in `bookorbit/compose.yaml` to the mount
+point (navidrome music plan; the Jellyfin CIFS automount is the
+implemented variant). World-readable is enough for scanning (NFS
+`root_squash` → the container uid 1000 reads via `o+r`); uploads/Book Dock
+finalization needs write access — NFS permission work, documented
+follow-up (same as navidrome/jellyfin).
+
+### Upgrade procedure
+
+Pin the app tag in `compose.yaml` (ghcr tags have no `v` prefix);
+`./backup-bookorbit-data.sh` **before every bump** (DB migrations are
+forward-only); `podman-compose pull` + unit restart.
+`pgvector/pgvector:pg18` is a **rolling major tag** — no finer pin exists
+upstream; a PG major bump refuses to open an old data dir (upstream
+documents the dump/restore path; staying on pg18 is fine).
 
 ## Home Assistant (Home Automation)
 

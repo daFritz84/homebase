@@ -17,6 +17,7 @@ systemctl --user status podman-compose@wanderer
 systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@jellyfin
 systemctl --user status podman-compose@stirling-pdf
+systemctl --user status podman-compose@bookorbit
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -110,6 +111,31 @@ are forward-only). Restore: stop the service, `rm -rf data && tar xzf
 <archive>`, `podman unshare chown -R 1000:1000 data`, start. The script
 (re)starts the containers directly, so the unit shows `inactive` afterwards
 — `systemctl --user start podman-compose@stirling-pdf` to re-adopt the pod.
+
+### BookOrbit data backups
+
+BookOrbit's `bookorbit/data/postgres/` is the irreplaceable artifact: the
+pgvector DB holds users, libraries, reading progress, highlights and the
+OIDC account links; `data/app/` (covers, Book Dock staging, derived data)
+is partially rebuildable via rescan but included for a complete restore.
+The `books/` library volume is NOT covered (same as navidrome music/ /
+jellyfin media/). Run from the service checkout on the server:
+
+```bash
+cd bookorbit && ./backup-bookorbit-data.sh
+```
+
+The script stops the service, archives `data/` (owner-only, mode `0600`)
+to `~/.local/share/bookorbit/backups/bookorbit-data-<date>.tar.gz`, and
+restarts it. It archives via `podman unshare tar czf … data/`
+(navidrome/stirling pattern): the app writes uid-1000-owned mode-700 dirs
+that the host user cannot read — a plain `tar` fails on them; namespace
+uid 0 has DAC override over the mapped range. Cadence: right after setup
+(the DB then holds users + OIDC links) and **before every image bump**
+(DB migrations are forward-only). Restore: stop the service, `rm -rf data
+&& tar xzf <archive>`, start. The script (re)starts the containers
+directly, so the unit shows `inactive` afterwards — `systemctl --user
+start podman-compose@bookorbit` to re-adopt the pod.
 
 ### Home Assistant config backups
 
