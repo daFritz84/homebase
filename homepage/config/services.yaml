@@ -56,6 +56,15 @@
         container: stirling-pdf_stirling-pdf_1
         showStats: true
 
+    - BookOrbit:
+        # no dashboard-icons entry (probed 2026-11-12) — custom icon, wanderer pattern
+        icon: /icons/bookorbit.png
+        href: https://bookorbit.sseifried.link
+        description: Self-hosted reading space (ebooks, audiobooks, comics, PDFs)
+        server: homebase-podman
+        container: bookorbit_app_1
+        showStats: true
+
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
         icon: home-assistant

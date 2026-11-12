@@ -44,6 +44,13 @@ jellyfin/cache/
 # rebuildable.
 stirling-pdf/data/
 
+# BookOrbit runtime data (data/postgres: pgvector DB — users, libraries,
+# progress, highlights, OIDC links; data/app: covers, Book Dock, derived
+# data) — data, not code; covered by backup-bookorbit-data.sh. books/ is
+# NOT ignored: the tracked .gitkeep keeps the bind source present (navidrome
+# music/ / jellyfin media/ pattern).
+bookorbit/data/
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/

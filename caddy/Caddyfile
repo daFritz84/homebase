@@ -133,6 +133,18 @@ stirling.sseifried.link {
 	reverse_proxy stirling:8080
 }
 
+# BookOrbit (reading space) — NO forward_auth wall, on purpose: OPDS/KOReader/Kobo
+# clients send their own credentials per request and can never pass a forward_auth
+# cookie wall (BookOrbit's auth-proxy docs document the failure; navidrome/jellyfin/
+# stirling doctrine); BookOrbit is a native Authelia OIDC client (stirling/HA
+# pattern): login redirects to Authelia (SSO), the app's password form stays
+# break-glass. LAN/VPN-only exposure (AdGuard split DNS) — never add to the tunnel
+# allowlist.
+bookorbit.sseifried.link {
+	import tls
+	reverse_proxy bookorbit:3000
+}
+
 # AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)
 adguard.sseifried.link {
 	import tls
