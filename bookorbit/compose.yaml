@@ -1,0 +1,112 @@
+# bookorbit — self-hosted reading space (https://bookorbit.app, https://github.com/bookorbit/bookorbit)
+# ---
+# No Authelia wall, on purpose: OPDS/KOReader/Kobo clients send their own credentials
+# (feed auth, device tokens) per request and can never pass a forward_auth cookie wall —
+# BookOrbit's own auth-proxy docs document the failure (navidrome/jellyfin/stirling
+# doctrine). BookOrbit is a native Authelia OIDC client (stirling/HA pattern): browser
+# login redirects to Authelia (SSO), the app's password form stays break-glass
+# (DISABLE_LOCAL_AUTH stays false). LAN/VPN-only exposure via AdGuard split DNS — NEVER
+# add bookorbit.sseifried.link to cloudflared/config.yml.
+# Secrets come from .env.secret (gitignored, 0600, provisioned by
+# provision-bookorbit-secrets.sh) via env_file — no ${VAR:?} interpolation, so
+# `docker compose config` passes with a touched .env.secret (CI).
+# Topology: only app joins caddy-proxy (alias `bookorbit`); postgres stays on the
+# internal network. No host ports — access is via Caddy only.
+# The app entrypoint starts as root (BOOKORBIT_FIX_PERMISSIONS repairs /data ownership;
+# cap CHOWN/SETUID/SETGID) then drops to PUID/PGID 1000 — NO `user:` directive.
+# books/ must be writable by container uid 1000 (podman unshare chown, docs/services.md).
+
+services:
+  app:
+    image: ghcr.io/bookorbit/bookorbit:3.7.0
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Must match the public URL Caddy serves (emails, Kobo endpoints).
+      APP_URL: https://bookorbit.sseifried.link
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: bookorbit
+      POSTGRES_DB: bookorbit
+      PUID: "1000"
+      PGID: "1000"
+      # Node heap below the 2g container limit.
+      NODE_MAX_OLD_SPACE_SIZE: "1536"
+      # Library folder picker shows only /books, not the container root.
+      LIBRARY_BROWSE_ROOT: /books
+      # The OIDC issuer (authelia.sseifried.link) resolves to the LAN IP from the
+      # server — private-address discovery needs this flag (docs env table).
+      OIDC_ALLOW_LOCAL_ISSUERS: "true"
+      # Pinned explicitly (upstream default true): the root entrypoint repairs
+      # /data ownership to PUID/PGID at startup — the header comment's ownership
+      # claim depends on this, so it must not ride on an unpinned default.
+      BOOKORBIT_FIX_PERMISSIONS: "true"
+    volumes:
+      - ./data/app:/data
+      - ./books:/books
+    networks:
+      bookorbit-internal: {}
+      caddy-proxy:
+        aliases:
+          - bookorbit
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No healthcheck: probe at first start whether the image ships curl/wget
+    # (upstream compose defines none for app). If a client exists, add
+    # ["CMD", "curl", "-fsS", "http://localhost:3000/"] and document the
+    # endpoint; if not, keep this note (wanderer-db precedent).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file: .env.secret
+    environment:
+      POSTGRES_USER: bookorbit
+      POSTGRES_DB: bookorbit
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - bookorbit-internal
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+networks:
+  caddy-proxy:
+    external: true
+
+  bookorbit-internal:
+    name: bookorbit-internal
+    driver: bridge
