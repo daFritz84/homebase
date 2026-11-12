@@ -1022,9 +1022,11 @@ podman healthcheck run bookorbit_postgres_1                      # exit 0
 podman exec bookorbit_app_1 sh -c 'command -v curl wget'         # probe: fills the compose.yaml healthcheck note
 ```
 
-5. Probe the app image for a health endpoint (`/api/health`, `/`); if the
-   image ships curl/wget, add the healthcheck to `compose.yaml`, commit,
-   redeploy (upstream ships none).
+5. App image probe (done 2026-11-12, first start): the image ships busybox
+   `wget`, **no curl**; `/api/health` 404s, `/` is 200. Healthcheck added to
+   `compose.yaml` (`CMD-SHELL wget -q -O /dev/null http://127.0.0.1:3000/` —
+   127.0.0.1, not `localhost`: the app listens IPv4-only and busybox wget
+   resolves `::1` first → connection refused).
 6. Caddy last: validate + restart `podman-compose@caddy`. Verify:
 
 ```bash
