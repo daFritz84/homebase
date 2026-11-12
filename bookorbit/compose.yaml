@@ -57,10 +57,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # No healthcheck: probe at first start whether the image ships curl/wget
-    # (upstream compose defines none for app). If a client exists, add
-    # ["CMD", "curl", "-fsS", "http://localhost:3000/"] and document the
-    # endpoint; if not, keep this note (wanderer-db precedent).
+    healthcheck:
+      # probe 2026-11-12 (first start): image ships busybox wget, NO curl;
+      # /api/health 404s, / is 200. 127.0.0.1 not localhost: the app listens
+      # IPv4-only (0.0.0.0:3000) and busybox wget resolves ::1 first ->
+      # connection refused.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+      timeout: 10s
     read_only: true
     tmpfs:
       - /tmp
