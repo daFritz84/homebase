@@ -2,8 +2,18 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
 #
-# Container stats: server: homebase-podman (docker.yaml) + container name
-# (podman-compose names: <project>_<service>_<n>, underscores), showStats: true.
+# Metrics/uptime moved to Beszel + Uptime Kuma: per-container showStats (CPU/RAM)
+# are gone (the dockerproxy sidecar + podman.sock mount are removed). Basic health
+# stays here: the uptimekuma widget (status-page aggregate: up/down/uptime) on the
+# Uptime Kuma card, the beszel widget (host CPU/RAM/disk) on the Beszel card, and
+# the adguard widget on the AdGuard card.
+#
+# Widget URLs are INTERNAL caddy-proxy aliases (status:3001, beszel:8090), NOT the
+# public https:// URLs: the homepage container's DNS is aardvark (it resolves
+# service aliases, not *.sseifried.link — the adguard widget already uses
+# host.containers.internal), and the forward_auth wall fronts only the public
+# hostname, so the internal port bypasses it.
+
 - Homebase:
     - Cockpit:
         icon: cockpit
@@ -14,9 +24,6 @@
         icon: adguard-home
         href: https://adguard.sseifried.link
         description: Network-wide DNS & ad blocking
-        server: homebase-podman
-        container: adguard-home_adguard-home_1
-        showStats: true
 
         widgets:
           - type: adguard
@@ -28,56 +35,67 @@
         icon: /icons/wanderer.png
         href: https://wanderer.sseifried.link
         description: Self-hosted trail database
-        server: homebase-podman
-        container: wanderer_web_1
-        showStats: true
 
     - Navidrome:
         icon: navidrome
         href: https://navidrome.sseifried.link
         description: Personal music streaming (Subsonic API)
-        server: homebase-podman
-        container: navidrome_navidrome_1
-        showStats: true
 
     - Jellyfin:
         icon: jellyfin
         href: https://jellyfin.sseifried.link
         description: Media server (movies & TV, VAAPI)
-        server: homebase-podman
-        container: jellyfin_jellyfin_1
-        showStats: true
 
     - Stirling PDF:
         icon: stirling-pdf
         href: https://stirling.sseifried.link
         description: PDF editor & processor (merge, OCR, sign, convert)
-        server: homebase-podman
-        container: stirling-pdf_stirling-pdf_1
-        showStats: true
 
     - BookOrbit:
         # no dashboard-icons entry (probed 2026-11-12) — custom icon, wanderer pattern
         icon: /icons/bookorbit.png
         href: https://bookorbit.sseifried.link
         description: Self-hosted reading space (ebooks, audiobooks, comics, PDFs)
-        server: homebase-podman
-        container: bookorbit_app_1
-        showStats: true
 
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
         icon: home-assistant
         href: https://homeassistant.sseifried.link
         description: Home automation
-        server: homebase-podman
-        container: homeassistant_homeassistant_1
-        showStats: true
 
     - Authelia:
         icon: authelia
         href: https://authelia.sseifried.link
         description: SSO — login portal, 2FA enrollment, OIDC
-        server: homebase-podman
-        container: authelia_authelia_1
-        showStats: true
+
+    - Uptime Kuma:
+        # abbr (no icon) — avoids a dashboard-icons 404; probe `uptime-kuma` icon
+        # later and swap if present.
+        abbr: UK
+        href: https://status.sseifried.link
+        description: Uptime & availability monitoring
+
+        # The uptimekuma widget has no full API — it reads a STATUS PAGE (create
+        # one in Kuma, group the monitored sites, record its slug). It shows the
+        # aggregate (up/down/uptime/incident), i.e. fleet-wide basic health.
+        widgets:
+          - type: uptimekuma
+            url: http://status:3001
+            slug: {{HOMEPAGE_VAR_KUMA_SLUG}}
+
+    - Beszel:
+        abbr: BZ
+        href: https://metrics.sseifried.link
+        description: Host & container metrics (CPU/RAM/disk)
+
+        # beszel widget: single-system detailed stats (systemId). The hub requires
+        # a superuser for API access (username/password, not an API key). version 2
+        # for Beszel >= 0.9.0.
+        widgets:
+          - type: beszel
+            url: http://beszel:8090
+            username: {{HOMEPAGE_VAR_BESZEL_USER}}
+            password: {{HOMEPAGE_VAR_BESZEL_PASS}}
+            systemId: {{HOMEPAGE_VAR_BESZEL_SYSTEMID}}
+            version: 2
+            fields: [cpu, memory, disk]

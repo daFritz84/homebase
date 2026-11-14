@@ -1,0 +1,67 @@
+# beszel — hub for host/container metrics (https://github.com/henrygd/beszel)
+# ---
+# The hub is a native Authelia OIDC client (in-app PocketBase OAuth2 provider, the
+# BookOrbit/Wanderer pattern — no forward_auth wall): login redirects to Authelia,
+# one portal login end-to-end. The app's password login stays enabled as
+# break-glass (DISABLE_PASSWORD_AUTH=false). LAN/VPN-only exposure via AdGuard
+# split DNS — NEVER add metrics.sseifried.link to cloudflared/config.yml (same
+# admin-tool doctrine as cockpit/adguard/homepage/homeassistant/.../uptime-kuma).
+#
+# NO env_file / NO secret: the hub has no JWT secret (the env-var list has no
+# HUB_JWT_SECRET — PocketBase manages its own), and the port is the binary default
+# 8090 (no HUB_PORT env). The hub's only secrets are the agent KEY/TOKEN (the
+# agent's own env, see beszel/agent.env) and the UI-created superuser password
+# (saved to Bitwarden beszel-superuser-password for the Homepage widget). So
+# `docker compose config` passes with no stub (navidrome/jellyfin pattern, CI).
+#
+# Runs as root (PocketBase image; Config.User empty) — under rootless Podman
+# container root maps to host chef, so ./data is host-user-owned: NO chown ritual
+# (jellyfin/homeassistant pattern). ./data is the hub SQLite (users, systems,
+# alerts, API keys) — covered by backup-beszel-data.sh; run after setup and before
+# every image bump.
+#
+# The agent (a systemd USER unit, plain process) dials the hub over the
+# loopback-published port (HUB_URL=http://127.0.0.1:8090) via an outgoing
+# WebSocket authenticated by KEY+TOKEN. DISABLE_SSH=true (hub + agent) makes it
+# WebSocket-only so the hub never dials the agent over SSH. The UI is proxied by
+# Caddy via the caddy-proxy alias `beszel` (metrics.sseifried.link -> beszel:8090);
+# the Homepage beszel widget also uses the internal http://beszel:8090.
+
+services:
+  beszel:
+    image: docker.io/henrygd/beszel:0.21.2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      # public URL — used for notification links and the OIDC redirect base
+      APP_URL: https://metrics.sseifried.link
+      # WebSocket-only agents: the hub must not dial agents over SSH
+      DISABLE_SSH: "true"
+      # auto-provision accounts on first Authelia OIDC login
+      USER_CREATION: "true"
+      # keep the password form as break-glass
+      DISABLE_PASSWORD_AUTH: "false"
+    volumes:
+      - ./data:/beszel_data
+    ports:
+      # loopback only — for the agent's HUB_URL + the healthcheck; the UI is
+      # proxied by Caddy via the caddy-proxy alias, never exposed to the LAN
+      - "127.0.0.1:8090:8090"
+    networks:
+      caddy-proxy:
+        aliases:
+          - beszel
+    healthcheck:
+      test: ["CMD", "/beszel", "health", "--url", "http://localhost:8090"]
+      interval: 120s
+      start_period: 10s
+      timeout: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+networks:
+  caddy-proxy:
+    external: true

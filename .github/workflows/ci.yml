@@ -34,7 +34,11 @@ jobs:
           # bind-mount, and volume targets need not exist for `config`)
           # navidrome needs no stub: no env_file (config lives in the image ENV)
           # jellyfin needs no stub: no env_file (config lives in data/jellyfin.xml)
-          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin stirling-pdf bookorbit; do
+          # uptime-kuma needs no stub: no env_file (config lives in the UI/DB)
+          # beszel needs no stub: no env_file (hub env is all non-secret; the
+          #   agent's KEY/TOKEN live in beszel/agent.env, a systemd unit file,
+          #   not a compose env_file)
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin stirling-pdf bookorbit uptime-kuma beszel; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"

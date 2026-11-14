@@ -12,12 +12,12 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit|beszel].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
 #     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
 #     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH / STIRLING_OIDC_CLIENT_SECRET_HASH /
-#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH
+#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH / BESZEL_OIDC_CLIENT_SECRET_HASH
 #     env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
@@ -205,6 +205,32 @@ identity_providers:
         # 'client_secret_post'") — not by trial-and-error UI clicks. If the log
         # shows a method mismatch, set the method the client actually sends.
         token_endpoint_auth_method: 'client_secret_post'
+      - client_id: 'beszel'
+        client_name: 'Beszel (PocketBase OIDC SSO)'
+        # argon2 digest injected from .env.secret by the template filter
+        # (BESZEL_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh); the
+        # RAW secret is pasted into Beszel's in-app OAuth2 provider form
+        # (Settings -> users collection -> OAuth2, the BookOrbit/Wanderer
+        # pattern — in-app config, never stored in a file)
+        client_secret: '{{ env "BESZEL_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
+        consent_mode: 'auto'
+        scopes: ['openid', 'profile', 'email']
+        redirect_uris:
+          # Beszel's fixed OAuth2 callback path (beszel.dev/guide/oauth):
+          # <hub-url>/api/oauth2-redirect
+          - 'https://metrics.sseifried.link/api/oauth2-redirect'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # PROBE: Beszel is PocketBase-based (like wanderer) — PocketBase
+        # authenticates at the token endpoint with POST body credentials. Verify
+        # via the Authelia log on a method mismatch (cloudflare-access precedent:
+        # "request ... using 'client_secret_basic', client configured for
+        # 'client_secret_post'") — not by trial-and-error UI clicks.
+        token_endpoint_auth_method: 'client_secret_post'
       - client_id: 'wanderer'
         client_name: 'Wanderer (PocketBase OIDC SSO)'
         # argon2 digest injected from .env.secret by the template filter
@@ -298,6 +324,12 @@ access_control:
     # the registration prompt (docs/services.md "MFA enrollment"; recovery:
     # docs/operations.md "Authelia MFA recovery").
     - domain: 'adguard.sseifried.link'
+      policy: 'two_factor'
+      subject: 'group:homebase-admins'
+    # Uptime Kuma — behind the wall (two_factor, homebase-admins). It has NO
+    # native OIDC, so the wall is the Authelia SSO path; its own login stays as
+    # defense-in-depth. LAN/VPN-only, never in the tunnel.
+    - domain: 'status.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
     # Wanderer is the one app published to the internet via the Cloudflare

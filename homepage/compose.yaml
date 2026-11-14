@@ -16,41 +16,19 @@ services:
       caddy-proxy:
         aliases:
           - homepage
-      homepage-internal: {}
-    depends_on:
-      - dockerproxy
     deploy:
       resources:
         limits:
           memory: 512m
 
-  # Read-only gate in front of the rootless Podman socket for Homepage's
-  # container-stats integration (docker.yaml). A :ro socket mount is NOT a
-  # read-only boundary — the full Docker-compatible API (create/start/exec,
-  # arbitrary bind mounts as the mapped host user) stays connectable, so the
-  # socket lives only here; POST=0 denies every mutating endpoint and
-  # Homepage reaches this proxy over the internal network for stats only.
-  dockerproxy:
-    image: ghcr.io/tecnativa/docker-socket-proxy:latest
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges=true
-    environment:
-      CONTAINERS: "1" # container list + stats endpoints
-      POST: "0" # deny every mutating API call
-    volumes:
-      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro
-    networks:
-      - homepage-internal
-    deploy:
-      resources:
-        limits:
-          memory: 64m
+# No dockerproxy sidecar / podman.sock mount: the per-container showStats that
+# fed it are gone (metrics moved to Beszel, uptime to Uptime Kuma), so the
+# read-only Docker-API surface is removed entirely. The Beszel agent (a host
+# process) reads chef's own podman.sock directly for container stats — no proxy.
+# The widgets (uptimekuma, beszel, adguard) reach their backends over the shared
+# caddy-proxy network by service alias (status:3001, beszel:8090) — Homepage
+# joins caddy-proxy, so no internal network is needed.
 
 networks:
   caddy-proxy:
     external: true
-
-  homepage-internal:
-    name: homepage-internal
-    driver: bridge
