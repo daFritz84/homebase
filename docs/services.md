@@ -486,17 +486,31 @@ applies the upstream-recommended non-root posture: `user: "1000:1000"` +
 port come from the image ENV (`ND_DATAFOLDER=/data`, `ND_MUSICFOLDER=/music`,
 `ND_PORT=4533`).
 
-**No Authelia wall (user decision 2026-11-14, after a short wall
-experiment):** Navidrome has no native OIDC and no trusted-proxy header SSO
-is configured, so a `forward_auth` wall on this internal-only exposure meant
-Authelia login + Navidrome login (two logins) — rejected ("no wall on the
-internal network"). Subsonic API clients send their own Basic/token auth per
-request and can never pass a `forward_auth` cookie wall — Navidrome's own
-login is the gate for ALL access. Exposure is LAN/VPN-only via AdGuard split
-DNS; `*.sseifried.link` is already covered by the existing wildcard rewrite,
-so AdGuard needs **no change**. `navidrome.sseifried.link` is absent from
+**Authelia wall + ExtAuth header SSO (single login):** Navidrome supports
+externalized authentication (navidrome.org "Externalized Authentication"):
+the Caddy wall (two_factor, `group:homebase-admins`) authenticates the
+browser, `forward_auth` copies the `Remote-User` header, and Navidrome
+auto-logs-in that user — one Authelia login end to end. Security per the
+Navidrome docs: `ND_EXTAUTH_TRUSTEDSOURCES` trusts **only Caddy's pinned
+caddy-proxy IP** (`10.89.0.200/32`, `ipv4_address` in `caddy/compose.yaml` —
+source-IP check, so other caddy-proxy containers cannot spoof the header),
+and Caddy strips client-supplied `Remote-User` (`request_header
+-Remote-User`) so the header only ever comes from Authelia. **Username
+match is required:** `Remote-User` (LDAP uid `sseifried`) == Navidrome
+username (verified via `/app/navidrome user list`); a mismatch silently
+creates a fresh non-admin user with an empty library. `/rest/*` is
+**bypassed** at Caddy: Subsonic clients (Symfonium, dSub, …) send their own
+Basic/token auth per request and can never pass a cookie wall — Navidrome
+authenticates them with their own password (keep it: it is the Subsonic
+client credential); the web app's `NavidromeUI` `/rest/` calls carry the
+server-issued Subsonic credentials and work through the same bypass.
+`ND_EXTAUTH_LOGOUTURL` returns logout to Authelia (full SSO logout).
+Exposure is LAN/VPN-only via AdGuard split DNS; `*.sseifried.link` is
+already covered by the existing wildcard rewrite, so AdGuard needs **no
+change**. `navidrome.sseifried.link` is absent from
 `cloudflared/config.yml` — **never add it** (same doctrine as
-cockpit/adguard/homepage/homeassistant).
+cockpit/adguard/homepage/homeassistant). Authelia down = web UI 502,
+Subsonic playback unaffected (bypassed path).
 
 Data that cannot be rebuilt: `navidrome/data/navidrome.db` — users,
 playlists, share tokens **and the auto-generated session/password secrets**
@@ -1472,8 +1486,9 @@ Caddy (wildcard cert)
    │     (tunnel-only listener: cloudflared ingresses wanderer here; :8443 is
    │     NOT published on the host, so only the tunnel can reach it)
    ├─ adguard|status ──► forward_auth authelia:9091 (wall) ──► upstream
-   ├─ navidrome ──► navidrome:4533 (no wall — own login gates all access;
-   │     Subsonic API per-request auth; internal-only, user decision 2026-11-14)
+   ├─ navidrome ──► wall + ExtAuth header SSO (Remote-User auto-login,
+   │     trusted source = Caddy pinned IP 10.89.0.200; /rest/* bypassed —
+   │     Subsonic per-request auth at the app)
    ├─ jellyfin ──► jellyfin:8096 (no wall — own login gates all access;
    │     API/mobile clients per-request auth; internal-only, same decision)
    ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia, LAN/VPN-only)
@@ -1527,8 +1542,8 @@ Authelia wall is stacked on a native OIDC app.
 | metrics (Beszel) | native OIDC | PocketBase OAuth2 |
 | adguard | wall | two_factor + homebase-admins |
 | status (Uptime Kuma) | wall | two_factor + homebase-admins |
-| navidrome | none — documented exception | own login gates all access (no OIDC, no header SSO; no wall on internal per user decision 2026-11-14); Subsonic clients authenticate per request |
-| jellyfin | none — documented exception | own login gates all access (same decision); API/mobile clients authenticate per request (X-Emby-Token etc.) |
+| navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
+| jellyfin | none — documented exception | own login gates all access (no OIDC, no header SSO without a third-party plugin; user decision 2026-11-14); API/mobile clients authenticate per request (X-Emby-Token etc.) |
 | wanderer (LAN/VPN) | native OIDC | no wall on `:443` |
 | wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
 | authelia | portal | self (ACL-exempt endpoints) |

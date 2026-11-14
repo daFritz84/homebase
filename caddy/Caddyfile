@@ -121,17 +121,33 @@ wanderer.sseifried.link:8443 {
 	}
 }
 
-# Navidrome (music streaming) — NO wall (user decision 2026-11-14, after a
-# short wall experiment): Navidrome has no native OIDC and no trusted-proxy
-# header SSO is configured, so a forward_auth wall on this internal-only
-# exposure meant Authelia login + Navidrome login (two logins) — rejected
-# ("no wall on the internal network"). Subsonic API clients (Symfonium,
-# dSub, …) send their own Basic/token auth per request and can never pass a
-# cookie wall; Navidrome's own login gates ALL access. LAN/VPN-only exposure
-# (AdGuard split DNS) — never add to the tunnel allowlist.
+# Navidrome (music streaming) — Authelia wall + ExtAuth header SSO (single
+# login, navidrome.org "Externalized Authentication"): the wall
+# (two_factor, group:homebase-admins) authenticates the browser, forward_auth
+# copies the Remote-User header (the authelia-fa snippet), and Navidrome
+# auto-logs-in that user (ND_EXTAUTH_TRUSTEDSOURCES trusts ONLY Caddy's
+# pinned IP 10.89.0.200 — caddy/compose.yaml; the Remote-User header name is
+# Navidrome's default). `request_header -Remote-User` strips any
+# client-supplied header BEFORE the wall (docs security rule #1: the header
+# must only ever come from Authelia). /rest/* BYPASSED: Subsonic clients
+# (Symfonium, dSub, …) send their own Basic/token auth per request and can
+# never pass a cookie wall — Navidrome authenticates them (header absent →
+# standard Subsonic scheme); the web app's NavidromeUI /rest/ calls carry the
+# server-issued Subsonic credentials and work through the same bypass.
+# Remote-User (LDAP uid sseifried) == Navidrome username (verified via
+# `/app/navidrome user list`). LAN/VPN-only exposure (AdGuard split DNS) —
+# never add to the tunnel allowlist.
 navidrome.sseifried.link {
 	import tls
-	reverse_proxy navidrome:4533
+	request_header -Remote-User
+	@subsonic path /rest/*
+	handle @subsonic {
+		reverse_proxy navidrome:4533
+	}
+	handle {
+		import authelia-fa
+		reverse_proxy navidrome:4533
+	}
 }
 
 # Jellyfin (media server) — NO wall (user decision 2026-11-14, same

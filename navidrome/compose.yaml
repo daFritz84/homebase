@@ -10,6 +10,17 @@
 # ND_ENFORCENONROOTUSER (the app itself refuses uid 0). Container uid 1000
 # maps into the subuid range — chown data/ once before first start
 # (`podman unshare chown 1000:1000 data`, see docs/services.md).
+# Authelia wall + ExtAuth header SSO (navidrome.org "Externalized
+# Authentication"): the Caddy wall authenticates the browser and copies the
+# Remote-User header; Navidrome auto-logs-in that user (username sseifried =
+# LDAP uid, verified). ND_EXTAUTH_TRUSTEDSOURCES trusts ONLY Caddy's pinned
+# caddy-proxy IP (caddy/compose.yaml ipv4_address) — source-IP check, so
+# other caddy-proxy containers cannot spoof the header (docs security rule).
+# Caddy strips client-supplied Remote-User (request_header -Remote-User).
+# /rest/* is bypassed at Caddy → Subsonic clients authenticate at Navidrome
+# with their own password (Symfonium/dSub). Logout returns to Authelia.
+# Env is baked in at container creation: changes need
+# `podman-compose up -d --force-recreate` (unit restart does not re-read env).
 # Folders/port come from the image ENV (ND_DATAFOLDER=/data,
 # ND_MUSICFOLDER=/music, ND_PORT=4533) — no folder env needed here.
 # ./music is a PLACEHOLDER bind mount: swap the line to the NFS mount point
@@ -24,6 +35,10 @@ services:
     user: "1000:1000"
     environment:
       ND_ENFORCENONROOTUSER: "true"
+      # ExtAuth: trust ONLY Caddy (pinned IP) as the authenticated-user source
+      ND_EXTAUTH_TRUSTEDSOURCES: 10.89.0.200/32
+      # logout in Navidrome -> Authelia logout (full SSO logout)
+      ND_EXTAUTH_LOGOUTURL: https://authelia.sseifried.link/logout?rd=https://navidrome.sseifried.link/
     volumes:
       - ./data:/data
       - ./music:/music:ro
