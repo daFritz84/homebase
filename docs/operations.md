@@ -505,7 +505,10 @@ Notes:
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; existing HA sessions keep working, break-glass form:
   `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
-  Jellyfin is not walled (own login gates all access) — unaffected.
+  Jellyfin is a native OIDC client (SSO-Auth plugin), not walled — it keeps
+  serving; only its SSO login redirect to Authelia fails. Break-glass: the
+  local admin login (a password account) still works — the plugin gates only
+  the browser SSO path.
   Navidrome's Subsonic playback is unaffected (bypassed `/rest/*` path);
   only its web UI 502s. Wanderer's LAN path (native OIDC) keeps serving,
   only its login redirect fails.
