@@ -393,8 +393,11 @@ Wanderer's own account system (PocketBase) federates to Authelia via generic
 OIDC: the login page gets an **Authelia button**, and because the
 `authelia_session` cookie covers `sseifried.link`, the OIDC redirect is
 authorized **silently** — one login end to end (internet via Access, LAN via
-split DNS). The wall (forward_auth) and the app login are separate layers;
-this closes the second one.
+split DNS). The forward_auth wall is **tunnel-only** (2026-11-14): the
+internet path is walled on the `:8443` listener (admins-only edge
+enforcement — the only place group rules can gate this app), the LAN/VPN
+path (`:443`) has no wall — the app's native OIDC is the single Authelia
+layer there (no 2nd wall on a native OIDC client).
 
 - **Authelia client:** `wanderer` in `authelia/config/configuration.yml`
   (confidential, PKCE S256, `client_secret_post` — PocketBase posts
@@ -483,13 +486,18 @@ applies the upstream-recommended non-root posture: `user: "1000:1000"` +
 port come from the image ENV (`ND_DATAFOLDER=/data`, `ND_MUSICFOLDER=/music`,
 `ND_PORT=4533`).
 
-**No Authelia wall, on purpose:** Subsonic API clients send their own Basic
-auth per request and can never pass a `forward_auth` cookie wall — Navidrome's
-own login is the gate. Exposure is LAN/VPN-only via AdGuard split DNS;
-`*.sseifried.link` is already covered by the existing wildcard rewrite, so
-AdGuard needs **no change**. `navidrome.sseifried.link` is absent from
-`cloudflared/config.yml` — **never add it** (same doctrine as
-cockpit/adguard/homepage/homeassistant).
+**Authelia wall on the web UI, `/rest/*` exempt (2026-11-14):** the wall
+(two_factor, `group:homebase-admins` — the AdGuard/Uptime-Kuma pattern) gates
+the browser web UI; Subsonic API clients (Symfonium, dSub, …) send their own
+Basic/token auth per request and can never pass a `forward_auth` cookie wall,
+so the Caddy site exempts `/rest/*` and those clients authenticate at
+Navidrome (own login = the gate, kept as defense-in-depth). Browser `/api/`
+calls carry the cookies, so they pass the wall. Exposure is LAN/VPN-only via
+AdGuard split DNS; `*.sseifried.link` is already covered by the existing
+wildcard rewrite, so AdGuard needs **no change**. `navidrome.sseifried.link`
+is absent from `cloudflared/config.yml` — **never add it** (same doctrine as
+cockpit/adguard/homepage/homeassistant). Authelia down = web UI 502, API
+playback unaffected (exempt path).
 
 Data that cannot be rebuilt: `navidrome/data/navidrome.db` — users,
 playlists, share tokens **and the auto-generated session/password secrets**
@@ -561,15 +569,22 @@ transcoding. Compose file: `jellyfin/compose.yaml`. Unit:
 Single container on `caddy-proxy` (alias `jellyfin`), no host ports — served
 by Caddy at `https://jellyfin.sseifried.link`.
 
-**No Authelia wall, on purpose:** Jellyfin API/mobile clients (Infuse,
-Swiftfin, …) authenticate with `X-Emby-Token` / `Authorization` headers per
-request and can never pass a `forward_auth` cookie wall — Jellyfin's own
-login is the gate. Exposure is LAN/VPN-only via AdGuard split DNS;
+**Authelia wall on the web UI, API clients exempt (2026-11-14):** the wall
+(two_factor, `group:homebase-admins`) gates the browser web UI; Jellyfin
+API/mobile clients (Infuse, Swiftfin, Kodi, …) authenticate with per-request
+credentials and can never pass a `forward_auth` cookie wall, so the Caddy
+site exempts the four documented Jellyfin auth vectors: `X-Emby-Token`
+header, legacy `X-Emby-Authorization` header, `Authorization: MediaBrowser …`,
+and the `?api_key=` query param — those clients authenticate at Jellyfin (own
+login = the gate). The web client's API calls carry the `MediaBrowser` header
+(exempt handle); the `/embywebsocket` upgrade carries the browser cookies
+(passes the wall). Exposure is LAN/VPN-only via AdGuard split DNS;
 `*.sseifried.link` is already covered by the existing wildcard rewrite, so
 AdGuard needs **no change**. `jellyfin.sseifried.link` is absent from
 `cloudflared/config.yml` — **never add it** (same doctrine as
 cockpit/adguard/homepage/homeassistant/navidrome). Caddy passes WebSockets
-through by default (required by the Jellyfin web client).
+through by default (required by the Jellyfin web client). Authelia down =
+web UI 502, app playback unaffected (exempt paths).
 
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
@@ -1444,42 +1459,53 @@ Single self-hosted identity layer: **Authelia** (login portal, 2FA, OIDC IdP)
 `podman-compose@authelia` (shared pattern above).
 
 ```
-Browser (LAN, AdGuard split DNS)
+Browser (LAN/VPN, AdGuard split DNS)
   │ https://<app>.sseifried.link
   ▼
 Remote (public internet, no VPN)
    │ https://wanderer|authelia.sseifried.link — ONLY these two, via Cloudflare
    │ Access (Authelia OIDC federation login) + cloudflared tunnel
-  ▼
+   ▼
 Caddy (wildcard cert)
-  ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
-  ├─ homeassistant.sseifried.link ──► host.containers.internal:8123 (native OIDC client → Authelia (gate))
-  ├─ adguard|wanderer ──► forward_auth authelia:9091 (wall) ──► upstream
-  ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia, LAN/VPN-only)
-  └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP;
-       internet-published via the tunnel — federation login + wall redirects)
+   ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
+   ├─ homeassistant.sseifried.link ──► host.containers.internal:8123 (native OIDC client → Authelia (gate))
+   ├─ stirling|bookorbit|metrics ──► upstream (native OIDC clients → Authelia, no wall)
+   ├─ wanderer.sseifried.link ──► wanderer:3000 (native OIDC client, no wall — LAN/VPN)
+   ├─ wanderer.sseifried.link:8443 ──► forward_auth authelia:9091 (wall) ──► wanderer:3000
+   │     (tunnel-only listener: cloudflared ingresses wanderer here; :8443 is
+   │     NOT published on the host, so only the tunnel can reach it)
+   ├─ adguard|status ──► forward_auth authelia:9091 (wall) ──► upstream
+   ├─ navidrome ──► wall, /rest/* exempt (Subsonic API authenticates at the app)
+   ├─ jellyfin ──► wall, API-credential requests exempt (X-Emby-Token /
+   │     X-Emby-Authorization / Authorization: MediaBrowser / api_key)
+   ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia, LAN/VPN-only)
+   └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP;
+        internet-published via the tunnel — federation login + wall redirects)
 
 authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
                 sqlite db + openldap data in named volumes
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `two_factor` for `group:homebase-admins` on AdGuard and
-Wanderer (the internet-published app — admins-only since the partner
-account was removed, 2026-11-08); no rules for the Authelia
-portal (its endpoints are exempt from ACL), Homepage (no forward_auth — its
-own OIDC gate enforces auth: Authelia authorizes the `homepage` OIDC client,
-and Homepage admits any identity Authelia authorizes) or Home Assistant (no
-forward_auth — gated by its OIDC client's `authorization_policy` + the
-component's `roles`: only `homebase-admins` is admitted, admins-only as the
-old wall rule). Cockpit has **no rule and no forward_auth** — it stays
-outside Authelia entirely. Session cookie domain `sseifried.link` → one
-login, all walled apps (true SSO). OIDC clients: `homepage`, `homeassistant`,
+**default deny**; `two_factor` for `group:homebase-admins` on AdGuard, Uptime
+Kuma, Navidrome, Jellyfin, and Wanderer (the internet-published app —
+admins-only since the partner account was removed, 2026-11-08; the Wanderer
+rule is evaluated only on the `:8443` tunnel listener); no rules for the
+Authelia portal (its endpoints are exempt from ACL), Homepage (no
+forward_auth — its own OIDC gate enforces auth: Authelia authorizes the
+`homepage` OIDC client, and Homepage admits any identity Authelia
+authorizes), Home Assistant (no forward_auth — gated by its OIDC client's
+`authorization_policy` + the component's `roles`: only `homebase-admins` is
+admitted, admins-only as the old wall rule), Stirling PDF, BookOrbit and
+Beszel (native OIDC clients, no wall). Cockpit has **no rule and no
+forward_auth** — it stays outside Authelia entirely. Session cookie domain
+`sseifried.link` → one login, all walled apps (true SSO). OIDC clients:
+`homepage`, `homeassistant`, `stirling-pdf`, `bookorbit`, `beszel`,
 `wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
 `cloudflare-access` (Cloudflare Access federation — the raw client
 secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
 `scopes: openid/email/profile`). Second factors: **enforced** — every rule
-and all four OIDC clients run `two_factor`: a **WebAuthn passkey stored in
+and all seven OIDC clients run `two_factor`: a **WebAuthn passkey stored in
 Bitwarden** (primary, registered from the desktop Chrome/Edge Bitwarden
 extension; asserted via the vault on mobile) plus a **TOTP backup factor**,
 enrolled in the login's 2FA step — see "MFA enrollment".
@@ -1487,6 +1513,33 @@ enrolled in the login's 2FA step — see "MFA enrollment".
 not passwordless. Passkeys work through the tunnel: rp_id `sseifried.link`,
 real domain. Recovery: [operations.md](operations.md), "Authelia MFA
 recovery".
+
+### Auth matrix (internal exposure, verified 2026-11-14)
+
+Rule: every internally-exposed (LAN/VPN) service is protected by **exactly
+one** Authelia layer — native OIDC **or** the forward_auth wall — and no 2nd
+Authelia wall is stacked on a native OIDC app.
+
+| Service | Protection | Notes |
+| --- | --- | --- |
+| homepage | native OIDC | built-in gate → `homepage` client |
+| homeassistant | native OIDC | hass-oidc-auth, roles → homebase-admins |
+| stirling | native OIDC | Spring Security SSO; REST API keys are per-request (no wall) |
+| bookorbit | native OIDC | in-app provider; OPDS/device creds per-request (no wall) |
+| metrics (Beszel) | native OIDC | PocketBase OAuth2 |
+| adguard | wall | two_factor + homebase-admins |
+| status (Uptime Kuma) | wall | two_factor + homebase-admins |
+| navidrome | wall (web UI) | `/rest/*` exempt — Subsonic per-request auth at the app |
+| jellyfin | wall (web UI) | API-credential requests exempt — per-request auth at the app |
+| wanderer (LAN/VPN) | native OIDC | no wall on `:443` |
+| wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
+| authelia | portal | self (ACL-exempt endpoints) |
+| cockpit | none — documented exception | PAM + TOTP, break-glass (explicit user decision) |
+| Caddy `:80 /health` | none — informational | proxies Homepage's public healthcheck, plaintext, read-only |
+
+Negative ACL (non-admin → 403 on walled domains) is not testable on this
+single-user LDAP (only `sseifried`, a homebase-admin) — rely on the rule
+syntax matching the proven adguard/status rules.
 
 ### First run
 
