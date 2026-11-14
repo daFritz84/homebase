@@ -147,6 +147,8 @@ navidrome.sseifried.link {
 # forward_auth cookie wall (navidrome/jellyfin doctrine) — exempt the four
 # documented Jellyfin auth vectors: X-Emby-Token header, legacy
 # X-Emby-Authorization header, Authorization: MediaBrowser …, ?api_key=.
+# (Four named matchers + mutually-exclusive handles = OR: caddy 2.11.7 has
+# no `any` matcher combinator — probed; `query` needs param=val format.)
 # Browser web UI: wall → Authelia SSO; the web client's API calls carry the
 # MediaBrowser Authorization header, so they take the exempt handle; the
 # /embywebsocket upgrade carries the browser cookies, so it passes the wall.
@@ -155,13 +157,20 @@ navidrome.sseifried.link {
 # through by default (required by the Jellyfin web client).
 jellyfin.sseifried.link {
 	import tls
-	@api any {
-		header X-Emby-Token *
-		header X-Emby-Authorization *
-		header_regexp Authorization ^MediaBrowser
-		query api_key *
+	@api_token header X-Emby-Token *
+	@api_embyauth header X-Emby-Authorization *
+	@api_media header_regexp Authorization ^MediaBrowser
+	@api_key query api_key=*
+	handle @api_token {
+		reverse_proxy jellyfin:8096
 	}
-	handle @api {
+	handle @api_embyauth {
+		reverse_proxy jellyfin:8096
+	}
+	handle @api_media {
+		reverse_proxy jellyfin:8096
+	}
+	handle @api_key {
 		reverse_proxy jellyfin:8096
 	}
 	handle {
