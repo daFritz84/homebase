@@ -64,7 +64,7 @@ Conflicts → stop and report; never resolve on the server.
 
 | Change | Command, in the service dir on the server |
 | --- | --- |
-| config/code only | `podman restart <container>` — verify `podman inspect <container> --format "{{.State.StartedAt}}"` moved; `systemctl --user restart podman-compose@<project>` can be a **no-op** on a running pod (ExecStartPre is `podman pod start`) |
+| config/code only | `systemctl --user restart podman-compose@<project>` — verify `podman inspect <container> --format "{{.State.StartedAt}}"` moved. **Do NOT `podman restart <container>` while the unit is active** (observed 2026-11-14): `podman-compose up` is the unit's main process, so stopping the container makes the main process exit → systemd runs ExecStop → `podman pod stop` → the container stays DOWN. `podman restart <container>` is only safe when the unit is already `inactive` (podman-compose exited, container persists via `restart: unless-stopped` — e.g. authelia's steady state). Check first: `systemctl --user is-active podman-compose@<project>` |
 | image tag bump | `podman-compose pull`, then unit restart |
 | Caddy image rebuild | `podman-compose build` (bump `CB_VERSION` and the plugin pin in `caddy/Dockerfile` together) |
 | new/changed `.env` / `.env.secret` key | `podman-compose up -d --force-recreate` (unit restart does **not** re-read env) |
