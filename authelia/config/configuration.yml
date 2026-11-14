@@ -12,12 +12,13 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit|beszel].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit|beszel|jellyfin].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
 #     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
 #     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH / STIRLING_OIDC_CLIENT_SECRET_HASH /
-#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH / BESZEL_OIDC_CLIENT_SECRET_HASH
+#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH / BESZEL_OIDC_CLIENT_SECRET_HASH /
+#     JELLYFIN_OIDC_CLIENT_SECRET_HASH
 #     env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
 #     (AUTHELIA_..._CLIENTS_0_...) are NOT supported — 4.39 rejects them with
@@ -283,6 +284,34 @@ identity_providers:
         # 'client_secret_post'"). The homeassistant client keeps post.
         token_endpoint_auth_method: 'client_secret_basic'
         # If the federation test shows Access sends no PKCE, drop require_pkce.
+      - client_id: 'jellyfin'
+        client_name: 'Jellyfin (SSO-Auth plugin OIDC SSO)'
+        # argon2 digest injected from .env.secret by the template filter
+        # (JELLYFIN_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh);
+        # the RAW secret is pasted into the Jellyfin SSO-Auth plugin provider
+        # form (Dashboard -> Plugins -> SSO-Auth -> Settings -> Add provider,
+        # in-app config, never stored in a file)
+        client_secret: '{{ env "JELLYFIN_OIDC_CLIENT_SECRET_HASH" }}'
+        public: false
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
+        consent_mode: 'auto'
+        # the plugin gates access on the `groups` claim (RoleClaim=groups,
+        # Roles/AdminRoles=homebase-admins); the scope is requested via the
+        # plugin's "Request Additional Scopes: groups"
+        scopes: ['openid', 'profile', 'groups']
+        redirect_uris:
+          # SSO-Auth plugin's fixed OIDC callback path: /sso/OID/redirect/<provider>
+          # (provider name = "authelia" in the plugin config)
+          - 'https://jellyfin.sseifried.link/sso/OID/redirect/authelia'
+        grant_types: ['authorization_code']
+        response_types: ['code']
+        # the plugin (IdentityModel client) expects unsigned access/userinfo tokens
+        access_token_signed_response_alg: 'none'
+        userinfo_signed_response_alg: 'none'
+        # the plugin authenticates at the token endpoint with POST body credentials
+        token_endpoint_auth_method: 'client_secret_post'
 
 session:
   # secret from AUTHELIA_SESSION_SECRET
@@ -318,8 +347,9 @@ access_control:
   # bookorbit./metrics.: rules are only evaluated for forward-auth requests,
   # and no Caddy site block forward-auths those domains (authelia serves its
   # own portal — its endpoints are exempt from ACL; Homepage, Home
-  # Assistant, Stirling PDF, BookOrbit and Beszel are native OIDC clients,
-  # gated by their clients' authorization_policy + the app-side role checks).
+  # Assistant, Stirling PDF, BookOrbit, Beszel and Jellyfin (SSO-Auth plugin)
+  # are native OIDC clients, gated by their clients' authorization_policy +
+  # the app-side role checks).
   rules:
     # walled apps. two_factor ENFORCED: Bitwarden passkey (primary) + TOTP
     # (backup) — with zero registered methods the login's 2FA step presents
@@ -342,11 +372,12 @@ access_control:
     - domain: 'navidrome.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
-    # jellyfin.sseifried.link: NO rule — no forward_auth (no native OIDC and
-    # no header SSO without a third-party plugin; wall experiment reverted
-    # 2026-11-14). Own login gates all access; API clients (X-Emby-Token,
-    # X-Emby-Authorization, Authorization: MediaBrowser, api_key)
-    # authenticate per request.
+    # jellyfin.sseifried.link: NO rule — no forward_auth. Jellyfin is a native
+    # OIDC client via the SSO-Auth plugin (the plugin runs the OIDC code flow
+    # itself and gates on the `groups` claim -> homebase-admins; the forward_auth
+    # wall experiment was reverted 2026-11-14, plugin SSO added the same day).
+    # API/mobile clients (X-Emby-Token, X-Emby-Authorization, Authorization:
+    # MediaBrowser, api_key) authenticate per request and bypass the browser SSO.
     # Wanderer is the one app published to the internet via the Cloudflare
     # Tunnel (cloudflared/config.yml); admins-only since the partner
     # account was removed (2026-11-08, stack is single-user). Evaluated ONLY

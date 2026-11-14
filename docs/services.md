@@ -582,20 +582,65 @@ transcoding. Compose file: `jellyfin/compose.yaml`. Unit:
 Single container on `caddy-proxy` (alias `jellyfin`), no host ports — served
 by Caddy at `https://jellyfin.sseifried.link`.
 
-**No Authelia wall (user decision 2026-11-14, same wall experiment):**
-Jellyfin has no native OIDC; a `forward_auth` wall gates only the browser
-web UI and Jellyfin's own login still follows it (the web client
-authenticates with `X-Emby-Token`, not the Authelia session) — two logins on
-an internal-only exposure, rejected. API/mobile clients (Infuse, Swiftfin,
-Kodi, …) authenticate with `X-Emby-Token` / `X-Emby-Authorization` /
-`Authorization: MediaBrowser …` / `?api_key=` per request and can never pass
-a `forward_auth` cookie wall — Jellyfin's own login is the gate for ALL
-access. Exposure is LAN/VPN-only via AdGuard split DNS; `*.sseifried.link`
-is already covered by the existing wildcard rewrite, so AdGuard needs **no
-change**. `jellyfin.sseifried.link` is absent from `cloudflared/config.yml` —
-**never add it** (same doctrine as
+**Native Authelia OIDC client (SSO-Auth plugin, user decision 2026-11-14):**
+Jellyfin has no built-in OIDC, so the **SSO-Auth plugin**
+([9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso)) is the
+native OIDC client — it runs the OIDC code flow in the browser and gates access
+on the `groups` claim (`homebase-admins`). This replaces the earlier
+`forward_auth` wall experiment (reverted 2026-11-14: a wall gates only the
+browser web UI, Jellyfin's own login follows it, and API/mobile clients —
+Infuse, Swiftfin, Kodi — authenticate with `X-Emby-Token` /
+`X-Emby-Authorization` / `Authorization: MediaBrowser …` / `?api_key=` per
+request and can never pass a cookie wall). The plugin SSO covers the browser
+web UI (one portal login end-to-end); the app's per-request auth covers the API
+clients. The `jellyfin` OIDC client is registered in
+`authelia/config/configuration.yml` (confidential + PKCE S256, argon2 digest
+from `authelia/.env.secret` via the template filter,
+`JELLYFIN_OIDC_CLIENT_SECRET_HASH`); the RAW secret is pasted into the plugin's
+provider form (in-app config, never a file). No `access_control` rule: rules
+apply only to walled (forward-auth) apps. Exposure is LAN/VPN-only via AdGuard
+split DNS; `*.sseifried.link` is already covered by the existing wildcard
+rewrite, so AdGuard needs **no change**. `jellyfin.sseifried.link` is absent
+from `cloudflared/config.yml` — **never add it** (same doctrine as
 cockpit/adguard/homepage/homeassistant/navidrome). Caddy passes WebSockets
 through by default (required by the Jellyfin web client).
+
+**SSO setup (one-time, Jellyfin Web UI):** the plugin install + provider config
+is interactive — no compose/env change (the plugin stores its config under
+`jellyfin/data/plugins/`, covered by `backup-jellyfin-data.sh`). Authelia
+first: re-run `../authelia/provision-authelia-secrets.sh` (writes
+`JELLYFIN_OIDC_CLIENT_SECRET_HASH`; save a generated
+`authelia-oidc-jellyfin-secret` to Bitwarden), validate, then
+`podman-compose up -d --force-recreate` in `authelia/` (new `.env.secret` key —
+a unit restart does NOT re-read env). Then in Jellyfin:
+
+1. Dashboard → Plugins → Repositories → `+`: Name `Jellyfin SSO-Auth`, URL
+   `https://raw.githubusercontent.com/9p4/jellyfin-plugin-sso/manifest-release/manifest.json`;
+   Save.
+2. Dashboard → Plugins → All / Other → `SSO-Auth` → Install → restart Jellyfin
+   (`systemctl --user restart podman-compose@jellyfin`).
+3. Dashboard → Plugins → SSO-Auth → ⚙ Settings → Add provider:
+   - Name of the OID Provider: `authelia`
+   - OID Endpoint: `https://authelia.sseifried.link`
+   - OpenID Client ID: `jellyfin`
+   - OID Secret: the RAW value printed by the provision script
+   - Enabled ✓ · Enable Authorization by Plugin ✓ · Enable All Folders ✓
+   - Roles: `homebase-admins` · Admin Roles: `homebase-admins`
+   - Role Claim: `groups` · Request Additional Scopes: `groups`
+   - Set default username claim: `preferred_username` (maps the LDAP uid
+     `sseifried` to the Jellyfin username) · Scheme Override: `https`
+   - Save.
+4. Log in at `https://jellyfin.sseifried.link/sso/OID/start/authelia` (the
+   plugin's start URL; the redirect URI registered in Authelia is
+   `/sso/OID/redirect/authelia`). Add a login-page button per the plugin README.
+
+**Plugin upgrade coupling:** the plugin tracks a Jellyfin server version
+(Authelia tested 10.10.7 + plugin 4.0.0.3; this stack runs 12.4 — **unverified**).
+On every Jellyfin image bump, back up `jellyfin/data/` first (forward-only DB
+migration), confirm the plugin supports the new server, and re-test SSO login.
+If the plugin lags the server, SSO breaks and the local admin login is the
+break-glass (the plugin gates only the browser SSO path; a local account with a
+password still works).
 
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
@@ -1489,8 +1534,9 @@ Caddy (wildcard cert)
    ├─ navidrome ──► wall + ExtAuth header SSO (Remote-User auto-login,
    │     trusted source = Caddy pinned IP 10.89.0.200; /rest/* bypassed —
    │     Subsonic per-request auth at the app)
-   ├─ jellyfin ──► jellyfin:8096 (no wall — own login gates all access;
-   │     API/mobile clients per-request auth; internal-only, same decision)
+    ├─ jellyfin ──► jellyfin:8096 (native OIDC via the SSO-Auth plugin — the
+    │     plugin runs the OIDC flow in the browser, gates on groups→homebase-admins;
+    │     no wall; API/mobile clients per-request auth; internal-only)
    ├─ cockpit.sseifried.link ──► unchanged (PAM + TOTP, no Authelia, LAN/VPN-only)
    └─ authelia.sseifried.link ──► authelia:9091 (login + portal + OIDC IdP;
         internet-published via the tunnel — federation login + wall redirects)
@@ -1501,7 +1547,7 @@ authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
 **default deny**; `two_factor` for `group:homebase-admins` on AdGuard, Uptime
-Kuma, Navidrome, Jellyfin, and Wanderer (the internet-published app —
+Kuma, Navidrome, and Wanderer (the internet-published app —
 admins-only since the partner account was removed, 2026-11-08; the Wanderer
 rule is evaluated only on the `:8443` tunnel listener); no rules for the
 Authelia portal (its endpoints are exempt from ACL), Homepage (no
@@ -1509,16 +1555,18 @@ forward_auth — its own OIDC gate enforces auth: Authelia authorizes the
 `homepage` OIDC client, and Homepage admits any identity Authelia
 authorizes), Home Assistant (no forward_auth — gated by its OIDC client's
 `authorization_policy` + the component's `roles`: only `homebase-admins` is
-admitted, admins-only as the old wall rule), Stirling PDF, BookOrbit and
-Beszel (native OIDC clients, no wall). Cockpit has **no rule and no
-forward_auth** — it stays outside Authelia entirely. Session cookie domain
+admitted, admins-only as the old wall rule), Stirling PDF, BookOrbit,
+Beszel and Jellyfin (native OIDC clients — Jellyfin via the SSO-Auth plugin,
+gated on the `groups` claim → homebase-admins — no wall). Cockpit has **no
+rule and no forward_auth** — it stays outside Authelia entirely. Session cookie domain
 `sseifried.link` → one login, all walled apps (true SSO). OIDC clients:
 `homepage`, `homeassistant`, `stirling-pdf`, `bookorbit`, `beszel`,
-`wanderer` (PocketBase app-level SSO — see "Wanderer SSO") and
+`wanderer` (PocketBase app-level SSO — see "Wanderer SSO"), `jellyfin`
+(SSO-Auth plugin app-level SSO — see "Jellyfin → SSO") and
 `cloudflare-access` (Cloudflare Access federation — the raw client
 secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
 `scopes: openid/email/profile`). Second factors: **enforced** — every rule
-and all seven OIDC clients run `two_factor`: a **WebAuthn passkey stored in
+and all eight OIDC clients run `two_factor`: a **WebAuthn passkey stored in
 Bitwarden** (primary, registered from the desktop Chrome/Edge Bitwarden
 extension; asserted via the vault on mobile) plus a **TOTP backup factor**,
 enrolled in the login's 2FA step — see "MFA enrollment".
@@ -1543,7 +1591,7 @@ Authelia wall is stacked on a native OIDC app.
 | adguard | wall | two_factor + homebase-admins |
 | status (Uptime Kuma) | wall | two_factor + homebase-admins |
 | navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
-| jellyfin | none — documented exception | own login gates all access (no OIDC, no header SSO without a third-party plugin; user decision 2026-11-14); API/mobile clients authenticate per request (X-Emby-Token etc.) |
+| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.) |
 | wanderer (LAN/VPN) | native OIDC | no wall on `:443` |
 | wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
 | authelia | portal | self (ACL-exempt endpoints) |

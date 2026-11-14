@@ -1,11 +1,17 @@
 # jellyfin — media server (movies & TV, https://jellyfin.org)
 # ---
-# No Authelia wall, on purpose: Jellyfin API/mobile clients (Infuse, Swiftfin,
-# …) authenticate with X-Emby-Token / Authorization headers per request and
-# can never pass a forward_auth cookie wall; Jellyfin's own login gates
-# access. LAN/VPN-only exposure via AdGuard split DNS — NEVER add
-# jellyfin.sseifried.link to cloudflared/config.yml (same doctrine as
-# cockpit/adguard/homepage/homeassistant/navidrome).
+# Native Authelia OIDC client via the SSO-Auth plugin (9p4/jellyfin-plugin-sso),
+# NOT a forward_auth wall: the plugin runs the OIDC code flow in the browser and
+# gates on the `groups` claim (homebase-admins). No Authelia wall, on purpose —
+# Jellyfin API/mobile clients (Infuse, Swiftfin, …) authenticate with
+# X-Emby-Token / Authorization headers per request and can never pass a
+# forward_auth cookie wall; the plugin SSO covers the browser web UI, the app's
+# own per-request auth covers the API. LAN/VPN-only exposure via AdGuard split
+# DNS — NEVER add jellyfin.sseifried.link to cloudflared/config.yml (same
+# doctrine as cockpit/adguard/homepage/homeassistant/navidrome). The `jellyfin`
+# OIDC client is registered in authelia/config/configuration.yml; the plugin
+# provider (client_id jellyfin, RAW secret) is configured in the Jellyfin Web UI
+# — see docs/services.md "Jellyfin → SSO".
 # The official image runs as root (Config.User empty — verified via
 # `podman image inspect jellyfin/jellyfin:12.4 --format "{{.Config.User}}"`),
 # and we keep it: under rootless Podman container root maps to host `chef`,
