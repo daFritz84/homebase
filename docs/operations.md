@@ -80,7 +80,8 @@ cd jellyfin && ./backup-jellyfin-data.sh
 ```
 
 The script stops the service, archives `data/` (owner-only, mode `0600`;
-the sibling `cache/` is rebuildable and excluded by construction) to
+the sibling `cache/` is rebuildable and the media dirs `/srv/media/{filme,serien}`
+are CIFS automounts — both excluded by construction) to
 `~/.local/share/jellyfin/backups/jellyfin-data-<date>.tar.gz`, and restarts
 it. No `podman unshare` needed — the image runs as root and rootless Podman
 maps container root to the host user, so `data/` is host-user-owned
@@ -90,6 +91,9 @@ creation and after library/user/plugin changes, at least monthly — and
 the service, `rm -rf data && tar xzf <archive>`, start. The script
 (re)starts the containers directly, so the unit shows `inactive` afterwards
 — `systemctl --user start podman-compose@jellyfin` to re-adopt the pod.
+With the NAS offline the restart cannot start the container (the `/srv/media`
+binds are required): the script reports it as a warning, not a failure — the
+`data/` archive is already written; start the service once the NAS is online.
 
 ### Stirling PDF data backups
 
