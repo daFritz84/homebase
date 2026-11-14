@@ -43,7 +43,7 @@ command -v python3 >/dev/null || { echo "[ERR] python3 not found (JSON handling)
 
 if [ -z "${PB_ADMIN_PW:-}" ]; then
   command -v bw >/dev/null || { echo "[ERR] bw not found and PB_ADMIN_PW unset"; exit 1; }
-  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
   PB_ADMIN_PW="$(bw get password beszel-superuser-password 2>/dev/null || true)"
   [ -n "${PB_ADMIN_PW}" ] || { echo "[ERR] Bitwarden item beszel-superuser-password empty/missing"; exit 1; }
 fi

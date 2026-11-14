@@ -43,7 +43,7 @@ if [ -n "${PB_CLIENT_SECRET:-}" ]; then
   echo "[*] Using PB_CLIENT_SECRET env override"
 else
   command -v bw >/dev/null || { echo "[ERR] bw (Bitwarden CLI) not found — see docs/host-setup.md"; exit 1; }
-  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
   PB_CLIENT_SECRET="$(bw get password authelia-oidc-wanderer-secret 2>/dev/null || true)"
   [ -n "${PB_CLIENT_SECRET}" ] || { echo "[ERR] Bitwarden item authelia-oidc-wanderer-secret empty/missing — run authelia/provision-authelia-secrets.sh and save the generated secret"; exit 1; }
 fi
