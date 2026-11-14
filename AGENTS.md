@@ -70,7 +70,8 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
   tracked files; never print them.
 - Authelia down = walled apps (AdGuard UI, Uptime Kuma, Navidrome web UI, Wanderer via the tunnel
   `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed `/rest/*`).
-  Jellyfin is not walled (own login gates all access, internal-only — user decision 2026-11-14).
+  Jellyfin is a native OIDC client (SSO-Auth plugin), not walled: it keeps
+  serving, only its SSO login redirect fails (break-glass: local admin login).
   HA is a native OIDC client, not walled:
   it keeps serving, only its login redirect fails (break-glass `?skip_oidc_redirect=true`).
   Cockpit, Homepage, VPN, SSH are break-glass.
