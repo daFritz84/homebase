@@ -20,8 +20,12 @@
 # create a status page in the UI and put its slug in homepage/config/services.yaml
 # (HOMEPAGE_VAR_KUMA_SLUG). The status page is public-by-design; it is reachable on
 # the internal caddy-proxy port (http://status:3001), never exposed publicly.
-# Healthcheck uses node (always in the image) — the image's curl presence is not
-# guaranteed, so a curl healthcheck is not assumed.
+# Healthcheck uses node (always in the image) — the image has /bin/sh + node but
+# NO wget/curl, so node -e is the probe. It MUST be a plain string, not a CMD
+# array: podman-compose converts a CMD-array healthcheck into CMD-SHELL
+# (/bin/sh -c <shell-joined>), which shell-quotes the node -e JS into a dash
+# "Syntax error: ( unexpected" (observed: FailingStreak 105). A string test is
+# passed to /bin/sh -c verbatim and the JS survives (verified exit 0).
 
 services:
   uptime-kuma:
@@ -38,13 +42,7 @@ services:
         aliases:
           - status
     healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://localhost:3001',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))",
-        ]
+      test: "node -e \"require('http').get('http://localhost:3001',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))\""
       interval: 15s
       retries: 10
       start_period: 60s
