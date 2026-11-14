@@ -1,0 +1,59 @@
+# uptime-kuma — availability/uptime/latency monitor (https://github.com/louislam/uptime-kuma)
+# ---
+# Behind the Authelia forward_auth wall (two_factor, group:homebase-admins — the
+# AdGuard pattern): Uptime Kuma has NO native OIDC (its docs/env expose none; the
+# often-cited issue #1057 is about 2FA, not OIDC — confirm at first start), so the
+# wall is the only Authelia SSO path. Its own login stays enabled as defense-in-depth.
+# LAN/VPN-only exposure via AdGuard split DNS — NEVER add status.sseifried.link to
+# cloudflared/config.yml (same doctrine as cockpit/adguard/homepage/homeassistant/
+# navidrome/jellyfin/stirling-pdf/bookorbit).
+# Runs as root (image Config.User is empty — probe at first start:
+# `podman image inspect docker.io/louislam/uptime-kuma:2 --format '{{.Config.User}}'`).
+# Under rootless Podman container root maps to host chef (jellyfin/homeassistant
+# mapping), so ./data is host-user-owned — NO `podman unshare chown` ritual. If the
+# probe shows the image supports non-root and you set `user: "1000:1000"`, chown
+# ./data once (navidrome ritual) and record the deviation here.
+# ./data is the irreplaceable SQLite (monitors, status pages, notifications, 2FA,
+# settings) — covered by backup-uptime-kuma-data.sh; run it after setup and before
+# every image bump (DB migrations are forward-only).
+# The Homepage widget reads a STATUS PAGE (Kuma has no full API), not an API key —
+# create a status page in the UI and put its slug in homepage/config/services.yaml
+# (HOMEPAGE_VAR_KUMA_SLUG). The status page is public-by-design; it is reachable on
+# the internal caddy-proxy port (http://status:3001), never exposed publicly.
+# Healthcheck uses node (always in the image) — the image's curl presence is not
+# guaranteed, so a curl healthcheck is not assumed.
+
+services:
+  uptime-kuma:
+    image: docker.io/louislam/uptime-kuma:2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      TZ: Europe/Vienna
+    volumes:
+      - ./data:/app/data/db
+    networks:
+      caddy-proxy:
+        aliases:
+          - status
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3001',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+      timeout: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+networks:
+  caddy-proxy:
+    external: true
