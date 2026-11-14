@@ -28,7 +28,7 @@ set -euo pipefail
 # data exists makes the database unreadable.
 
 command -v bw >/dev/null || { echo "[ERR] bw (Bitwarden CLI) not found — see docs/host-setup.md"; exit 1; }
-bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
 
 # --- CONFIG: target env file (gitignored) ---
 ENV_FILE=".env.secret"

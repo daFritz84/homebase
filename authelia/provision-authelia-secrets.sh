@@ -68,7 +68,7 @@ AUTHHELIA_IMAGE="$(awk '/^[[:space:]]*image:[[:space:]]*docker\.io\/authelia\// 
 [ -n "${AUTHHELIA_IMAGE}" ] || { echo "[ERR] Cannot read the authelia image from compose.yaml — run from the authelia directory"; exit 1; }
 
 command -v bw >/dev/null || { echo "[ERR] bw (Bitwarden CLI) not found — see docs/host-setup.md"; exit 1; }
-bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden session not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
 
 # --- CONFIG: target env file (gitignored) ---
 ENV_FILE=".env.secret"
