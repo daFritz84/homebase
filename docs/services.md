@@ -623,19 +623,35 @@ a unit restart does NOT re-read env). Then in Jellyfin:
    - Name of the OID Provider: `authelia`
    - OID Endpoint: `https://authelia.sseifried.link`
    - OpenID Client ID: `jellyfin`
-   - OID Secret: the RAW value printed by the provision script
-   - Enabled ✓ · Enable Authorization by Plugin ✓ · Enable All Folders ✓
-   - Roles: `homebase-admins` · Admin Roles: `homebase-admins`
-   - Role Claim: `groups` · Request Additional Scopes: `groups`
-   - Set default username claim: `preferred_username` (maps the LDAP uid
-     `sseifried` to the Jellyfin username) · Scheme Override: `https`
-   - Save.
+    - OID Secret: the RAW value printed by the provision script — **must be hex**
+      (the Bitwarden item `authelia-oidc-jellyfin-secret` holds a hex secret; the
+      plugin form-encodes the secret and sends `+` literally, which Authelia
+      decodes as a space → `invalid_client`; generate with `openssl rand -hex 32`)
+    - Enabled ✓ · Enable Authorization by Plugin ✓ · Enable All Folders ✓
+    - **Disable Pushed Authorization ✓** (required — see coupling note)
+    - Roles: `homebase-admins` · Admin Roles: `homebase-admins`
+    - Role Claim: `groups` · Request Additional Scopes: `groups`
+    - Set default username claim: `preferred_username` (maps the LDAP uid
+      `sseifried` to the Jellyfin username) · Scheme Override: `https`
+    - Save.
 4. Log in at `https://jellyfin.sseifried.link/sso/OID/start/authelia` (the
    plugin's start URL; the redirect URI registered in Authelia is
    `/sso/OID/redirect/authelia`). Add a login-page button per the plugin README.
 
-**Plugin upgrade coupling:** the plugin tracks a Jellyfin server version
-(Authelia tested 10.10.7 + plugin 4.0.0.3; this stack runs 12.4 — **unverified**).
+**Plugin upgrade coupling (verified 2026-11-14: Jellyfin 12.4 + plugin 4.0.0.4):**
+the plugin tracks a Jellyfin server version (Authelia's guide is written for
+10.10.7 + plugin 4.0.0.3). Two 4.0.0.4-specific gotchas, both required:
+
+- **Disable Pushed Authorization** — 4.0.0.4 enables PAR by default; its PAR
+  push fails against Authelia (`Failed to push authorization parameters` →
+  400 at `/sso/OID/start/authelia`). Authelia's PAR endpoint itself works (a
+  manual PAR POST returns 201), so this is plugin-side; disabling PAR makes the
+  plugin use the standard authorize redirect (302 → `/api/oidc/authorization`).
+- **Hex client secret** — the plugin form-encodes the `client_secret` and sends
+  `+` literally; Authelia decodes it as a space → `invalid_client`. A hex secret
+  (`openssl rand -hex 32`, no `+`/`/`/`=`) avoids it; the Bitwarden item
+  `authelia-oidc-jellyfin-secret` holds the hex value (the provisioner fetches it).
+
 On every Jellyfin image bump, back up `jellyfin/data/` first (forward-only DB
 migration), confirm the plugin supports the new server, and re-test SSO login.
 If the plugin lags the server, SSO breaks and the local admin login is the

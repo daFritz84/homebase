@@ -78,5 +78,7 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
 - Update-coupling gotchas (Cloudflare plugin pin in `caddy/Dockerfile`, `caddy-proxy` CIDR ↔
   `trusted_proxies static` in `caddy/Caddyfile`; Caddy's pinned `ipv4_address` 10.89.0.200 ↔
   `ND_EXTAUTH_TRUSTEDSOURCES` in `navidrome/compose.yaml`; HA's `trusted_proxies` is UI-managed in
-  `.storage/http` — must be `127.0.0.1`+`::1`, NOT the CIDR, and NOT in `configuration.yaml`):
-  `docs/operations.md`.
+  `.storage/http` — must be `127.0.0.1`+`::1`, NOT the CIDR, and NOT in `configuration.yaml`;
+  Jellyfin SSO-Auth plugin 4.0.0.4 provider needs "Disable Pushed Authorization" + a **hex**
+  client secret (Bitwarden `authelia-oidc-jellyfin-secret`) — PAR and a `+` in the secret both
+  break SSO): `docs/operations.md`.
