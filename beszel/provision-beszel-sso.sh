@@ -33,7 +33,9 @@ cd "$(dirname "$(readlink -f "$0")")"
 PB_URL="${PB_URL:-http://127.0.0.1:8090}"
 PB_ADMIN_EMAIL="${PB_ADMIN_EMAIL:-s.seifried@gmx.at}"
 AUTHHELIA_ISSUER="https://authelia.sseifried.link"
-PROVIDER="authelia"   # oauth2Providers map key + login-page provider name
+PROVIDER="oidc"       # PocketBase OAuth2 registry key (the generic OIDC
+                      # provider). A custom name is rejected with
+                      # validation_missing_provider; displayName is the button.
 CLIENT_ID="beszel"    # must match authelia client_id in configuration.yml
 
 command -v curl >/dev/null || { echo "[ERR] curl not found"; exit 1; }
