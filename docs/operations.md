@@ -496,18 +496,17 @@ Notes:
   "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Homepage HTTPS UI by design (Caddyfile `:80` block).
-- **Walled apps (AdGuard UI, Uptime Kuma, Navidrome/Jellyfin web UI,
-  Wanderer via the tunnel) return 502** — the authelia stack is
+- **Walled apps (AdGuard UI, Uptime Kuma, Wanderer via the tunnel) return
+  502** — the authelia stack is
   down. Check `systemctl --user status podman-compose@authelia` and
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
   Homepage, VPN and SSH are unaffected (not walled). Home Assistant keeps
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; existing HA sessions keep working, break-glass form:
   `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
-  Navidrome/Jellyfin web UIs 502, but API playback is unaffected (Subsonic
-  and Jellyfin API clients ride the exempt paths — TV/mobile apps keep
-  playing); Wanderer's LAN path (native OIDC) keeps serving, only its login
-  redirect fails.
+  Navidrome/Jellyfin are not walled (own login gates all access) —
+  unaffected. Wanderer's LAN path (native OIDC) keeps serving, only its
+  login redirect fails.
   Break-glass is SSH (see [services.md](services.md), "Authelia (SSO) →
   Break-glass").
 - **New `.env.secret` entries have no effect after a unit restart** — the

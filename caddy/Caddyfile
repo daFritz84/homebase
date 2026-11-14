@@ -121,62 +121,32 @@ wanderer.sseifried.link:8443 {
 	}
 }
 
-# Navidrome (music streaming) — Authelia wall on the web UI (two_factor,
-# group:homebase-admins), /rest/* EXEMPT: Subsonic API clients (Symfonium,
+# Navidrome (music streaming) — NO wall (user decision 2026-11-14, after a
+# short wall experiment): Navidrome has no native OIDC and no trusted-proxy
+# header SSO is configured, so a forward_auth wall on this internal-only
+# exposure meant Authelia login + Navidrome login (two logins) — rejected
+# ("no wall on the internal network"). Subsonic API clients (Symfonium,
 # dSub, …) send their own Basic/token auth per request and can never pass a
-# forward_auth cookie wall — they authenticate at Navidrome (navidrome/
-# jellyfin API doctrine). Browser web UI: wall → Authelia SSO; its /api/
-# calls carry the browser cookies, so they pass the wall. Navidrome's own
-# login gates the API tokens and stays as defense-in-depth. LAN/VPN-only
-# exposure (AdGuard split DNS) — never add to the tunnel allowlist.
+# cookie wall; Navidrome's own login gates ALL access. LAN/VPN-only exposure
+# (AdGuard split DNS) — never add to the tunnel allowlist.
 navidrome.sseifried.link {
 	import tls
-	@subsonic path /rest/*
-	handle @subsonic {
-		reverse_proxy navidrome:4533
-	}
-	handle {
-		import authelia-fa
-		reverse_proxy navidrome:4533
-	}
+	reverse_proxy navidrome:4533
 }
 
-# Jellyfin (media server) — Authelia wall on the web UI (two_factor,
-# group:homebase-admins), API clients EXEMPT: mobile/API clients (Infuse,
-# Swiftfin, Kodi, …) send per-request credentials that can never pass a
-# forward_auth cookie wall (navidrome/jellyfin doctrine) — exempt the four
-# documented Jellyfin auth vectors: X-Emby-Token header, legacy
-# X-Emby-Authorization header, Authorization: MediaBrowser …, ?api_key=.
-# (Four named matchers + mutually-exclusive handles = OR: caddy 2.11.7 has
-# no `any` matcher combinator — probed; `query` needs param=val format.)
-# Browser web UI: wall → Authelia SSO; the web client's API calls carry the
-# MediaBrowser Authorization header, so they take the exempt handle; the
-# /embywebsocket upgrade carries the browser cookies, so it passes the wall.
-# Jellyfin's own login gates the API tokens. LAN/VPN-only exposure (AdGuard
-# split DNS) — never add to the tunnel allowlist. Caddy passes WebSockets
-# through by default (required by the Jellyfin web client).
+# Jellyfin (media server) — NO wall (user decision 2026-11-14, same
+# experiment): Jellyfin has no native OIDC; a forward_auth wall gates only
+# the browser web UI and Jellyfin's own login still follows it (the web
+# client authenticates with X-Emby-Token, not the Authelia session) — two
+# logins on an internal-only exposure, rejected. API/mobile clients (Infuse,
+# Swiftfin, Kodi, …) send X-Emby-Token / X-Emby-Authorization /
+# Authorization: MediaBrowser / api_key per request and can never pass a
+# cookie wall; Jellyfin's own login gates ALL access. LAN/VPN-only exposure
+# (AdGuard split DNS) — never add to the tunnel allowlist. Caddy passes
+# WebSockets through by default (required by the Jellyfin web client).
 jellyfin.sseifried.link {
 	import tls
-	@api_token header X-Emby-Token *
-	@api_embyauth header X-Emby-Authorization *
-	@api_media header_regexp Authorization ^MediaBrowser
-	@api_key query api_key=*
-	handle @api_token {
-		reverse_proxy jellyfin:8096
-	}
-	handle @api_embyauth {
-		reverse_proxy jellyfin:8096
-	}
-	handle @api_media {
-		reverse_proxy jellyfin:8096
-	}
-	handle @api_key {
-		reverse_proxy jellyfin:8096
-	}
-	handle {
-		import authelia-fa
-		reverse_proxy jellyfin:8096
-	}
+	reverse_proxy jellyfin:8096
 }
 
 # Stirling PDF (PDF editor/processor) — NO forward_auth wall, on purpose: the

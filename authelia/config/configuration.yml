@@ -33,9 +33,9 @@
 #     (forward_auth trusted_proxies); Authelia trusts the proxy network.
 #   - access_control rules have no bypass_credentials / user-agent criteria —
 #     moot: HA is a native OIDC client (no wall, no bypasses) and the other
-#     walled apps (AdGuard, Uptime Kuma, Navidrome, Jellyfin, and the Wanderer
-#     tunnel listener) need none — the media apps' API clients never reach
-#     the wall (exempt at the Caddy layer, see caddy/Caddyfile).
+#     walled apps (AdGuard, Uptime Kuma, and the Wanderer tunnel listener)
+#     need none — the media apps (navidrome/jellyfin) have no wall at all
+#     (own login; wall experiment reverted 2026-11-14).
 #   - the OIDC issuer is derived from session.cookies[].authelia_url.
 #   - the legacy /api/authelia/validate endpoint is now /api/authz/forward-auth.
 
@@ -334,20 +334,11 @@ access_control:
     - domain: 'status.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
-    # Navidrome — wall on the web UI (two_factor, homebase-admins); /rest/*
-    # (Subsonic API) is exempt at the Caddy layer — those clients authenticate
-    # per-request at the app and can never pass a cookie wall. LAN/VPN-only,
-    # never in the tunnel.
-    - domain: 'navidrome.sseifried.link'
-      policy: 'two_factor'
-      subject: 'group:homebase-admins'
-    # Jellyfin — wall on the web UI (two_factor, homebase-admins); API clients
-    # (X-Emby-Token / X-Emby-Authorization / Authorization: MediaBrowser /
-    # api_key) are exempt at the Caddy layer and authenticate at the app.
-    # LAN/VPN-only, never in the tunnel.
-    - domain: 'jellyfin.sseifried.link'
-      policy: 'two_factor'
-      subject: 'group:homebase-admins'
+    # navidrome./jellyfin.sseifried.link: NO rules — no forward_auth (wall
+    # experiment reverted 2026-11-14: no native OIDC, no header SSO, so the
+    # wall meant double login on an internal-only exposure; user decision
+    # "no wall on the internal network"). Own login gates all access; API
+    # clients (Subsonic, X-Emby-Token) authenticate per request.
     # Wanderer is the one app published to the internet via the Cloudflare
     # Tunnel (cloudflared/config.yml); admins-only since the partner
     # account was removed (2026-11-08, stack is single-user). Evaluated ONLY
