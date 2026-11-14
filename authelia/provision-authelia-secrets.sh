@@ -49,7 +49,12 @@ set -euo pipefail
 # client_id beszel — the RAW value is pasted there, never stored in a file), and
 # for the Jellyfin SSO-Auth plugin provider form (Dashboard -> Plugins ->
 # SSO-Auth -> Settings -> Add provider, client_id jellyfin — the RAW value is
-# pasted there, never stored in a file).
+# pasted there, never stored in a file). The Jellyfin secret MUST be hex
+# (openssl rand -hex 32 — no +, /, =): the SSO-Auth plugin form-encodes the
+# client_secret and sends + literally, which Authelia decodes as a space ->
+# invalid_client. Keep the Bitwarden item authelia-oidc-jellyfin-secret hex:
+# if it is missing, resolve() generates a base64 secret (with +) that breaks
+# the plugin — set the hex value in Bitwarden before running.
 #
 # The Authelia login password (LDIF_LOGIN_PASSWORD for uid=sseifried, for
 # the LDIF userPassword) is generated once, kept in .env.secret across
