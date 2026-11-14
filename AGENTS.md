@@ -68,12 +68,14 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
   `.env*`, `authelia/config/keys/`, `cloudflared/credentials.json`,
   rendered LDIF, `homeassistant/config/secrets.yaml` are gitignored. Never write secret values to
   tracked files; never print them.
-- Authelia down = walled apps (AdGuard UI, Uptime Kuma, Wanderer via the tunnel `:8443` listener)
-  502. Navidrome/Jellyfin are not walled (own login gates all access, internal-only — user decision
-  2026-11-14). HA is a native OIDC client, not walled:
+- Authelia down = walled apps (AdGuard UI, Uptime Kuma, Navidrome web UI, Wanderer via the tunnel
+  `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed `/rest/*`).
+  Jellyfin is not walled (own login gates all access, internal-only — user decision 2026-11-14).
+  HA is a native OIDC client, not walled:
   it keeps serving, only its login redirect fails (break-glass `?skip_oidc_redirect=true`).
   Cockpit, Homepage, VPN, SSH are break-glass.
 - Update-coupling gotchas (Cloudflare plugin pin in `caddy/Dockerfile`, `caddy-proxy` CIDR ↔
-  `trusted_proxies static` in `caddy/Caddyfile`; HA's `trusted_proxies` is UI-managed in
+  `trusted_proxies static` in `caddy/Caddyfile`; Caddy's pinned `ipv4_address` 10.89.0.200 ↔
+  `ND_EXTAUTH_TRUSTEDSOURCES` in `navidrome/compose.yaml`; HA's `trusted_proxies` is UI-managed in
   `.storage/http` — must be `127.0.0.1`+`::1`, NOT the CIDR, and NOT in `configuration.yaml`):
   `docs/operations.md`.
