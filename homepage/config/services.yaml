@@ -69,8 +69,8 @@
         description: SSO — login portal, 2FA enrollment, OIDC
 
     - Uptime Kuma:
-        # abbr (no icon) — avoids a dashboard-icons 404; probe `uptime-kuma` icon
-        # later and swap if present.
+        # abbr (no icon) — avoids a dashboard-icons 404; probe the `uptime-kuma`
+        # icon later and swap if present.
         abbr: UK
         href: https://status.sseifried.link
         description: Uptime & availability monitoring
