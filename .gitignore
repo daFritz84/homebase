@@ -51,6 +51,17 @@ stirling-pdf/data/
 # music/ / jellyfin media/ pattern).
 bookorbit/data/
 
+# Uptime Kuma runtime data (data/: SQLite — monitors, status pages,
+# notification configs, 2FA secrets, settings) — data, not code; covered by
+# backup-uptime-kuma-data.sh.
+uptime-kuma/data/
+
+# Beszel hub runtime data (data/: PocketBase SQLite — users, systems, alerts,
+# API keys) — data, not code; covered by backup-beszel-data.sh. beszel/agent.env
+# holds the agent KEY/TOKEN (secrets from the hub's Add System) — never commit.
+beszel/data/
+beszel/agent.env
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/
