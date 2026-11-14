@@ -26,8 +26,9 @@ row = c.execute("select id from user order by id limit 1").fetchone()
 if not row:
     sys.exit("[ERR] no admin user in the DB — create the Kuma admin first")
 admin = row[0]
-# (name, type, url, port). The host check is TCP:22, NOT ping — rootless Podman
-# cannot grant CAP_NET_RAW, so an ICMP ping monitor fails EPERM in the container.
+# (name, type, url, port). The host check is Kuma's TCP port check (type `port`)
+# on :22, NOT ping — rootless Podman cannot grant CAP_NET_RAW, so an ICMP ping
+# monitor fails EPERM in the container. (Kuma's type is `port`, not `tcp`.)
 monitors = [
     ("Authelia",         "http", "https://authelia.sseifried.link",   None),
     ("Homepage",         "http", "https://homepage.sseifried.link",   None),
@@ -41,7 +42,7 @@ monitors = [
     ("Cockpit",          "http", "https://cockpit.sseifried.link",    None),
     ("Status (self)",    "http", "https://status.sseifried.link",     None),
     ("Metrics (self)",   "http", "https://metrics.sseifried.link",    None),
-    ("Host",             "tcp",  "192.168.178.249",                   22),
+    ("Host",             "port", "192.168.178.249",                   22),
 ]
 added = 0
 for name, mtype, url, port in monitors:
@@ -53,11 +54,12 @@ for name, mtype, url, port in monitors:
         (name, mtype, url, admin, port))
     added += 1
     print("[+] add:", name)
-# self-heal: the host check must be tcp:22 — rootless Podman has no CAP_NET_RAW,
-# so a seeded ICMP ping row fails EPERM. Repair it in place.
-c.execute("update monitor set type='tcp', port=22, url='192.168.178.249' where name='Host' and type!='tcp'")
+# self-heal: the host check must be a `port` (TCP) check on :22 — rootless
+# Podman has no CAP_NET_RAW, so a seeded ICMP ping row fails EPERM, and a `tcp`
+# type is "Unknown Monitor Type". Repair it in place.
+c.execute("update monitor set type='port', port=22, url='192.168.178.249' where name='Host' and type!='port'")
 if c.execute("select changes()").fetchone()[0]:
-    print("[+] fixed Host monitor -> tcp:22 (rootless has no CAP_NET_RAW for ping)")
+    print("[+] fixed Host monitor -> port:22 (rootless has no CAP_NET_RAW for ping)")
 c.commit()
 print("[+] %d added; total monitors now %d" % (added, c.execute("select count(*) from monitor").fetchone()[0]))
 PY
