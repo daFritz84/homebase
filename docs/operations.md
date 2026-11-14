@@ -445,6 +445,15 @@ Notes:
   `--subnet 10.89.0.0/24`, so a recreated network keeps the CIDR that
   `trusted_proxies` expects (an existing network is left untouched — check it
   with `podman network inspect caddy-proxy`).
+- **`podman restart <container>` leaves the container DOWN (observed 2026-11-14,
+  caddy + cloudflared)** — while `podman-compose@<project>` is **active**, its
+  main process is `podman-compose up`; stopping the container makes that process
+  exit, systemd runs ExecStop → `podman pod stop`, and the container stays
+  stopped (`Exited (0/143)`). Config-only deploys must use
+  `systemctl --user restart podman-compose@<project>`; `podman restart` is only
+  safe when the unit is already `inactive` (podman-compose exited, container
+  persists via `restart: unless-stopped` — authelia's steady state). Check with
+  `systemctl --user is-active podman-compose@<project>` before restarting.
 - **After a host reboot: walled apps (AdGuard UI) 502, HA 502 (Caddy→HA
   reachability, not the wall — HA is a native OIDC client, not walled),
   AdGuard widget down, containers get `connection refused` to host ports
