@@ -31,7 +31,7 @@ BESZEL_USER="${BESZEL_USER:-s.seifried@gmx.at}"
 
 if [ -z "${BESZEL_PASS:-}" ]; then
   command -v bw >/dev/null || { echo "[ERR] bw not found and BESZEL_PASS unset"; exit 1; }
-  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
   BESZEL_PASS="$(bw get password beszel-superuser-password 2>/dev/null || true)"
   [ -n "${BESZEL_PASS}" ] || { echo "[ERR] Bitwarden item beszel-superuser-password empty/missing"; exit 1; }
 fi

@@ -25,7 +25,7 @@ get() { # <item> <env-override>
   local item="$1" override="${2:-}" v
   if [ -n "${override}" ]; then printf '%s' "${override}"; return; fi
   command -v bw >/dev/null || { echo "[ERR] bw not found and ${item} override unset"; exit 1; }
-  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — bw login && export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+  bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
   v="$(bw get password "${item}" 2>/dev/null || true)"
   [ -n "${v}" ] || { echo "[ERR] Bitwarden item ${item} empty/missing — add the KEY/TOKEN from the hub's Add System"; exit 1; }
   printf '%s' "${v}"
