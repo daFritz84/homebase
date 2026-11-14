@@ -45,18 +45,19 @@ services:
     volumes:
       - ./data:/beszel_data
     ports:
-      # loopback only — for the agent's HUB_URL + the healthcheck; the UI is
-      # proxied by Caddy via the caddy-proxy alias, never exposed to the LAN
+      # loopback only — for the agent's HUB_URL; the UI is proxied by Caddy via
+      # the caddy-proxy alias, never exposed to the LAN
       - "127.0.0.1:8090:8090"
     networks:
       caddy-proxy:
         aliases:
           - beszel
-    healthcheck:
-      test: ["CMD", "/beszel", "health", "--url", "http://localhost:8090"]
-      interval: 120s
-      start_period: 10s
-      timeout: 5s
+    # NO container healthcheck: the beszel image ships no shell (no /bin/sh, no
+    # ls — probe: `podman exec beszel_beszel_1 sh -c true` -> "executable file
+    # sh not found"), and podman-compose converts a CMD-array healthcheck into
+    # CMD-SHELL (/bin/sh -c ...), which cannot exec in this image (observed:
+    # FailingStreak 14, exit 1, empty output). The hub is a single static
+    # binary; liveness is the systemd unit + the loopback port (127.0.0.1:8090).
     deploy:
       resources:
         limits:
