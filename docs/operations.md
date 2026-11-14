@@ -496,7 +496,8 @@ Notes:
   "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Homepage HTTPS UI by design (Caddyfile `:80` block).
-- **Walled apps (AdGuard UI, Uptime Kuma, Wanderer via the tunnel) return
+- **Walled apps (AdGuard UI, Uptime Kuma, Navidrome web UI, Wanderer via the
+  tunnel) return
   502** — the authelia stack is
   down. Check `systemctl --user status podman-compose@authelia` and
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
@@ -504,9 +505,10 @@ Notes:
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; existing HA sessions keep working, break-glass form:
   `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
-  Navidrome/Jellyfin are not walled (own login gates all access) —
-  unaffected. Wanderer's LAN path (native OIDC) keeps serving, only its
-  login redirect fails.
+  Jellyfin is not walled (own login gates all access) — unaffected.
+  Navidrome's Subsonic playback is unaffected (bypassed `/rest/*` path);
+  only its web UI 502s. Wanderer's LAN path (native OIDC) keeps serving,
+  only its login redirect fails.
   Break-glass is SSH (see [services.md](services.md), "Authelia (SSO) →
   Break-glass").
 - **New `.env.secret` entries have no effect after a unit restart** — the
@@ -520,7 +522,19 @@ Notes:
   caddy-proxy`, update the CIDR in the snippet, validate, restart
   `podman-compose@caddy`. (Authelia 4.38+ has no `server.trusted_proxies` —
   proxy trust lives only in Caddy.) `ensure_proxy_network.sh` pins the subnet
-  at creation, so a recreated network should not drift.
+   at creation, so a recreated network should not drift.
+- **Navidrome web UI asks for its own login behind the wall (no SSO
+  auto-login)** — ExtAuth broke: `ND_EXTAUTH_TRUSTEDSOURCES`
+  (`navidrome/compose.yaml`) must equal Caddy's pinned caddy-proxy IP
+  (`caddy/compose.yaml` `ipv4_address`, `10.89.0.200`) — Navidrome checks
+  the SOURCE IP before honoring the `Remote-User` header, so a drifted IP
+  silently falls back to its own login. Check:
+  `podman inspect caddy --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`.
+  Env changes need `podman-compose up -d --force-recreate` in `navidrome/`.
+  Also verify the Navidrome username == `Remote-User` (LDAP uid `sseifried`):
+  `podman exec navidrome_navidrome_1 /app/navidrome user list` — a mismatch
+  silently creates a fresh non-admin user with an empty library (delete it
+  via the CLI `user delete` and fix the name).
 - **HA login loops between `homeassistant.sseifried.link` and
   `authelia.sseifried.link`** — the OIDC round trip fails: the component
   cannot reach its `discovery_url`
