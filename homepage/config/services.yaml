@@ -2,17 +2,17 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
 #
-# Metrics/uptime moved to Beszel + Uptime Kuma: per-container showStats (CPU/RAM)
-# are gone (the dockerproxy sidecar + podman.sock mount are removed). Basic health
-# stays here: the uptimekuma widget (status-page aggregate: up/down/uptime) on the
-# Uptime Kuma card, the beszel widget (host CPU/RAM/disk) on the Beszel card, and
-# the adguard widget on the AdGuard card.
+# Metrics/uptime moved to Beszel + Uptime Kuma: per-container showStats
+# (CPU/RAM) are gone (the dockerproxy sidecar + podman.sock mount are removed).
+# Basic health stays here: the uptimekuma widget (status-page aggregate:
+# up/down/uptime) on the Uptime Kuma card, the beszel widget (host
+# CPU/RAM/disk) on the Beszel card, and the adguard widget on the AdGuard card.
 #
-# Widget URLs are INTERNAL caddy-proxy aliases (status:3001, beszel:8090), NOT the
-# public https:// URLs: the homepage container's DNS is aardvark (it resolves
-# service aliases, not *.sseifried.link — the adguard widget already uses
-# host.containers.internal), and the forward_auth wall fronts only the public
-# hostname, so the internal port bypasses it.
+# Widget URLs are INTERNAL caddy-proxy aliases (status:3001, beszel:8090), NOT
+# the public https:// URLs: the homepage container's DNS is aardvark (it
+# resolves service aliases, not *.sseifried.link — the adguard widget already
+# uses host.containers.internal), and the forward_auth wall fronts only the
+# public hostname, so the internal port bypasses it.
 
 - Homebase:
     - Cockpit:
@@ -52,10 +52,10 @@
         description: PDF editor & processor (merge, OCR, sign, convert)
 
     - BookOrbit:
-        # no dashboard-icons entry (probed 2026-11-12) — custom icon, wanderer pattern
+        # no dashboard-icons entry — custom icon, wanderer pattern
         icon: /icons/bookorbit.png
         href: https://bookorbit.sseifried.link
-        description: Self-hosted reading space (ebooks, audiobooks, comics, PDFs)
+        description: Self-hosted reading space (ebooks, audiobooks, comics)
 
     - Home Assistant:
         # dashboard-icons filename is hyphenated; bare "homeassistant" 404s
@@ -88,9 +88,9 @@
         href: https://metrics.sseifried.link
         description: Host & container metrics (CPU/RAM/disk)
 
-        # beszel widget: single-system detailed stats (systemId). The hub requires
-        # a superuser for API access (username/password, not an API key). version 2
-        # for Beszel >= 0.9.0.
+        # beszel widget: single-system detailed stats (systemId). The hub
+        # requires a superuser for API access (username/password, not an API
+        # key). version 2 for Beszel >= 0.9.0.
         widgets:
           - type: beszel
             url: http://beszel:8090
