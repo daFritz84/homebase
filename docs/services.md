@@ -772,11 +772,16 @@ fstab, automount units): [host-setup.md](host-setup.md)
   `chef`, which the rootless container's root maps to;
   `x-systemd.automount` + `x-systemd.idle-timeout=60` +
   `x-systemd.mount-timeout=30`, `nofail` + `noauto`).
-- `jellyfin/compose.yaml` binds them read-only and **rshared**:
-  `/srv/media/filme:/media/filme:ro,rshared`,
-  `/srv/media/serien:/media/serien:ro,rshared`. Volume changes require
-  **container recreation** (`podman-compose up -d --force-recreate`), not a
-  unit restart — binds are baked at container creation.
+- `jellyfin/compose.yaml` binds the **parent** read-only and **rshared**:
+  `/srv/media:/media:ro,rshared` — NOT the two trigger points. `/srv/media`
+  is a plain ext4 dir, always statfs-able, so the container **starts with the
+  NAS offline** (empty `/media`: UI/SSO/config work, no playback); binding
+  `/srv/media/{filme,serien}` directly fails `statfs` when the NAS is down
+  (`no such device`) and the container cannot be created. The CIFS submounts
+  propagate into `/media/{filme,serien}` via `rshared` when the NAS is
+  online. Volume changes require **container recreation**
+  (`podman-compose up -d --force-recreate`), not a unit restart — binds are
+  baked at container creation.
 - **`rshared` (kernel ≥ 6.12):** the CIFS `upcall_target=app` mechanism
   mounts the share on-demand in the *accessing* process's mount namespace.
   `rshared` makes the container-triggered mount visible in the host mount
@@ -806,13 +811,16 @@ fstab, automount units): [host-setup.md](host-setup.md)
 
 ```ini
 [Unit]
-RequiresMountsFor=/srv/media/filme /srv/media/serien
+RequiresMountsFor=/srv/media
 ```
 
-  then `systemctl --user daemon-reload`. The `.automount` units are active
-  regardless of NAS state, so jellyfin is never gated on the NAS; first
-  access from inside the container triggers the mount via the kernel autofs
-  upcall.
+  then `systemctl --user daemon-reload`. `/srv/media` is the always-present
+  parent (a plain dir on the root fs), so the dependency is trivially
+  satisfied and jellyfin is **never gated on the NAS** — it starts with the
+  NAS offline (empty `/media`) and the media appears via propagation once the
+  NAS is online. The `.automount` units are active regardless of NAS state;
+  first access from inside the container triggers the mount via the kernel
+  autofs upcall.
 - Credentials: Bitwarden item `TrueNAS SMB` → `./provision-nas-credentials.sh`
   (uses sudo → run over `ssh -t`) → `/etc/samba/credentials.nas`
   (root:root 0600).
