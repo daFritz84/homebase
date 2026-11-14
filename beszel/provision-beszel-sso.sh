@@ -3,11 +3,14 @@ set -euo pipefail
 
 ## Configure Beszel hub's Authelia OIDC provider via the PocketBase REST API —
 ## idempotent, re-runnable after stack recreation (the provider lives in the
-## PocketBase DB, not a file). Mirrors wanderer/provision-wanderer-sso.sh, but
-## Beszel is STOCK PocketBase v0.23: the provider lives in the users collection's
-## options.oauth2Providers map (the Wanderer fork uses a custom top-level
-## `oauth2` field — do NOT copy that shape). The UI hides this (collection
-## create/edit controls are off by default), which is why it is hard to find.
+## PocketBase DB, not a file). Mirrors wanderer/provision-wanderer-sso.sh:
+## Beszel 0.21.2's users collection carries a TOP-LEVEL `oauth2` field
+## {providers:[...], mappedFields, enabled} (verified by GET — users.options is
+## null, so stock v0.23's options.oauth2Providers map is NOT used here). The
+## admin UI hides this (collection create/edit controls off by default), which
+## is why it is hard to find. The provider struct is FLAT/REDUCED — only
+## name, displayName, clientId, clientSecret, authURL, tokenURL, userInfoURL,
+## pkce, extra survive.
 ##
 ## Unlock Bitwarden CLI first (example):
 # bw login
@@ -16,7 +19,7 @@ set -euo pipefail
 ## Run from the beszel directory on the server. The hub publishes 127.0.0.1:8090.
 ##
 ## Inputs:
-##   PB_ADMIN_EMAIL  superuser email (default admin@sseifried.link) — set to the
+##   PB_ADMIN_EMAIL  superuser email (default s.seifried@gmx.at) — set to the
 ##                   one you created in the hub UI.
 ##   PB_ADMIN_PW     superuser password; default = Bitwarden beszel-superuser-password
 ##   PB_CLIENT_SECRET RAW OIDC client secret; default = Bitwarden
@@ -28,7 +31,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 PB_URL="${PB_URL:-http://127.0.0.1:8090}"
-PB_ADMIN_EMAIL="${PB_ADMIN_EMAIL:-admin@sseifried.link}"
+PB_ADMIN_EMAIL="${PB_ADMIN_EMAIL:-s.seifried@gmx.at}"
 AUTHHELIA_ISSUER="https://authelia.sseifried.link"
 PROVIDER="authelia"   # oauth2Providers map key + login-page provider name
 CLIENT_ID="beszel"    # must match authelia client_id in configuration.yml
@@ -77,48 +80,57 @@ def api(path, method="GET", body=None):
     return out
 
 coll = api("/api/collections/users")
-options = coll.get("options") or {}
-providers = options.get("oauth2Providers") or {}
+# Beszel 0.21.2 bundles a PocketBase whose users collection carries a TOP-LEVEL
+# `oauth2` field {providers:[...], mappedFields:{...}, enabled:bool} — the same
+# shape as the Wanderer fork, NOT stock v0.23's options.oauth2Providers map
+# (users.options is null here; a PATCH to it is silently dropped). The provider
+# struct is FLAT/REDUCED — unknown keys are dropped; verified surviving keys:
+# name, displayName, clientId, clientSecret, authURL, tokenURL, userInfoURL,
+# pkce, extra.
+oauth2 = coll.get("oauth2") or {}
+providers = oauth2.get("providers") or []
 
 provider = {
     "name": provider_name,
-    "type": "oidc",
-    "issuerName": "Authelia",
-    "issuerURL": issuer,
+    "displayName": "Authelia",
     "clientId": client_id,
     "clientSecret": secret,
-    "scopes": "openid profile email",
     "authURL": issuer + "/api/oidc/authorization",
     "tokenURL": issuer + "/api/oidc/token",
     "userInfoURL": issuer + "/api/oidc/userinfo",
     "pkce": True,
-    "groupsAttribute": "groups",
-    "usernameAttribute": "preferred_username",
-    "emailTokenFile": "",
-    "button": {"show": True, "icon": "", "label": "Authelia", "color": ""},
+    "extra": {},
 }
 
-if provider_name in providers:
+existing = next((p for p in providers if p.get("name") == provider_name), None)
+if existing:
+    for key in ("id", "collectionId"):
+        if key in existing:
+            provider[key] = existing[key]
+    providers = [provider if p.get("name") == provider_name else p for p in providers]
     print("[*] Provider '%s' exists — updating in place" % provider_name)
 else:
+    providers.append(provider)
     print("[*] Provider '%s' is new — adding" % provider_name)
-providers[provider_name] = provider
-options["oauth2Providers"] = providers
-coll["options"] = options
+
+oauth2["providers"] = providers
+oauth2["enabled"] = True
+coll["oauth2"] = oauth2
 api("/api/collections/users", "PATCH", coll)
 
 # read back: clientSecret is write-only (GET masks it) — verify the rest.
-check = (api("/api/collections/users").get("options") or {}).get("oauth2Providers") or {}
-saved = check.get(provider_name)
+check = api("/api/collections/users").get("oauth2") or {}
+saved = next((p for p in check.get("providers", []) if p.get("name") == provider_name), None)
 if not saved:
     sys.exit("[ERR] provider not present after PATCH")
-for key in ("clientId", "authURL", "tokenURL", "userInfoURL", "issuerURL", "usernameAttribute"):
+for key in ("clientId", "authURL", "tokenURL", "userInfoURL", "displayName"):
     if saved.get(key) != provider[key]:
         sys.exit("[ERR] saved provider mismatch on %s: %s" % (key, saved))
 if not saved.get("pkce"):
     sys.exit("[ERR] pkce not enabled on saved provider: %s" % saved)
-print("[+] OAuth2 provider '%s' saved (client_id=%s, usernameAttribute=preferred_username)"
-      % (provider_name, client_id))
+if not check.get("enabled"):
+    sys.exit("[ERR] oauth2.enabled not true after PATCH")
+print("[+] OAuth2 provider '%s' saved and enabled (client_id=%s)" % (provider_name, client_id))
 PY
 
 echo
