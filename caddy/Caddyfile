@@ -92,9 +92,28 @@ authelia.sseifried.link {
 	reverse_proxy authelia:9091
 }
 
-# Wanderer (trail database) — behind the Authelia wall (two_factor for
-# homebase-admins; Wanderer's own account login stays on top of it)
+# Wanderer (trail database) — native Authelia OIDC client (PocketBase SSO,
+# the BookOrbit/Beszel pattern): LAN/VPN browsers hit the app's login, which
+# redirects to Authelia (one SSO login). NO wall on :443 — the wall on top of
+# the native OIDC client was the 2nd Authelia layer (removed 2026-11-14).
+# The internet path keeps the wall: the tunnel ingress (cloudflared/
+# config.yml) points at the :8443 listener below, so the wall (two_factor,
+# group:homebase-admins — the only admins-only edge enforcement; Authelia
+# OIDC clients cannot express group rules) gates ONLY the public path.
 wanderer.sseifried.link {
+	import tls
+	reverse_proxy wanderer:3000
+}
+
+# Tunnel-only wall listener for wanderer: cloudflared ingresses wanderer to
+# https://caddy:8443. :8443 is NOT published on the host (caddy/compose.yaml
+# publishes 80/443 only), so only cloudflared — on caddy-proxy — can reach
+# it: LAN/VPN can neither bypass the wall nor hit this listener. Same LE
+# wildcard cert (DNS-01); cloudflared verifies it via originServerName. The
+# authelia_session cookie (domain sseifried.link) is set during the
+# Cloudflare Access federation login, so the wall passes transparently for
+# Access-authenticated browsers.
+wanderer.sseifried.link:8443 {
 	import tls
 	route {
 		import authelia-fa
@@ -102,24 +121,53 @@ wanderer.sseifried.link {
 	}
 }
 
-# Navidrome (music streaming) — NO forward_auth wall, on purpose: Subsonic API
-# clients (Symfonium, dSub, …) send their own Basic auth per request and can
-# never pass a forward_auth cookie wall; Navidrome's own login gates access.
-# LAN/VPN-only exposure (AdGuard split DNS) — never add to the tunnel allowlist.
+# Navidrome (music streaming) — Authelia wall on the web UI (two_factor,
+# group:homebase-admins), /rest/* EXEMPT: Subsonic API clients (Symfonium,
+# dSub, …) send their own Basic/token auth per request and can never pass a
+# forward_auth cookie wall — they authenticate at Navidrome (navidrome/
+# jellyfin API doctrine). Browser web UI: wall → Authelia SSO; its /api/
+# calls carry the browser cookies, so they pass the wall. Navidrome's own
+# login gates the API tokens and stays as defense-in-depth. LAN/VPN-only
+# exposure (AdGuard split DNS) — never add to the tunnel allowlist.
 navidrome.sseifried.link {
 	import tls
-	reverse_proxy navidrome:4533
+	@subsonic path /rest/*
+	handle @subsonic {
+		reverse_proxy navidrome:4533
+	}
+	handle {
+		import authelia-fa
+		reverse_proxy navidrome:4533
+	}
 }
 
-# Jellyfin (media server) — NO forward_auth wall, on purpose: Jellyfin
-# API/mobile clients (Infuse, Swiftfin, …) send X-Emby-Token / Authorization
-# headers per request and can never pass a forward_auth cookie wall;
-# Jellyfin's own login gates access. LAN/VPN-only exposure (AdGuard split
-# DNS) — never add to the tunnel allowlist. Caddy passes WebSockets through
-# by default (required by the Jellyfin web client).
+# Jellyfin (media server) — Authelia wall on the web UI (two_factor,
+# group:homebase-admins), API clients EXEMPT: mobile/API clients (Infuse,
+# Swiftfin, Kodi, …) send per-request credentials that can never pass a
+# forward_auth cookie wall (navidrome/jellyfin doctrine) — exempt the four
+# documented Jellyfin auth vectors: X-Emby-Token header, legacy
+# X-Emby-Authorization header, Authorization: MediaBrowser …, ?api_key=.
+# Browser web UI: wall → Authelia SSO; the web client's API calls carry the
+# MediaBrowser Authorization header, so they take the exempt handle; the
+# /embywebsocket upgrade carries the browser cookies, so it passes the wall.
+# Jellyfin's own login gates the API tokens. LAN/VPN-only exposure (AdGuard
+# split DNS) — never add to the tunnel allowlist. Caddy passes WebSockets
+# through by default (required by the Jellyfin web client).
 jellyfin.sseifried.link {
 	import tls
-	reverse_proxy jellyfin:8096
+	@api any {
+		header X-Emby-Token *
+		header X-Emby-Authorization *
+		header_regexp Authorization ^MediaBrowser
+		query api_key *
+	}
+	handle @api {
+		reverse_proxy jellyfin:8096
+	}
+	handle {
+		import authelia-fa
+		reverse_proxy jellyfin:8096
+	}
 }
 
 # Stirling PDF (PDF editor/processor) — NO forward_auth wall, on purpose: the
