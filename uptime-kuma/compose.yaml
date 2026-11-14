@@ -36,7 +36,11 @@ services:
     environment:
       TZ: Europe/Vienna
     volumes:
-      - ./data:/app/data/db
+      # Kuma 2.x dataDir is /app/data (db-config.json + kuma.db live there) — NOT
+      # /app/data/db (the Kuma 1.x path). Mounting the 1.x path leaves the SQLite
+      # in ephemeral container storage: lost on recreate, and the backup script
+      # (which copies ./data) sees an empty dir. Probe: /app/data/db-config.json.
+      - ./data:/app/data
     networks:
       caddy-proxy:
         aliases:
