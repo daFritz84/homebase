@@ -34,7 +34,13 @@ mkdir -p "${BACKUP_DIR}"
 
 restore_service() {
   echo "[*] Starting the service"
-  podman-compose up -d
+  # The media dirs (/srv/media/{filme,serien}) are CIFS automounts and are
+  # NOT in the archive (data/ only). With the NAS offline the container's
+  # /srv/media binds cannot mount, so the start fails — expected, NOT a
+  # backup failure: the data/ archive is already written. Tolerate it and
+  # tell the operator to start the service once the NAS is online.
+  podman-compose up -d \
+    || echo "[!] Service did not start (NAS media mounts offline?) — the backup is safe; once the NAS is online: systemctl --user start podman-compose@jellyfin"
 }
 trap restore_service EXIT
 
