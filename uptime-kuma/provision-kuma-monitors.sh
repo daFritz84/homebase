@@ -28,7 +28,10 @@ if not row:
 admin = row[0]
 # (name, type, url, port). The host check is Kuma's TCP port check (type `port`)
 # on :22, NOT ping — rootless Podman cannot grant CAP_NET_RAW, so an ICMP ping
-# monitor fails EPERM in the container. (Kuma's type is `port`, not `tcp`.)
+# monitor fails EPERM in the container. (Kuma's type is `port`, not `tcp`.) The
+# target is host.containers.internal (the caddy-proxy gateway), NOT the LAN IP
+# 192.168.178.249 — a bridge container reaches host services via the gateway,
+# not the host's LAN address (AGENTS.md).
 monitors = [
     ("Authelia",         "http", "https://authelia.sseifried.link",   None),
     ("Homepage",         "http", "https://homepage.sseifried.link",   None),
@@ -42,7 +45,7 @@ monitors = [
     ("Cockpit",          "http", "https://cockpit.sseifried.link",    None),
     ("Status (self)",    "http", "https://status.sseifried.link",     None),
     ("Metrics (self)",   "http", "https://metrics.sseifried.link",    None),
-    ("Host",             "port", "192.168.178.249",                   22),
+    ("Host",             "port", "host.containers.internal",          22),
 ]
 added = 0
 for name, mtype, url, port in monitors:
@@ -57,9 +60,9 @@ for name, mtype, url, port in monitors:
 # self-heal: the host check must be a `port` (TCP) check on :22 — rootless
 # Podman has no CAP_NET_RAW, so a seeded ICMP ping row fails EPERM, and a `tcp`
 # type is "Unknown Monitor Type". Repair it in place.
-c.execute("update monitor set type='port', port=22, url='192.168.178.249' where name='Host' and type!='port'")
+c.execute("update monitor set type='port', port=22, url='host.containers.internal' where name='Host' and (type!='port' or url!='host.containers.internal' or port!=22)")
 if c.execute("select changes()").fetchone()[0]:
-    print("[+] fixed Host monitor -> port:22 (rootless has no CAP_NET_RAW for ping)")
+    print("[+] fixed Host monitor -> port host.containers.internal:22")
 c.commit()
 print("[+] %d added; total monitors now %d" % (added, c.execute("select count(*) from monitor").fetchone()[0]))
 PY
