@@ -26,8 +26,10 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 VERSION="0.21.2"
-ARCH="Linux_x86_64"
-URL="https://github.com/henrygd/beszel/releases/download/v${VERSION}/beszel-agent_${ARCH}.tar.gz"
+# Asset name is lowercase Go-style GOOS_GOARCH (linux_amd64), NOT Linux_x86_64
+# — the latter 404s (the release names assets beszel-agent_<goos>_<goarch>).
+URL="https://github.com/henrygd/beszel/releases/download/v${VERSION}/beszel-agent_linux_amd64.tar.gz"
+CHECKSUMS_URL="https://github.com/henrygd/beszel/releases/download/v${VERSION}/beszel_${VERSION}_checksums.txt"
 DEST="${HOME}/.local/bin/beszel-agent"
 
 command -v curl >/dev/null || { echo "[ERR] curl not found"; exit 1; }
@@ -43,8 +45,12 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
 curl -fsSL "${URL}" -o "${tmp}/agent.tar.gz"
 
-echo "[*] sha256 (verify against the GitHub release checksums):"
-sha256sum "${tmp}/agent.tar.gz"
+# Verify against the release checksums (fail closed).
+expected="$(curl -fsSL "${CHECKSUMS_URL}" | awk '/beszel-agent_linux_amd64\.tar\.gz$/{print $1}')"
+actual="$(sha256sum "${tmp}/agent.tar.gz" | cut -d' ' -f1)"
+[ -n "${expected}" ] || { echo "[ERR] no checksum for beszel-agent_linux_amd64.tar.gz in ${CHECKSUMS_URL}"; exit 1; }
+[ "${expected}" = "${actual}" ] || { echo "[ERR] sha256 mismatch: expected ${expected}, got ${actual}"; exit 1; }
+echo "[+] sha256 verified: ${actual}"
 
 tar -xzf "${tmp}/agent.tar.gz" -C "${tmp}" beszel-agent
 install -d "${HOME}/.local/bin"
