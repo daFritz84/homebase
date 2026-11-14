@@ -1,0 +1,26 @@
+[Unit]
+Description=Beszel agent (host metrics + Podman container stats, plain process)
+Documentation=file:///home/chef/src/homebase/docs/services.md
+# The agent dials the hub (a compose unit) over loopback and reads the rootless
+# podman.socket; order behind the network gate and the socket.
+Wants=podman-network-online.service podman.socket
+After=podman-network-online.service podman.socket
+
+[Service]
+ExecStart=%h/.local/bin/beszel-agent
+EnvironmentFile=%h/src/homebase/beszel/agent.env
+Restart=on-failure
+RestartSec=5
+
+# Hardening subset. Do NOT set ProtectHome=read-only: it makes /run/user
+# read-only, and the agent cannot connect to the rootless podman.sock
+# (unix-socket connect needs write) — the docs' example unit's
+# ProtectHome=read-only + ProtectSystem=strict is incompatible with reading the
+# socket. ProtectSystem=full (read-only /usr,/boot,/etc) is fine: the binary
+# lives in ~/.local/bin and the socket in /run/user.
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

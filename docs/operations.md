@@ -18,6 +18,9 @@ systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@jellyfin
 systemctl --user status podman-compose@stirling-pdf
 systemctl --user status podman-compose@bookorbit
+systemctl --user status podman-compose@uptime-kuma
+systemctl --user status podman-compose@beszel
+systemctl --user status beszel-agent
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -136,6 +139,48 @@ uid 0 has DAC override over the mapped range. Cadence: right after setup
 && tar xzf <archive>`, start. The script (re)starts the containers
 directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@bookorbit` to re-adopt the pod.
+
+### Uptime Kuma data backups
+
+Uptime Kuma's `uptime-kuma/data/` is the irreplaceable, secret-bearing artifact:
+the SQLite DB holds monitors, status pages, notification configs, 2FA secrets and
+settings. Run from the service checkout on the server:
+
+```bash
+cd uptime-kuma && ./backup-uptime-kuma-data.sh
+```
+
+The script stops the service, archives `data/` (owner-only, mode `0600`) to
+`~/.local/share/uptime-kuma/backups/uptime-kuma-data-<date>.tar.gz`, and restarts
+it. No `podman unshare` needed — the image runs as root and rootless Podman maps
+container root to the host user, so `data/` is host-user-owned
+(services.md, "Uptime Kuma"). Cadence: right after setup (monitors + status page +
+notification tokens) and **before every image bump** (DB migrations are
+forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+start. The script (re)starts the containers directly, so the unit shows `inactive`
+afterwards — `systemctl --user start podman-compose@uptime-kuma` to re-adopt the
+pod.
+
+### Beszel data backups
+
+The Beszel hub's `beszel/data/` is the irreplaceable artifact: the PocketBase
+SQLite DB holds users, systems, alerts and API keys. The agent is stateless (its
+`KEY`/`TOKEN` live in `beszel/agent.env`, gitignored). Run from the service
+checkout on the server:
+
+```bash
+cd beszel && ./backup-beszel-data.sh
+```
+
+The script stops the hub, archives `data/` (owner-only, mode `0600`) to
+`~/.local/share/beszel/backups/beszel-data-<date>.tar.gz`, and restarts it. No
+`podman unshare` needed — the hub runs as root and rootless Podman maps container
+root to the host user, so `data/` is host-user-owned (services.md, "Beszel").
+Cadence: right after setup (the DB then holds users + systems + the agent link)
+and **before every image bump** (DB migrations are forward-only). Restore: stop
+the hub, `rm -rf data && tar xzf <archive>`, start. The script (re)starts the
+containers directly, so the unit shows `inactive` afterwards — `systemctl --user
+start podman-compose@beszel` to re-adopt the pod.
 
 ### Home Assistant config backups
 
@@ -260,6 +305,18 @@ podman-compose pull
 cd ../jellyfin
 podman-compose pull
 
+cd ../stirling-pdf
+podman-compose pull
+
+cd ../bookorbit
+podman-compose pull
+
+cd ../uptime-kuma
+podman-compose pull
+
+cd ../beszel
+podman-compose pull
+
 cd ../homeassistant
 podman-compose pull
 
@@ -284,6 +341,11 @@ systemctl --user restart podman-compose@homepage
 systemctl --user restart podman-compose@wanderer
 systemctl --user restart podman-compose@navidrome
 systemctl --user restart podman-compose@jellyfin
+systemctl --user restart podman-compose@stirling-pdf
+systemctl --user restart podman-compose@bookorbit
+systemctl --user restart podman-compose@uptime-kuma
+systemctl --user restart podman-compose@beszel
+systemctl --user restart beszel-agent
 systemctl --user restart podman-compose@homeassistant
 systemctl --user restart podman-compose@authelia
 systemctl --user restart podman-compose@cloudflared
@@ -316,6 +378,10 @@ podman logs --tail=50 <homepage-container>
 podman logs --tail=50 <wanderer-web-container>
 podman logs --tail=50 navidrome_navidrome_1
 podman logs --tail=50 jellyfin_jellyfin_1
+podman logs --tail=50 stirling-pdf_stirling-pdf_1
+podman logs --tail=50 bookorbit_app_1
+podman logs --tail=50 uptime-kuma_uptime-kuma_1
+podman logs --tail=50 beszel_beszel_1
 podman logs --tail=50 <homeassistant-container>
 podman logs --tail=50 authelia_authelia_1
 podman logs --tail=50 authelia_openldap_1
@@ -580,10 +646,14 @@ Notes:
 
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
-[host-setup.md](host-setup.md)) starts all nine user units — `podman-compose@caddy`,
-`podman-compose@adguard-home`, `podman-compose@homepage`, `podman-compose@wanderer`,
-`podman-compose@navidrome`, `podman-compose@jellyfin`, `podman-compose@homeassistant`,
-`podman-compose@authelia` and `podman-compose@cloudflared` — no manual action is needed.
+[host-setup.md](host-setup.md)) starts all thirteen compose user units —
+`podman-compose@caddy`, `podman-compose@adguard-home`, `podman-compose@homepage`,
+`podman-compose@wanderer`, `podman-compose@navidrome`, `podman-compose@jellyfin`,
+`podman-compose@stirling-pdf`, `podman-compose@bookorbit`,
+`podman-compose@uptime-kuma`, `podman-compose@beszel`,
+`podman-compose@homeassistant`, `podman-compose@authelia` and
+`podman-compose@cloudflared` — plus the `beszel-agent` user unit (enabled via
+`systemctl --user enable beszel-agent`) — no manual action is needed.
 
 ## Appstore as Inspiration
 
