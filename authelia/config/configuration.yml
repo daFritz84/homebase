@@ -33,7 +33,9 @@
 #     (forward_auth trusted_proxies); Authelia trusts the proxy network.
 #   - access_control rules have no bypass_credentials / user-agent criteria —
 #     moot: HA is a native OIDC client (no wall, no bypasses) and the other
-#     walled apps (AdGuard, Wanderer) need none.
+#     walled apps (AdGuard, Uptime Kuma, Navidrome, Jellyfin, and the Wanderer
+#     tunnel listener) need none — the media apps' API clients never reach
+#     the wall (exempt at the Caddy layer, see caddy/Caddyfile).
 #   - the OIDC issuer is derived from session.cookies[].authelia_url.
 #   - the legacy /api/authelia/validate endpoint is now /api/authz/forward-auth.
 
@@ -312,12 +314,12 @@ access_control:
   # No `networks` definitions: they are only consumed by the `networks`
   # criteria of rules, and no rule references one — LAN-only exposure is
   # enforced by AdGuard split DNS + the VPN, not by Authelia policy.
-  # No bypass rules for authelia./homepage./homeassistant./stirling.: rules
-  # are only evaluated for forward-auth requests, and no Caddy site block
-  # forward-auths those domains (authelia serves its own portal — its
-  # endpoints are exempt from ACL; Homepage, Home Assistant and Stirling PDF
-  # are native OIDC clients, gated by their clients' authorization_policy +
-  # the app-side role checks).
+  # No bypass rules for authelia./homepage./homeassistant./stirling./
+  # bookorbit./metrics.: rules are only evaluated for forward-auth requests,
+  # and no Caddy site block forward-auths those domains (authelia serves its
+  # own portal — its endpoints are exempt from ACL; Homepage, Home
+  # Assistant, Stirling PDF, BookOrbit and Beszel are native OIDC clients,
+  # gated by their clients' authorization_policy + the app-side role checks).
   rules:
     # walled apps. two_factor ENFORCED: Bitwarden passkey (primary) + TOTP
     # (backup) — with zero registered methods the login's 2FA step presents
@@ -332,9 +334,27 @@ access_control:
     - domain: 'status.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
+    # Navidrome — wall on the web UI (two_factor, homebase-admins); /rest/*
+    # (Subsonic API) is exempt at the Caddy layer — those clients authenticate
+    # per-request at the app and can never pass a cookie wall. LAN/VPN-only,
+    # never in the tunnel.
+    - domain: 'navidrome.sseifried.link'
+      policy: 'two_factor'
+      subject: 'group:homebase-admins'
+    # Jellyfin — wall on the web UI (two_factor, homebase-admins); API clients
+    # (X-Emby-Token / X-Emby-Authorization / Authorization: MediaBrowser /
+    # api_key) are exempt at the Caddy layer and authenticate at the app.
+    # LAN/VPN-only, never in the tunnel.
+    - domain: 'jellyfin.sseifried.link'
+      policy: 'two_factor'
+      subject: 'group:homebase-admins'
     # Wanderer is the one app published to the internet via the Cloudflare
     # Tunnel (cloudflared/config.yml); admins-only since the partner
-    # account was removed (2026-11-08, stack is single-user).
+    # account was removed (2026-11-08, stack is single-user). Evaluated ONLY
+    # on the :8443 tunnel listener (the wall site): the LAN/VPN :443 site has
+    # no forward_auth — the app's native PocketBase OIDC gates it (the wall
+    # is the only admins-only edge enforcement: OIDC clients cannot express
+    # group rules).
     - domain: 'wanderer.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'

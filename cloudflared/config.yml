@@ -16,7 +16,12 @@ tunnel: homebase
 credentials-file: /etc/cloudflared/credentials.json
 ingress:
   - hostname: wanderer.sseifried.link
-    service: https://caddy:443
+    # :8443 = the tunnel-only wall listener in Caddy (two_factor,
+    # group:homebase-admins — the admins-only edge enforcement for the public
+    # path). :443 serves the same app WITHOUT the wall for LAN/VPN (native
+    # PocketBase OIDC); :8443 is not published on the host, so only the
+    # tunnel can reach it.
+    service: https://caddy:8443
     originRequest:
       originServerName: wanderer.sseifried.link
   - hostname: authelia.sseifried.link

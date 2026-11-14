@@ -68,7 +68,9 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
   `.env*`, `authelia/config/keys/`, `cloudflared/credentials.json`,
   rendered LDIF, `homeassistant/config/secrets.yaml` are gitignored. Never write secret values to
   tracked files; never print them.
-- Authelia down = walled apps (AdGuard UI, Wanderer) 502. HA is a native OIDC client, not walled:
+- Authelia down = walled apps (AdGuard UI, Uptime Kuma, Navidrome/Jellyfin web UI, Wanderer via the
+  tunnel `:8443` listener) 502; exempt API paths (Subsonic, Jellyfin token clients) keep playing.
+  HA is a native OIDC client, not walled:
   it keeps serving, only its login redirect fails (break-glass `?skip_oidc_redirect=true`).
   Cockpit, Homepage, VPN, SSH are break-glass.
 - Update-coupling gotchas (Cloudflare plugin pin in `caddy/Dockerfile`, `caddy-proxy` CIDR ↔
