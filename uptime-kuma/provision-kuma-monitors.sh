@@ -26,12 +26,11 @@ row = c.execute("select id from user order by id limit 1").fetchone()
 if not row:
     sys.exit("[ERR] no admin user in the DB — create the Kuma admin first")
 admin = row[0]
-# (name, type, url, port). The host check is Kuma's TCP port check (type `port`)
-# on :22, NOT ping — rootless Podman cannot grant CAP_NET_RAW, so an ICMP ping
-# monitor fails EPERM in the container. (Kuma's type is `port`, not `tcp`.) The
-# target is host.containers.internal (the caddy-proxy gateway), NOT the LAN IP
-# 192.168.178.249 — a bridge container reaches host services via the gateway,
-# not the host's LAN address (AGENTS.md).
+# (name, type, url, port). All checks are HTTP(s) Up. There is NO host/ping
+# monitor: rootless Podman has no CAP_NET_RAW (ICMP ping -> EPERM), and the
+# host's ports are not reachable from a caddy-proxy bridge container (neither
+# the LAN IP nor the host.containers.internal gateway reaches :22), so host
+# health is left to the Beszel agent — the host-metrics source of truth.
 monitors = [
     ("Authelia",         "http", "https://authelia.sseifried.link",   None),
     ("Homepage",         "http", "https://homepage.sseifried.link",   None),
@@ -45,7 +44,6 @@ monitors = [
     ("Cockpit",          "http", "https://cockpit.sseifried.link",    None),
     ("Status (self)",    "http", "https://status.sseifried.link",     None),
     ("Metrics (self)",   "http", "https://metrics.sseifried.link",    None),
-    ("Host",             "port", "host.containers.internal",          22),
 ]
 added = 0
 for name, mtype, url, port in monitors:
@@ -57,12 +55,12 @@ for name, mtype, url, port in monitors:
         (name, mtype, url, admin, port))
     added += 1
     print("[+] add:", name)
-# self-heal: the host check must be a `port` (TCP) check on :22 — rootless
-# Podman has no CAP_NET_RAW, so a seeded ICMP ping row fails EPERM, and a `tcp`
-# type is "Unknown Monitor Type". Repair it in place.
-c.execute("update monitor set type='port', port=22, url='host.containers.internal' where name='Host' and (type!='port' or url!='host.containers.internal' or port!=22)")
+# cleanup: remove any seeded host/ping monitor — rootless can't ICMP (EPERM) and
+# can't reach host ports from the bridge network; host health is the Beszel
+# agent's job.
+c.execute("delete from monitor where name='Host'")
 if c.execute("select changes()").fetchone()[0]:
-    print("[+] fixed Host monitor -> port host.containers.internal:22")
+    print("[+] removed Host monitor (host health = Beszel agent; rootless can't reach host ports)")
 c.commit()
 print("[+] %d added; total monitors now %d" % (added, c.execute("select count(*) from monitor").fetchone()[0]))
 PY
