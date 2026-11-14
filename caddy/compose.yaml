@@ -27,9 +27,6 @@ services:
     extra_hosts:
       - "host.containers.internal:169.254.1.2"
     networks:
-      - caddy-proxy
-
-    networks:
       caddy-proxy:
         # Static IP: Navidrome's ExtAuth (externalized auth) trusts the
         # proxy by SOURCE IP (ND_EXTAUTH_TRUSTEDSOURCES in
@@ -37,6 +34,9 @@ services:
         # disable the Remote-User auto-login (Navidrome falls back to its own
         # login). Keep the two values in sync (docs/operations.md).
         ipv4_address: 10.89.0.200
+
+networks:
+  caddy-proxy:
     external: true
 
 volumes:
