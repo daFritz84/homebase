@@ -26,31 +26,38 @@ row = c.execute("select id from user order by id limit 1").fetchone()
 if not row:
     sys.exit("[ERR] no admin user in the DB — create the Kuma admin first")
 admin = row[0]
+# (name, type, url, port). The host check is TCP:22, NOT ping — rootless Podman
+# cannot grant CAP_NET_RAW, so an ICMP ping monitor fails EPERM in the container.
 monitors = [
-    ("Authelia",         "http", "https://authelia.sseifried.link"),
-    ("Homepage",         "http", "https://homepage.sseifried.link"),
-    ("AdGuard",          "http", "https://adguard.sseifried.link"),
-    ("Wanderer",         "http", "https://wanderer.sseifried.link"),
-    ("Home Assistant",   "http", "https://homeassistant.sseifried.link"),
-    ("Navidrome",        "http", "https://navidrome.sseifried.link"),
-    ("Jellyfin",         "http", "https://jellyfin.sseifried.link"),
-    ("Stirling PDF",     "http", "https://stirling.sseifried.link"),
-    ("BookOrbit",        "http", "https://bookorbit.sseifried.link"),
-    ("Cockpit",          "http", "https://cockpit.sseifried.link"),
-    ("Status (self)",    "http", "https://status.sseifried.link"),
-    ("Metrics (self)",   "http", "https://metrics.sseifried.link"),
-    ("Host",             "ping", "192.168.178.249"),
+    ("Authelia",         "http", "https://authelia.sseifried.link",   None),
+    ("Homepage",         "http", "https://homepage.sseifried.link",   None),
+    ("AdGuard",          "http", "https://adguard.sseifried.link",    None),
+    ("Wanderer",         "http", "https://wanderer.sseifried.link",   None),
+    ("Home Assistant",   "http", "https://homeassistant.sseifried.link", None),
+    ("Navidrome",        "http", "https://navidrome.sseifried.link",  None),
+    ("Jellyfin",         "http", "https://jellyfin.sseifried.link",   None),
+    ("Stirling PDF",     "http", "https://stirling.sseifried.link",   None),
+    ("BookOrbit",        "http", "https://bookorbit.sseifried.link",  None),
+    ("Cockpit",          "http", "https://cockpit.sseifried.link",    None),
+    ("Status (self)",    "http", "https://status.sseifried.link",     None),
+    ("Metrics (self)",   "http", "https://metrics.sseifried.link",    None),
+    ("Host",             "tcp",  "192.168.178.249",                   22),
 ]
 added = 0
-for name, mtype, url in monitors:
+for name, mtype, url, port in monitors:
     if c.execute("select 1 from monitor where name=?", (name,)).fetchone():
         print("[*] exists:", name)
         continue
     c.execute(
-        "insert into monitor (name, type, url, user_id, interval, active) values (?,?,?,?,60,1)",
-        (name, mtype, url, admin))
+        "insert into monitor (name, type, url, user_id, interval, active, port) values (?,?,?,?,60,1,?)",
+        (name, mtype, url, admin, port))
     added += 1
     print("[+] add:", name)
+# self-heal: the host check must be tcp:22 — rootless Podman has no CAP_NET_RAW,
+# so a seeded ICMP ping row fails EPERM. Repair it in place.
+c.execute("update monitor set type='tcp', port=22, url='192.168.178.249' where name='Host' and type!='tcp'")
+if c.execute("select changes()").fetchone()[0]:
+    print("[+] fixed Host monitor -> tcp:22 (rootless has no CAP_NET_RAW for ping)")
 c.commit()
 print("[+] %d added; total monitors now %d" % (added, c.execute("select count(*) from monitor").fetchone()[0]))
 PY
