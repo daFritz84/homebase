@@ -10,10 +10,11 @@
 #   21116/tcp+udp = hbbs ID server (registration, hole punching) — published
 #   21117/tcp     = hbbr relay — published
 #   21115/tcp     = hbbs NAT-type test + RAW-TCP runtime console (NOT HTTP) —
-#                   127.0.0.1 only; access via `podman exec rustdesk_hbbs_1 sh -c
-#                   "printf <cmd> | nc -q1 127.0.0.1 21115"` (the "web console" is a
-#                   Server Pro feature — OSS has no HTTP console, decision revision
-#                   2026-11-15)
+#                   127.0.0.1 only; access from the SERVER HOST (the image has no
+#                   shell, so podman exec is impossible): `printf <cmd> | nc -q1
+#                   127.0.0.1 21115` (host nc probed 2026-11-15; the "web console"
+#                   is a Server Pro feature — OSS has no HTTP console, decision
+#                   revision 2026-11-15)
 #   21118/21119   = web-client WebSocket ports — NOT published (web client out of
 #                   scope; upstream install docs: keep them closed)
 # NO caddy-proxy network: nothing is proxied by service name.
@@ -36,11 +37,11 @@
 # it needs `podman-compose up -d --force-recreate`, not a restart.
 # Secrets: .env.secret (gitignored, 0600, provision-rustdesk-secrets.sh from Bitwarden
 # tailscale-authkey) carries TS_AUTHKEY — CI needs a stub touch (ci.yml).
-# NO healthchecks on hbbs/hbbr: the image shell/nc availability is unprobed
-# (cloudflared/beszel trap: podman-compose runs healthchecks as /bin/sh -c). Probe
-# on first run (docs/services.md first-run), then add TCP healthchecks
-# (`nc -z 127.0.0.1 21116` / `nc -z 127.0.0.1 21117`) ONLY if the probe passes, and
-# record it. Liveness until then: the systemd unit + published ports.
+# NO healthchecks on hbbs/hbbr — PERMANENT (cloudflared/beszel trap: podman-compose
+# runs healthchecks as /bin/sh -c). Probed 2026-11-15: the image has NO shell at all
+# (`podman run --entrypoint sh` → crun: "executable file `sh` not found" — static
+# binary, distroless-style), so no in-container healthcheck of any kind is possible.
+# Liveness: the systemd unit + published ports (host-side probes: nc/curl exist).
 
 services:
   hbbs:
@@ -83,8 +84,9 @@ services:
   # limits). TS_ROUTES is the documented container subnet-routing parameter
   # (tailscale.com Docker-params, validated 2026-03-23). TS_AUTH_ONCE=true: state is
   # persisted, so re-auth only when needed (docs: default false forces login every
-  # start). TS_ENABLE_HEALTH_CHECK (v1.78+): unauthenticated /healthz on
-  # TS_LOCAL_ADDR_PORT (default [::]:9002) — the documented container health signal.
+# start). TS_ENABLE_HEALTH_CHECK (v1.78+): unauthenticated /healthz on
+# TS_LOCAL_ADDR_PORT (default [::]:9002) — kept for external probes; the shipped
+# healthcheck uses the CLI (no wget in the image, probed 2026-11-15).
   # Traffic path (probed on first run, see docs/services.md): tailnet client ->
   # tailscaled (userspace) -> pod netns default route -> netavark SNAT -> host LAN
   # IP:21116/21117 — lands in the firewalld public zone, where 21116/tcp+udp and
@@ -109,10 +111,12 @@ services:
       TS_ENABLE_HEALTH_CHECK: "true"
     volumes:
       - ./data/tailscale:/var/lib/tailscale
-    # healthcheck: the tailscale image is Alpine-based (sh + busybox wget) — probe
-    # on first run, then keep this (healthz 200 once the node has a tailnet IP):
+    # healthcheck: probed 2026-11-15 — the image has /bin/sh (Alpine) but NO
+    # wget/nc/curl, so the healthz endpoint is NOT reachable from inside; use the
+    # documented CLI signal (tailscale status exits non-zero while the node is
+    # logged out / not connected — crash-loop-free: retries 3 tolerate first-auth).
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9002/healthz"]
+      test: ["CMD-SHELL", "tailscale status --peers=false > /dev/null"]
       interval: 30s
       timeout: 5s
       retries: 3

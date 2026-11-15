@@ -1461,8 +1461,9 @@ to one service.
 21116/tcp+udp = ID server (registration, hole punching); 21117/tcp = relay;
 21115/tcp = NAT-type test + **raw-TCP runtime console (NOT HTTP)** — the "web
 console" is a Server **Pro** feature (decision revision 2026-11-15: no Caddy site,
-no Authelia wall; console is loopback-only: `podman exec rustdesk_hbbs_1 sh -c
-"printf <cmd> | nc -q1 127.0.0.1 21115"`); 21118/21119 (web-client WebSocket) are
+no Authelia wall; console is loopback-only, reached from the **server host**
+   (the image has no shell): `printf <cmd> | nc -q1 127.0.0.1 21115`);
+   21118/21119 (web-client WebSocket) are
 **not published** (upstream install docs: keep them closed). firewalld:
 `21116/tcp 21116/udp 21117/tcp` permanent (LAN + VPN arrival on the public zone;
 the sidecar needs none — outbound-only).
@@ -1509,12 +1510,15 @@ encryption stays on (hbbr relays ciphertext only).
 root to host `chef`, `data/` is host-user-owned — **no chown ritual**
 (jellyfin/uptime-kuma pattern).
 
-**Healthchecks:** hbbs/hbbr ship WITHOUT healthchecks (image shell/nc availability
-unprobed — cloudflared/beszel trap: podman-compose runs healthchecks as
-`/bin/sh -c`). Probe `podman exec rustdesk_hbbs_1 sh -c 'command -v nc wget'`; if
-it passes, add `nc -z 127.0.0.1 21116` (hbbs) / `nc -z 127.0.0.1 21117` (hbbr) to
-`compose.yaml` and record it here. tailscale healthcheck: healthz on
-`127.0.0.1:9002` (shipped).
+**Healthchecks:** hbbs/hbbr have **no healthchecks, permanently** — probed
+2026-11-15: the image has no shell at all (`podman run --entrypoint sh` → crun
+"`sh` not found"; static binary), so podman-compose healthchecks (`/bin/sh -c`)
+and `nc` TCP probes are impossible (cloudflared/beszel trap moot). Liveness:
+systemd unit + published ports; host-side probes (`nc`/`curl` exist on the
+server). tailscale healthcheck (shipped): `tailscale status --peers=false` —
+the image has `/bin/sh` but no wget/nc/curl (probed 2026-11-15), so the
+`:9002` healthz endpoint is not reachable from inside; the CLI exits non-zero
+while the node is logged out/not connected.
 
 Data that cannot be rebuilt: `rustdesk/data/` — `id_ed25519` (PRIVATE key),
 `id_ed25519.pub`, `db_v2.sqlite3` (client ID registry), `tailscale/` (node-key
@@ -1546,13 +1550,16 @@ touch .env.secret   # stub so `up` works before the key exists; tailscale crash-
 4. `podman-compose up -d` (no caddy-proxy dependency)
 5. Public key: `cat data/id_ed25519.pub` → Bitwarden `rustdesk-server-key` (public
    value — the client-config "Key"). Never print `id_ed25519`.
-6. Shell probe (decides healthchecks): `podman exec rustdesk_hbbs_1 sh -c
-   'command -v nc wget'` — pass → add the TCP healthchecks above, recreate, record.
-7. Console probe (raw TCP, NOT HTTP): `podman exec rustdesk_hbbs_1 sh -c "printf
-   'help' | nc -q1 127.0.0.1 21115"`
+6. Shell probe — **done 2026-11-15, FAILED**: the rustdesk-server image has no
+   shell (`podman run --rm --entrypoint sh <image> -c 'command -v sh'` → crun:
+   "`sh` not found"). No in-container healthcheck/console access is possible;
+   hbbs/hbbr stay healthcheck-free.
+7. Console probe (raw TCP, NOT HTTP) from the **server host** (21115 is
+   published on loopback; host `nc` probed present):
+   `printf 'help' | nc -q1 127.0.0.1 21115`
 8. Tailscale probes: `podman exec rustdesk_tailscale_1 tailscale ip -4` (100.x),
-   `tailscale status` (advertised route), healthz 200; approve the route in the
-   admin console (Machines → sidecar → Subnets).
+   `podman exec rustdesk_tailscale_1 tailscale status` (advertised route, peer
+   list); approve the route in the admin console (Machines → sidecar → Subnets).
 9. Firewall (LAN + VPN arrival; the sidecar needs none):
 
 ```bash
