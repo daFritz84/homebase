@@ -2,17 +2,17 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
 #
-# Metrics/uptime moved to Beszel + Uptime Kuma: per-container showStats
-# (CPU/RAM) are gone (the dockerproxy sidecar + podman.sock mount are removed).
-# Basic health stays here: the uptimekuma widget (status-page aggregate:
-# up/down/uptime) on the Uptime Kuma card, the beszel widget (host
-# CPU/RAM/disk) on the Beszel card, and the adguard widget on the AdGuard card.
+# Metrics/uptime live in the GitOps observability stack (VictoriaMetrics +
+# Grafana + blackbox + node_exporter), which replaced Uptime Kuma + Beszel.
+# Basic health surfaces here: the grafana widget (committed dashboard panels:
+# targets-up / endpoints-up) on the Monitoring card, and the adguard widget on
+# the AdGuard card.
 #
-# Widget URLs are INTERNAL caddy-proxy aliases (status:3001, beszel:8090), NOT
-# the public https:// URLs: the homepage container's DNS is aardvark (it
-# resolves service aliases, not *.sseifried.link — the adguard widget already
-# uses host.containers.internal), and the forward_auth wall fronts only the
-# public hostname, so the internal port bypasses it.
+# Widget URLs are INTERNAL caddy-proxy aliases (grafana:3000), NOT the public
+# https:// URLs: the homepage container's DNS is aardvark (it resolves service
+# aliases, not *.sseifried.link — the adguard widget already uses
+# host.containers.internal), and the forward_auth wall fronts only the public
+# hostname, so the internal port bypasses it.
 
 - Homebase:
     - Cockpit:
@@ -68,34 +68,32 @@
         href: https://authelia.sseifried.link
         description: SSO — login portal, 2FA enrollment, OIDC
 
-    - Uptime Kuma:
-        # abbr (no icon) — avoids a dashboard-icons 404; probe the `uptime-kuma`
-        # icon later and swap if present.
-        abbr: UK
-        href: https://status.sseifried.link
-        description: Uptime & availability monitoring
+    - Monitoring:
+        # abbr (no icon) — avoids a dashboard-icons 404; the GitOps
+        # observability stack (VictoriaMetrics + Grafana + blackbox +
+        # node_exporter) replaced Uptime Kuma + Beszel.
+        abbr: MO
+        href: https://grafana.sseifried.link
+        description: GitOps observability — endpoints, host & container metrics
 
-        # The uptimekuma widget has no full API — it reads a STATUS PAGE (create
-        # one in Kuma, group the monitored sites, record its slug). It shows the
-        # aggregate (up/down/uptime/incident), i.e. fleet-wide basic health.
+        # The grafana widget reads committed dashboard panels via a Grafana
+        # service-account API key (viewer role, scoped to the dashboard). The
+        # panels are the fleet-health stats (targets up, endpoints up). URL is
+        # the INTERNAL caddy-proxy alias (grafana:3000) — the wall fronts only
+        # the public hostname, so the internal port bypasses it (the
+        # status:3001/beszel:8090 pattern the old widgets used).
         widgets:
-          - type: uptimekuma
-            url: http://status:3001
-            slug: {{HOMEPAGE_VAR_KUMA_SLUG}}
-
-    - Beszel:
-        abbr: BZ
-        href: https://metrics.sseifried.link
-        description: Host & container metrics (CPU/RAM/disk)
-
-        # beszel widget: single-system detailed stats (systemId). The hub
-        # requires a superuser for API access (username/password, not an API
-        # key). version 2 for Beszel >= 0.9.0.
-        widgets:
-          - type: beszel
-            url: http://beszel:8090
-            username: {{HOMEPAGE_VAR_BESZEL_USER}}
-            password: {{HOMEPAGE_VAR_BESZEL_PASS}}
-            systemId: {{HOMEPAGE_VAR_BESZEL_SYSTEMID}}
-            version: 2
-            fields: [cpu, memory, disk]
+          - type: grafana
+            url: http://grafana:3000
+            apiKey: {{HOMEPAGE_VAR_GRAFANA_APIKEY}}
+            stats:
+              - type: stat
+                position: 0
+                id: 1
+                dashboardUid: homebase-overview
+                panelId: 1
+              - type: stat
+                position: 1
+                id: 2
+                dashboardUid: homebase-overview
+                panelId: 2

@@ -1,0 +1,218 @@
+---
+# monitoring — GitOps observability stack (replaces Uptime Kuma + Beszel)
+# ---
+# Declarative, git-versioned monitoring: every definition (scrape targets, probe
+# modules, alert rules, Grafana dashboards/datasources, alertmanager routing) is
+# a YAML/JSON file in this directory, hot-reloaded — no SQLite/PocketBase
+# reconcile shim (the reason Kuma/Beszel were retired: their config lives in a
+# DB with no config-file model).
+#
+# Components (this pod, unit `podman-compose@monitoring`):
+#   victoriametrics  TSDB + Prometheus-compatible scrape (-promscrape.config)
+#   vmalert          evaluates vmalert/rules/*.yml -> Alertmanager
+#   grafana          dashboards (provisioning/ + dashboards/ in git), native
+#                    Authelia OIDC client (the beszel/jellyfin/stirling pattern)
+#   alertmanager     routing + Telegram receiver
+#   blackbox-exporter endpoint probes (http_2xx / http_2xx_homepage / tcp)
+#
+# NOT in this compose (host processes, systemd user units — the beszel-agent
+# model, the clean rootless answer for /proc + the podman socket):
+#   node_exporter            host CPU/RAM/disk/net, scraped as
+#                         host.containers.internal:9100 (the adguard/HA/cockpit
+#                            host-loopback relay pattern — caddy-proxy cannot
+#                            resolve `homebase` and the LAN IP lands in the
+#                            firewalld public zone). install-node-exporter.sh +
+#                            systemd/user/node-exporter.service.
+#   podman-stats exporter    container stats via `podman stats --no-stream` fed
+#                            to node_exporter's textfile collector
+#                            (systemd/user/podman-stats-export.{service,timer}).
+#   Container stats via podman-exporter (ghcr.io) is NOT used: the server's
+#   egress to the ghcr.io token endpoint is 403-blocked (probed 2026-11-15), and
+#   podman's built-in metrics endpoint does not initialize on podman 5.4.2
+#   (metrics_enabled not honored — probed 2026-11-15). The textfile path is the
+#   working, gitops-native, rootless answer.
+#
+# Image tags pinned (repo doctrine, beszel:0.21.2 precedent); all verified to
+# pull on the server 2026-11-15 (docker.io reachable; ghcr.io token endpoint is
+# 403-blocked, so no ghcr images).
+#
+# Ownership: every image's Config.User is empty (root) -> rootless Podman maps
+# container root to host chef (jellyfin/uptime-kuma pattern) -> ./data is
+# host-user-owned, NO `podman unshare chown` ritual. Probe at first start
+# (repo doctrine): `podman image inspect <image> --format '{{.Config.User}}'`.
+#
+# Healthchecks: grafana (Alpine) / alertmanager (busybox) / blackbox (busybox)
+# ship a shell -> in-container healthcheck OK (probe at first start).
+# victoriametrics + vmalert ship DISTROLESS images (no /bin/sh) -> NO container
+# healthcheck (the podman-compose CMD-array->CMD-SHELL trap, beszel/rustdesk/
+# cloudflared precedent); liveness = systemd unit + scrape `up`.
+#
+# Secrets: grafana + alertmanager read .env.secret (gitignored, 0600,
+# provision-monitoring-secrets.sh from Bitwarden). victoriametrics/vmalert/
+# blackbox have NO env_file (config is files; CI needs no stub for them).
+# victoriametrics/vmalert/blackbox/grafana/alertmanager all join caddy-proxy;
+# the UIs are proxied by Caddy (metrics.->victoriametrics wall, grafana. OIDC,
+# alerts.->alertmanager wall); the scrapers (blackbox) are internal-only.
+# NEVER add metrics./grafana./alerts. to cloudflared/config.yml (admin-tool
+# doctrine — LAN/VPN-only via AdGuard split DNS).
+
+services:
+  victoriametrics:
+    image: docker.io/victoriametrics/victoria-metrics:v1.111.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - -promscrape.config=/etc/vm/promscrape.yml
+      - -storageDataPath=/vmdata
+      - -retentionPeriod=12
+      - -httpListenAddr=:8428
+    volumes:
+      - ./data/victoriametrics:/vmdata
+      - ./vm:/etc/vm:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - victoriametrics
+    # NO healthcheck: distroless image (no /bin/sh) — the CMD-array->CMD-SHELL
+    # trap (beszel/rustdesk precedent). Liveness = systemd unit + scrape up.
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+
+  vmalert:
+    image: docker.io/victoriametrics/vmalert:v1.111.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - -datasourceURL=http://victoriametrics:8428
+      - -notifier=http://alertmanager:9093
+      - -rule=/etc/vmalert/rules/*.yml
+      - -evaluationInterval=30s
+      - -httpListenAddr=:8880
+    volumes:
+      - ./vmalert:/etc/vmalert:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - vmalert
+    # NO healthcheck: distroless image (no /bin/sh) — same trap as VM.
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  grafana:
+    image: docker.io/grafana/grafana:11.6.1
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file:
+      - .env.secret
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.sseifried.link
+      # no telemetry (repo doctrine: SYSTEM_ENABLEANALYTICS=false in stirling)
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # native Authelia OIDC (generic_oauth; the Authelia Grafana guide)
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: Authelia
+      GF_AUTH_GENERIC_OAUTH_CLIENT_NAME: Authelia
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_USERS_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: openid profile email groups
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: >-
+        https://authelia.sseifried.link/api/oidc/authorization
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: >-
+        https://authelia.sseifried.link/api/oidc/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: >-
+        https://authelia.sseifried.link/api/oidc/userinfo
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
+      # JMESPath role mapping: homebase-admins group -> Grafana Admin
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: >-
+        contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'
+      GF_AUTH_GENERIC_OAUTH_ROLE_LIST: Admin,Editor,Viewer
+      GF_AUTH_GENERIC_OAUTH_TEAM_ROLE: Admin
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - grafana
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:3000/api/health >/dev/null 2>&1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  alertmanager:
+    image: docker.io/prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    env_file:
+      - .env.secret
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      - ./data/alertmanager:/alertmanager
+    networks:
+      caddy-proxy:
+        aliases:
+          - alertmanager
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:9093/-/healthy >/dev/null 2>&1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  blackbox-exporter:
+    image: docker.io/prom/blackbox-exporter:v0.25.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox:/etc/blackbox:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - blackbox
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:9115/-/healthy >/dev/null 2>&1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+networks:
+  caddy-proxy:
+    external: true

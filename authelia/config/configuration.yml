@@ -12,12 +12,12 @@
 #
 # REPLACE_ME markers stay in the committed files — the deployment values are
 # secrets and live only on the server:
-#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit|beszel|jellyfin].client_secret
+#   - identity_providers.oidc.clients[homepage|homeassistant|wanderer|cloudflare-access|stirling-pdf|bookorbit|grafana|jellyfin].client_secret
 #     (here): the argon2 digest is injected at startup by the `template`
 #     filter from the HOMEPAGE_OIDC_CLIENT_SECRET_HASH /
 #     HA_OIDC_CLIENT_SECRET_HASH / WANDERER_OIDC_CLIENT_SECRET_HASH /
 #     CLOUDFLARE_OIDC_CLIENT_SECRET_HASH / STIRLING_OIDC_CLIENT_SECRET_HASH /
-#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH / BESZEL_OIDC_CLIENT_SECRET_HASH /
+#     BOOKORBIT_OIDC_CLIENT_SECRET_HASH / GRAFANA_OIDC_CLIENT_SECRET_HASH /
 #     JELLYFIN_OIDC_CLIENT_SECRET_HASH
 #     env vars (.env.secret, written by
 #     provision-authelia-secrets.sh). Indexed env overrides
@@ -34,7 +34,8 @@
 #     (forward_auth trusted_proxies); Authelia trusts the proxy network.
 #   - access_control rules have no bypass_credentials / user-agent criteria —
 #     moot: HA is a native OIDC client (no wall, no bypasses) and the other
-#     walled apps (AdGuard, Uptime Kuma, Navidrome, and the Wanderer tunnel
+#     walled apps (AdGuard, VictoriaMetrics, Alertmanager, Navidrome, and the
+#     Wanderer tunnel
 #     listener) need none — Navidrome's API clients (Subsonic) never reach
 #     the wall (bypassed at the Caddy layer, authenticate at the app).
 #   - the OIDC issuer is derived from session.cookies[].authelia_url.
@@ -208,32 +209,35 @@ identity_providers:
         # 'client_secret_post'") — not by trial-and-error UI clicks. If the log
         # shows a method mismatch, set the method the client actually sends.
         token_endpoint_auth_method: 'client_secret_post'
-      - client_id: 'beszel'
-        client_name: 'Beszel (PocketBase OIDC SSO)'
+      - client_id: 'grafana'
+        client_name: 'Grafana (native OIDC SSO)'
         # argon2 digest injected from .env.secret by the template filter
-        # (BESZEL_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh); the
-        # RAW secret is pasted into Beszel's in-app OAuth2 provider form
-        # (Settings -> users collection -> OAuth2, the BookOrbit/Wanderer
-        # pattern — in-app config, never stored in a file)
-        client_secret: '{{ env "BESZEL_OIDC_CLIENT_SECRET_HASH" }}'
+        # (GRAFANA_OIDC_CLIENT_SECRET_HASH, provision-authelia-secrets.sh); the
+        # RAW secret goes to monitoring/.env.secret as
+        # GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET (provision-monitoring-secrets.sh,
+        # same Bitwarden item authelia-oidc-grafana-secret — the stirling-pdf
+        # pattern: digest here, RAW in the app env). Keep the Bitwarden item hex
+        # (the provisioner generates hex) to avoid the +/ form-encoding class of
+        # bug documented for the Jellyfin SSO-Auth plugin.
+        client_secret: '{{ env "GRAFANA_OIDC_CLIENT_SECRET_HASH" }}'
         public: false
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
         consent_mode: 'auto'
-        scopes: ['openid', 'profile', 'email']
+        # Grafana gates the Admin role on the `groups` claim (JMESPath
+        # contains(groups,'homebase-admins') -> Admin; see monitoring/compose.yaml
+        # GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH)
+        scopes: ['openid', 'profile', 'email', 'groups']
         redirect_uris:
-          # Beszel's fixed OAuth2 callback path (beszel.dev/guide/oauth):
-          # <hub-url>/api/oauth2-redirect
-          - 'https://metrics.sseifried.link/api/oauth2-redirect'
+          # Grafana generic_oauth fixed callback path: /login/generic_oauth
+          - 'https://grafana.sseifried.link/login/generic_oauth'
         grant_types: ['authorization_code']
         response_types: ['code']
-        # PROBE: Beszel is PocketBase-based (like wanderer) — PocketBase
-        # authenticates at the token endpoint with POST body credentials. Verify
-        # via the Authelia log on a method mismatch (cloudflare-access precedent:
-        # "request ... using 'client_secret_basic', client configured for
-        # 'client_secret_post'") — not by trial-and-error UI clicks.
-        token_endpoint_auth_method: 'client_secret_post'
+        # Grafana's generic_oauth authenticates at the token endpoint with HTTP
+        # Basic (client_secret_basic, its default). PROBE via the Authelia log on
+        # a method mismatch (cloudflare-access precedent) — not UI trial-and-error.
+        token_endpoint_auth_method: 'client_secret_basic'
       - client_id: 'wanderer'
         client_name: 'Wanderer (PocketBase OIDC SSO)'
         # argon2 digest injected from .env.secret by the template filter
@@ -344,10 +348,10 @@ access_control:
   # criteria of rules, and no rule references one — LAN-only exposure is
   # enforced by AdGuard split DNS + the VPN, not by Authelia policy.
   # No bypass rules for authelia./homepage./homeassistant./stirling./
-  # bookorbit./metrics.: rules are only evaluated for forward-auth requests,
+  # bookorbit./grafana.: rules are only evaluated for forward-auth requests,
   # and no Caddy site block forward-auths those domains (authelia serves its
   # own portal — its endpoints are exempt from ACL; Homepage, Home
-  # Assistant, Stirling PDF, BookOrbit, Beszel and Jellyfin (SSO-Auth plugin)
+  # Assistant, Stirling PDF, BookOrbit, Grafana and Jellyfin (SSO-Auth plugin)
   # are native OIDC clients, gated by their clients' authorization_policy +
   # the app-side role checks).
   rules:
@@ -358,10 +362,15 @@ access_control:
     - domain: 'adguard.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
-    # Uptime Kuma — behind the wall (two_factor, homebase-admins). It has NO
-    # native OIDC, so the wall is the Authelia SSO path; its own login stays as
-    # defense-in-depth. LAN/VPN-only, never in the tunnel.
-    - domain: 'status.sseifried.link'
+    # VictoriaMetrics UI — behind the wall (two_factor, homebase-admins): VM has
+    # NO native OIDC, so the wall is the Authelia SSO path (the Uptime Kuma/AdGuard
+    # pattern). LAN/VPN-only, never in the tunnel.
+    - domain: 'metrics.sseifried.link'
+      policy: 'two_factor'
+      subject: 'group:homebase-admins'
+    # Alertmanager UI — behind the wall (two_factor, homebase-admins): no native
+    # OIDC. LAN/VPN-only, never in the tunnel.
+    - domain: 'alerts.sseifried.link'
       policy: 'two_factor'
       subject: 'group:homebase-admins'
     # Navidrome — wall + ExtAuth header SSO (two_factor, homebase-admins):

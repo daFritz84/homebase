@@ -51,16 +51,15 @@ stirling-pdf/data/
 # music/ / jellyfin media/ pattern).
 bookorbit/data/
 
-# Uptime Kuma runtime data (data/: SQLite — monitors, status pages,
-# notification configs, 2FA secrets, settings) — data, not code; covered by
-# backup-uptime-kuma-data.sh.
-uptime-kuma/data/
-
-# Beszel hub runtime data (data/: PocketBase SQLite — users, systems, alerts,
-# API keys) — data, not code; covered by backup-beszel-data.sh. beszel/agent.env
-# holds the agent KEY/TOKEN (secrets from the hub's Add System) — never commit.
-beszel/data/
-beszel/agent.env
+# Monitoring runtime data (data/victoriametrics: TSDB; data/grafana: sqlite —
+# admin prefs, service-account API keys, non-provisioned dashboards;
+# data/alertmanager: silences + nflog) — data, not code. The declarative
+# monitoring config (vm/, blackbox/, vmalert/, alertmanager/, grafana/provisioning,
+# grafana/dashboards) IS committed (the gitops source of truth); dashboards
+# live in git, so data/grafana is the irreplaceable part (API keys) — covered
+# by backup-grafana-data.sh. monitoring/.env.secret (Grafana pw + OIDC secret +
+# Telegram) is covered by the global **/.env.secret rule.
+monitoring/data/
 
 # RustDesk runtime data (id_ed25519 PRIVATE key + id_ed25519.pub + db_v2.sqlite3
 # client registry + tailscale/ node-key state) — data, not code; covered by
