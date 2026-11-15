@@ -98,3 +98,70 @@
                   type: number
                   options:
                     maximumFractionDigits: 1
+
+- Network:
+    # LAN devices discovered 2026-11-15 (docs/services.md "Network devices").
+    # Widget URLs are LAN IPs: the homepage container reaches the LAN via
+    # pasta outbound (probed 2026-11-15 — the docs' LAN-IP warning is about
+    # inbound hairpin to homebase's own IP, not outbound).
+
+    - FRITZ!Box 7530:
+        icon: fritzbox
+        href: http://192.168.178.1/
+        description: Router — WAN status via UPnP (no credentials)
+
+        # Homepage's fritzbox widget reads UPnP/IGD status (no credentials);
+        # needs "Allow access for applications" + "Transmit status information
+        # over UPnP" in the Fritzbox UI. Max 4 fields.
+        widgets:
+          - type: fritzbox
+            url: http://192.168.178.1
+            fields:
+              - uptime
+              - externalIPAddress
+              - down
+              - up
+
+    - TrueNAS SCALE:
+        icon: truenas
+        href: https://truenas.fritz.box
+        description: NAS (Supermicro) — pools, disks, SMART
+
+        widgets:
+          - type: truenas
+            url: https://192.168.178.58
+            # REST API widget mode (version 1) for SCALE 24.10; READONLY API
+            # key (Bitwarden truenas-api-key, same key feeds the Prometheus
+            # scrape).
+            version: 1
+            key: {{HOMEPAGE_VAR_TRUENAS_KEY}}
+            enablePools: true
+            nasType: scale
+
+    - Supermicro BMC:
+        # no dashboard-icons entry — abbr card, Monitoring pattern
+        abbr: BMC
+        href: https://192.168.178.190
+        description: IPMI management of the TrueNAS box (sensors via ipmi-exporter)
+
+        # Homepage has no redfish/ipmi widget (checked v2.8 widget list) —
+        # the numbers come from VictoriaMetrics (ipmi-exporter metrics), the
+        # Monitoring-card pattern, no secret.
+        widgets:
+          - type: prometheusmetric
+            url: http://victoriametrics:8428
+            metrics:
+              - label: BMC up
+                query: ipmi_up
+              - label: Max temp
+                query: max(ipmi_temperature_celsius)
+                format:
+                  type: number
+                  options:
+                    maximumFractionDigits: 1
+              - label: Min fan
+                query: min(ipmi_fan_speed_rpm)
+                format:
+                  type: number
+                  options:
+                    maximumFractionDigits: 0

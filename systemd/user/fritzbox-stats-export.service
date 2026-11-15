@@ -1,0 +1,9 @@
+[Unit]
+Description=Export Fritzbox WAN stats (UPnP) to the node_exporter textfile collector
+Documentation=file:///home/chef/src/homebase/docs/services.md
+# POSTs SOAP actions to the FRITZ!Box :49000 (unauthenticated UPnP, LAN-only)
+# and writes fritzbox.prom to the node_exporter textfile dir.
+
+[Service]
+Type=oneshot
+ExecStart=%h/src/homebase/monitoring/export-fritzbox-stats.sh

@@ -14,6 +14,10 @@
 #                    Authelia OIDC client (the beszel/jellyfin/stirling pattern)
 #   alertmanager     routing + Telegram receiver
 #   blackbox-exporter endpoint probes (http_2xx / http_2xx_homepage / tcp)
+#   ipmi-exporter        Supermicro BMC (.190) sensors via IPMI LANplus
+#                        (docker.io image bundling FreeIPMI; config file with
+#                        the BMC auth is gitignored, rendered by the provision
+#                        script — no env_file)
 #
 # NOT in this compose (host processes, systemd user units — the beszel-agent
 # model, the clean rootless answer for /proc + the podman socket):
@@ -184,6 +188,45 @@ services:
       test:
         - CMD-SHELL
         - wget -q -O - http://localhost:9093/-/healthy >/dev/null 2>&1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  ipmi-exporter:
+    # Supermicro BMC (.190) sensor metrics via IPMI LANplus (multi-target
+    # pattern: /ipmi?target=&module=autoconf). docker.io image (ghcr is
+    # 403-blocked); it BUNDLES the FreeIPMI suite (ipmi-sensors, bmc-info,
+    # ipmi-dcmi, ipmi-raw, ipmi-sel, ipmi-chassis) — the static binary needs
+    # those host packages (apt+sudo), the container does not (verified
+    # 2026-11-15). Remote (lanplus) scraping needs no root (the root
+    # requirement is for host-local IPMI only).
+    image: docker.io/prometheuscommunity/ipmi-exporter:v1.10.1
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - --config.file=/etc/ipmi/ipmi.yml
+    volumes:
+      # ipmi.yml carries the BMC credentials -> gitignored, 0600, rendered by
+      # provision-monitoring-secrets.sh from Bitwarden `bmc-ipmi` (template:
+      # ipmi/ipmi.yml.example). NO env_file: the exporter config has no env
+      # expansion, so the credentials live in the rendered file, not in
+      # .env.secret.
+      - ./ipmi:/etc/ipmi:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - ipmi-exporter
+    # Alpine-based (FreeIPMI via apk) -> shell + busybox wget present; verify
+    # at first start (repo doctrine) and probe Config.User for ownership.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:9290/metrics >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
