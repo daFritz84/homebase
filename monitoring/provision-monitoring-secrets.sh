@@ -3,9 +3,11 @@ set -euo pipefail
 
 ## Provision monitoring/.env.secret (gitignored, 0600) from Bitwarden — the
 ## Grafana admin password + the Grafana Authelia OIDC client secret (RAW) + the
-## Alertmanager Telegram bot token/chat id. Mirrors the provision-*-secrets.sh
-## pattern (Bitwarden -> gitignored env, 0600). Consumed by grafana +
-## alertmanager (env_file in compose.yaml).
+## Alertmanager Telegram bot token. Mirrors the provision-*-secrets.sh pattern
+## (Bitwarden -> gitignored env, 0600). Consumed by grafana + alertmanager
+## (env_file in compose.yaml). The Telegram CHAT ID is not a secret and amtool
+## cannot validate an env-expanded int64, so it is a literal in
+## alertmanager/alertmanager.yml — this script prints it for you to set there.
 ##
 ## Unlock Bitwarden CLI first (example):
 # bw login
@@ -21,7 +23,9 @@ set -euo pipefail
 ##                                    provision-authelia-secrets.sh — same
 ##                                    Bitwarden item, stirling-pdf precedent)
 ##   telegram-bot-token            -> TELEGRAM_BOT_TOKEN (env override TELEGRAM_BOT_TOKEN)
-##   telegram-chat-id              -> TELEGRAM_CHAT_ID (env override TELEGRAM_CHAT_ID)
+##   telegram-chat-id              -> printed only (set it as the literal chat_id
+##                                    in alertmanager/alertmanager.yml; env
+##                                    override TELEGRAM_CHAT_ID)
 ##
 ## Missing items are generated and printed on stderr — save them to Bitwarden
 ## under the same names before the next run. The Grafana OIDC secret is generated
@@ -69,12 +73,13 @@ TELEGRAM_CHAT_ID="$(resolve telegram-chat-id "${TELEGRAM_CHAT_ID:-}")"
   printf 'GF_SECURITY_ADMIN_PASSWORD=%s\n' "${GF_SECURITY_ADMIN_PASSWORD}"
   printf 'GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=%s\n' "${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}"
   printf 'TELEGRAM_BOT_TOKEN=%s\n' "${TELEGRAM_BOT_TOKEN}"
-  printf 'TELEGRAM_CHAT_ID=%s\n' "${TELEGRAM_CHAT_ID}"
 } > "${ENV_FILE}.tmp"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
 
-echo "[+] Wrote ${ENV_FILE} (Grafana admin pw + OIDC client secret + Telegram)."
+echo "[+] Wrote ${ENV_FILE} (Grafana admin pw + OIDC client secret + Telegram bot token)."
+echo "    Telegram chat id (not a secret): ${TELEGRAM_CHAT_ID}"
+echo "    Set it as the literal chat_id in alertmanager/alertmanager.yml (git)."
 echo "    The Grafana OIDC RAW secret must match the argon2 digest in"
 echo "    authelia/.env.secret (provision-authelia-secrets.sh, same Bitwarden"
 echo "    item authelia-oidc-grafana-secret). Re-run that script after saving"
