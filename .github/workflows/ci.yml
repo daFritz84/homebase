@@ -97,11 +97,11 @@ jobs:
         run: |
           docker run --rm -v "$PWD/monitoring/blackbox:/c:ro" \
             docker.io/prom/blackbox-exporter:v0.25.0 \
-            --config.file=/c/blackbox.yml --config.test_and_exit
+            --config.file=/c/blackbox.yml --config.check
       - name: Validate alertmanager config
         run: |
           docker run --rm -v "$PWD/monitoring/alertmanager:/c:ro" \
-            -e TELEGRAM_BOT_TOKEN=ci-dummy -e TELEGRAM_CHAT_ID=1 \
+            -e TELEGRAM_BOT_TOKEN=ci-dummy \
             --entrypoint amtool docker.io/prom/alertmanager:v0.28.1 \
             check-config /c/alertmanager.yml
       - name: Validate vmalert rules (promtool, Prometheus-compatible)

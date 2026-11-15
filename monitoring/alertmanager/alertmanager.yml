@@ -1,6 +1,9 @@
-# Alertmanager routing + Telegram receiver. Secrets (bot token, chat id) are
-# env-expanded from .env.secret (Alertmanager expands $(VAR) in the config).
-# Never put the token/chat id in this committed file.
+# Alertmanager routing + Telegram receiver. The bot token is a secret, env-expanded
+# from .env.secret (Alertmanager expands $(VAR) in the config) — never in this
+# file. The chat id is NOT a secret (it identifies the target, the token
+# authorizes it) and amtool cannot validate an env-expanded int64, so it is a
+# literal here: set the real value (provision-monitoring-secrets.sh prints it
+# from Bitwarden `telegram-chat-id`) on the workstation, in git.
 route:
   receiver: telegram
   group_by: ["alertname", "instance"]
@@ -17,7 +20,7 @@ receivers:
   - name: telegram
     telegram_configs:
       - bot_token: "$(TELEGRAM_BOT_TOKEN)"
-        chat_id: $(TELEGRAM_CHAT_ID)
+        chat_id: 0
         api_url: https://api.telegram.org
         parse_mode: HTML
         send_resolved: true

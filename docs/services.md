@@ -1279,9 +1279,11 @@ is empty → rootless Podman maps container root to host `chef`
 `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` (RAW hex from Bitwarden
 `authelia-oidc-grafana-secret` — the Authelia client digest
 `GRAFANA_OIDC_CLIENT_SECRET_HASH` is provisioned by
-`authelia/provision-authelia-secrets.sh`), `TELEGRAM_BOT_TOKEN` +
-`TELEGRAM_CHAT_ID` (Bitwarden `monitoring-telegram-bot-token` /
-`monitoring-telegram-chat-id`). victoriametrics/vmalert/blackbox have **no
+`authelia/provision-authelia-secrets.sh`), `TELEGRAM_BOT_TOKEN` (Bitwarden
+`telegram-bot-token`). The Telegram **chat id** is not a secret and lives as a
+literal in `alertmanager/alertmanager.yml` (amtool cannot validate an
+env-expanded int64) — `provision-monitoring-secrets.sh` prints it from Bitwarden
+`telegram-chat-id`. victoriametrics/vmalert/blackbox have **no
 env_file** (config is files; CI needs no stub for them). New `.env.secret` keys
 need `podman-compose up -d --force-recreate`, not a unit restart.
 
