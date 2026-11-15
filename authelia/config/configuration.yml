@@ -118,6 +118,12 @@ identity_providers:
       # preferred_username shows in the Access session.
       cloudflare-access:
         id_token: ['email', 'email_verified', 'preferred_username']
+      # Grafana evaluates role_attribute_path against the ID-token claims; 4.39's
+      # minimal ID token has no groups (scope claims live on UserInfo), so the
+      # JMESPath contains(groups,...) fell to Viewer (observed 2026-11-15).
+      # Hydrate groups into the ID token (the cloudflare-access escape hatch).
+      grafana:
+        id_token: ['groups', 'email', 'preferred_username']
     clients:
       - client_id: 'homepage'
         client_name: 'Homepage'
@@ -229,6 +235,9 @@ identity_providers:
         # contains(groups,'homebase-admins') -> Admin; see monitoring/compose.yaml
         # GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH)
         scopes: ['openid', 'profile', 'email', 'groups']
+        # groups into the ID token (see claims_policies.grafana) — Grafana's
+        # role_attribute_path reads the ID-token claims
+        claims_policy: 'grafana'
         redirect_uris:
           # Grafana generic_oauth fixed callback path: /login/generic_oauth
           - 'https://grafana.sseifried.link/login/generic_oauth'
