@@ -1469,7 +1469,11 @@ no Authelia wall; console is loopback-only, reached from the **server host**
 the sidecar needs none — outbound-only).
 
 **Keypair:** hbbs auto-generates `id_ed25519`/`id_ed25519.pub` into `./data` on
-first start (default key `-`). The **public** key is the client-config "Key"
+first start (default key `-`) — **`working_dir: /data` is required**: the image's
+WorkingDir is `/root` (probed 2026-11-15, found during first deploy), so without
+it the keypair + `db_v2.sqlite3` land in the container's ephemeral writable layer
+and a recreate silently rotates the keypair and loses the ID registry. The
+**public** key is the client-config "Key"
 (Bitwarden `rustdesk-server-key`); the private key never leaves `./data`.
 `hbbr -k _` shares the same keypair → relay key validation (clients present the
 Key; keyless clients are refused — deliberate hardening, the upstream docs demand

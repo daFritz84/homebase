@@ -25,6 +25,10 @@
 # --format '{{.Config.User}}'` — repo doctrine, stirling/uptime-kuma precedent):
 # empty (root) for both images -> rootless Podman maps container root to host chef
 # -> ./data is host-user-owned, NO chown ritual.
+# working_dir: /data is REQUIRED — probed 2026-11-15: the image's WorkingDir is
+# /root, so without this the keypair + db_v2.sqlite3 land in the container's
+# EPHEMERAL writable layer (lost on recreate = silent keypair rotation + ID
+# registry loss; found during first deploy).
 # hbbs key: default `-` loads/generates id_ed25519 in the working dir (/data) — no
 # `-k` flag needed (docs: "explicitly passing -k _ to hbbs is unnecessary").
 # hbbr key: `hbbr -k _` enables relay key validation from the SAME shared ./data
@@ -50,6 +54,7 @@ services:
     security_opt:
       - no-new-privileges=true
     command: hbbs -r 192.168.178.249:21117
+    working_dir: /data
     volumes:
       - ./data:/data
     ports:
@@ -67,6 +72,7 @@ services:
     security_opt:
       - no-new-privileges=true
     command: hbbr -k _
+    working_dir: /data
     volumes:
       - ./data:/data
     ports:
