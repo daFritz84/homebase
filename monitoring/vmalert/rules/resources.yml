@@ -1,9 +1,12 @@
+---
 # vmalert rules — host resources (node_exporter).
 groups:
   - name: resources
     rules:
       - alert: HostHighCpu
-        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        expr: >-
+          100 - (avg by (instance)
+            (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
         for: 10m
         labels:
           severity: warning
@@ -11,7 +14,7 @@ groups:
           summary: "High CPU on {{ $labels.instance }}"
           description: "CPU usage > 90% for 10m on {{ $labels.instance }}."
       - alert: HostHighMem
-        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        expr: 1-node_memory_MemAvailable_bytes/node_memory_MemTotal_bytes>0.9
         for: 10m
         labels:
           severity: warning
@@ -19,10 +22,14 @@ groups:
           summary: "High memory on {{ $labels.instance }}"
           description: "Memory usage > 90% for 10m on {{ $labels.instance }}."
       - alert: DiskWillFillIn
-        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24*3600) < 0
+        expr: >-
+          predict_linear(
+            node_filesystem_avail_bytes{fstype=~"ext4|xfs|btrfs"}[6h],
+            24*3600
+          ) < 0
         for: 30m
         labels:
           severity: warning
         annotations:
-          summary: "Disk filling on {{ $labels.instance }} {{ $labels.mountpoint }}"
-          description: "Filesystem {{ $labels.mountpoint }} predicted full within 24h on {{ $labels.instance }}."
+          summary: "Disk filling: {{ $labels.mountpoint }}"
+          description: "Predicted full within 24h on {{ $labels.instance }}."

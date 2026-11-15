@@ -1,5 +1,6 @@
+---
 # blackbox-exporter probe modules. NO icmp module: rootless Podman has no
-# CAP_NET_RAW (ICMP -> EPERM) — the same reason Uptime Kuma had no ping monitors.
+# CAP_NET_RAW (ICMP -> EPERM) — same reason Kuma had no ping monitors.
 # Host liveness uses tcp_connect.
 modules:
   http_2xx:
@@ -9,8 +10,8 @@ modules:
       valid_status_codes: [200]
       follow_redirects: false
       preferred_ip_protocol: ip4
-  # Homepage validates the Host header (HOMEPAGE_ALLOWED_HOSTS); a plain-IP probe
-  # returns 400. Send the allowed Host (the Caddyfile :80 health block pattern).
+  # Homepage validates the Host header (HOMEPAGE_ALLOWED_HOSTS); plain-IP
+  # probes return 400. Send the allowed Host (the Caddyfile :80 health block).
   http_2xx_homepage:
     prober: http
     timeout: 10s
