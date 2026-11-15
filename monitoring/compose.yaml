@@ -87,8 +87,8 @@ services:
     security_opt:
       - no-new-privileges=true
     command:
-      - -datasourceURL=http://victoriametrics:8428
-      - -notifier=http://alertmanager:9093
+      - -datasource.url=http://victoriametrics:8428
+      - -notifier.url=http://alertmanager:9093
       - -rule=/etc/vmalert/rules/*.yml
       - -evaluationInterval=30s
       - -httpListenAddr=:8880
