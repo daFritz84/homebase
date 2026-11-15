@@ -38,10 +38,12 @@ fi
 echo "[*] Fetching ${URL}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
-curl -fsSL "${URL}" -o "${tmp}/${ASSET}"
+# GitHub's release-asset signed-redirect intermittently returns 404 (observed
+# 2026-11-15: same URL 404s from the script, 200s on manual retry) — retry.
+curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "${URL}" -o "${tmp}/${ASSET}"
 
 # Verify against the per-asset sha256 (fail closed).
-expected="$(curl -fsSL "${CHECKSUM_URL}" | awk '{print $1}')"
+expected="$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "${CHECKSUM_URL}" | awk '{print $1}')"
 actual="$(sha256sum "${tmp}/${ASSET}" | cut -d' ' -f1)"
 [ -n "${expected}" ] || { echo "[ERR] no checksum in ${CHECKSUM_URL}"; exit 1; }
 [ "${expected}" = "${actual}" ] || { echo "[ERR] sha256 mismatch: expected ${expected}, got ${actual}"; exit 1; }
