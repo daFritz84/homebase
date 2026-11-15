@@ -6,11 +6,21 @@
 #
 # Remote multi-target pattern: scrape
 #   /ipmi?target=192.168.178.190&module=autoconf
-# (see vm/promscrape.yml job `ipmi`). autoconf picks the lanplus collectors
-# for remote addresses. v1.10.1 has NO collector_timeout (master-only field —
-# "unknown fields in modules" at startup, probed 2026-11-15); the VM
-# scrape_timeout 30s is the outer bound.
-auth:
-  - address: 192.168.178.190
-    username: BMC_USERNAME
-    password: BMC_PASSWORD
+# (see vm/promscrape.yml job `ipmi`). v1.10.1 schema: per-module
+# user/pass/driver/privilege/timeout/collectors — the master-branch top-level
+# `auth:` list and `collector_timeout` are "unknown fields" there (probed at
+# first deploy 2026-11-15). session timeout 10s; a scrape can take up to
+# timeout x #-of-collectors, the VM scrape_timeout 30s is the outer bound.
+modules:
+  autoconf:
+    user: BMC_USERNAME
+    pass: BMC_PASSWORD
+    driver: "LAN_2_0"
+    privilege: "admin"
+    timeout: 10000
+    collectors:
+    - bmc
+    - ipmi
+    - chassis
+    - dcmi
+    - sel

@@ -114,12 +114,24 @@ mkdir -p ipmi vm/secrets
   echo "---"
   echo "# Rendered by provision-monitoring-secrets.sh from Bitwarden \`bmc-ipmi\`"
   echo "# (gitignored, 0600). Template: ipmi.yml.example. Docs: docs/services.md."
-  echo "# v1.10.1 has NO collector_timeout (master-only field — probed at first"
-  echo "# deploy 2026-11-15); the VM scrape_timeout 30s is the outer bound."
-  echo "auth:"
-  echo "  - address: 192.168.178.190"
-  printf '    username: %s\n' "${BMC_USER}"
-  printf '    password: %s\n' "${BMC_PASS}"
+  echo "# v1.10.1 schema: per-module user/pass/driver/privilege/timeout (the"
+  echo "# master-branch top-level \`auth:\` list and \`collector_timeout\` are"
+  echo "# unknown fields there — probed at first deploy 2026-11-15). session"
+  echo "# timeout 10s; a scrape can take up to timeout x #-of-collectors, the"
+  echo "# VM scrape_timeout 30s is the outer bound."
+  echo "modules:"
+  echo "  autoconf:"
+  printf '    user: "%s"\n' "${BMC_USER}"
+  printf '    pass: "%s"\n' "${BMC_PASS}"
+  echo '    driver: "LAN_2_0"'
+  echo '    privilege: "admin"'
+  echo "    timeout: 10000"
+  echo "    collectors:"
+  echo "    - bmc"
+  echo "    - ipmi"
+  echo "    - chassis"
+  echo "    - dcmi"
+  echo "    - sel"
 } > ipmi/ipmi.yml.tmp
 mv -f ipmi/ipmi.yml.tmp ipmi/ipmi.yml
 chmod 0600 ipmi/ipmi.yml
