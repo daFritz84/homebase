@@ -1612,6 +1612,14 @@ Pin the tags in `compose.yaml`; `./backup-rustdesk-data.sh` **before every bump*
 - **Tailscale control-plane outage:** existing tailnet connections survive, **new**
   sessions may fail to negotiate → Fritz!Box WG is the break-glass transport.
 - **Client without the Key** → relay refused (`hbbr -k _`).
+- **Client warning "API server not set → http only"** (seen 2026-11-15 after
+  first connect): the API server (`rustdesk-api`, port 21114) is a **Server
+  Pro** component — OSS rustdesk-server has none, and we deliberately run
+  none. The warning covers web-console login / address book / web client
+  (`ws://` vs `wss://`) only; the ID/relay path is a keypair-encrypted
+  proprietary protocol (E2E through the relay), no TLS/HTTPS involved.
+  **Ignore** — no action, never add an API server (Pro = paid, and the
+  posture is password-only, no console).
 
 ## Home Assistant (Home Automation)
 
