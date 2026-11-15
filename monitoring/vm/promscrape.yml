@@ -10,7 +10,9 @@
 # alias:port (wall-bypassing, the homepage-widget pattern) — NOT the public
 # https:// URL (the Authelia wall returns 302, not 200). Ports verified against
 # caddy/Caddyfile upstreams. Per-app path/status behavior from docs/services.md:
-# Jellyfin `/` is 302->/web/ (probe /web/), Stirling `/` is 302->/login (probe
+# Jellyfin `/` is 302->/web/ (probe /web/), Navidrome `/` is 302->/app/ (probe
+# /app/), AdGuard `/` is 302->/login.html (probe /login.html; /health/status is
+# 401), Stirling `/` is 302->/login (probe
 # /api/v1/info/status), Homepage validates Host (probe /api/healthcheck with the
 # http_2xx_homepage module), Cockpit :9090 is HTTPS self-signed + Host-validated
 # (tcp_connect only). No ICMP (rootless has no CAP_NET_RAW).
@@ -39,11 +41,11 @@ scrape_configs:
       - targets:
           - http://authelia:9091/api/health
           - http://wanderer:3000/
-          - http://navidrome:4533/
+          - http://navidrome:4533/app/
           - http://jellyfin:8096/web/
           - http://stirling:8080/api/v1/info/status
           - http://bookorbit:3000/
-          - http://host.containers.internal:8095/
+          - http://host.containers.internal:8095/login.html
           - http://host.containers.internal:8123/
           - http://grafana:3000/api/health
           - http://victoriametrics:8428/health
