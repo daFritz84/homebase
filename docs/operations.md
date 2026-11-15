@@ -710,19 +710,28 @@ Notes:
     `truenas-api-key`) — a TrueNAS upgrade can revoke the key (widget shows
     an error): create a new READONLY key, update Bitwarden, update
     `homepage/.env`, `podman-compose up -d --force-recreate` in `homepage/`.
+  - **TrueNAS REST scrape stale** (`TrueNASStatsStale`, pool/disk alerts stop
+    firing): a TrueNAS upgrade can revoke API keys. Create a new READONLY key,
+    update Bitwarden `truenas-api-key`, re-run
+    `monitoring/provision-monitoring-secrets.sh` (renders
+    `vm/secrets/truenas-api-key`, read by `export-truenas-stats.sh` at each
+    run — no restart), and update `HOMEPAGE_VAR_TRUENAS_KEY` in
+    `homepage/.env` + `podman-compose up -d --force-recreate` in `homepage/`
+    (the widget uses the same key).
   - **BMC scrape fails** (`BmcUnreachable`): a BMC firmware update can reset
     users and disable IPMI-over-LAN. Recreate the "monitoring" user
     (Administrator privilege), enable IPMI-over-LAN, update Bitwarden
     `bmc-ipmi`, re-run the provision script (renders `ipmi/ipmi.yml`), then
     `podman-compose up -d --force-recreate` in `monitoring/` (the container
     reads the file at start).
-  - **TrueNAS metric renames** (pool/disk alerts stop firing, dashboard panels
-    empty): the collectd plugin names in the graphite path
-    (`truenas_<host>_..._value`, lite mapping) can change across major
-    upgrades — list what arrives (`podman exec caddy curl -s
-    http://graphite-exporter:9102/metrics | grep '^truenas_'` — VM is
-    distroless, caddy has curl) and adjust
-    `vmalert/rules/network.yml` + `grafana/dashboards/network.json`.
+  - **TrueNAS metric renames** (dashboard panels empty): the collectd plugin
+    names in the graphite path (`scale_truenas_..._value`, lite mapping) can
+    change across major upgrades — list what arrives (`podman exec caddy curl
+    -s http://graphite-exporter:9102/metrics | grep '^scale_truenas_'` — VM
+    is distroless, caddy has curl) and adjust
+    `grafana/dashboards/network.json`; the textfile names
+    (`truenas_pool_status`, `truenas_disk_temperature_celsius`) are ours —
+    adjust `export-truenas-stats.sh` if the REST endpoints move.
   - **Proxmox PVE integration is NOT deployed** — the PVE API (:8006) is
     firewalled from the LAN (user decision 2026-11-15). If that ever changes,
     the homepage `proxmox.yaml` stub + a pve-exporter are the entry points.
