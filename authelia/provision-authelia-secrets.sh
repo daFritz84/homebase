@@ -27,14 +27,14 @@ set -euo pipefail
 # authelia-oidc-wanderer-secret), Cloudflare Access (item:
 # authelia-oidc-cloudflare-secret), Stirling PDF (item:
 # authelia-oidc-stirling-pdf-secret) and BookOrbit (item:
-# authelia-oidc-bookorbit-secret) and Beszel (item:
-# authelia-oidc-beszel-secret) and Jellyfin (item:
+# authelia-oidc-bookorbit-secret) and Grafana (item:
+# authelia-oidc-grafana-secret) and Jellyfin (item:
 # authelia-oidc-jellyfin-secret) are fetched/generated and argon2-hashed
 # via the authelia image: the digests go into .env.secret as
 # HOMEPAGE_OIDC_CLIENT_SECRET_HASH / HA_OIDC_CLIENT_SECRET_HASH /
 # WANDERER_OIDC_CLIENT_SECRET_HASH / CLOUDFLARE_OIDC_CLIENT_SECRET_HASH /
 # STIRLING_OIDC_CLIENT_SECRET_HASH / BOOKORBIT_OIDC_CLIENT_SECRET_HASH /
-# BESZEL_OIDC_CLIENT_SECRET_HASH / JELLYFIN_OIDC_CLIENT_SECRET_HASH
+# GRAFANA_OIDC_CLIENT_SECRET_HASH / JELLYFIN_OIDC_CLIENT_SECRET_HASH
 # (injected into configuration.yml by the template filter — the committed
 # file keeps its placeholders), the RAW
 # values are printed for homepage/.env as HOMEPAGE_OIDC_CLIENT_SECRET, for
@@ -45,8 +45,9 @@ set -euo pipefail
 # same Bitwarden item by provision-stirling-pdf-secrets.sh), and for
 # BookOrbit's Settings > OIDC/SSO provider form (in-app config, client_id
 # bookorbit — the RAW value is pasted there, never stored in a file), and for
-# Beszel's in-app OAuth2 provider form (Settings -> users collection -> OAuth2,
-# client_id beszel — the RAW value is pasted there, never stored in a file), and
+# Grafana (client_id grafana) the RAW value lands in monitoring/.env.secret as
+# GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET via provision-monitoring-secrets.sh (same
+# Bitwarden item authelia-oidc-grafana-secret — keep it hex), and
 # for the Jellyfin SSO-Auth plugin provider form (Dashboard -> Plugins ->
 # SSO-Auth -> Settings -> Add provider, client_id jellyfin — the RAW value is
 # pasted there, never stored in a file). The Jellyfin secret MUST be hex
@@ -151,7 +152,7 @@ provision_oidc_client authelia-oidc-wanderer-secret Wanderer OIDC_WANDERER_SECRE
 provision_oidc_client authelia-oidc-cloudflare-secret Cloudflare-Access OIDC_CF_SECRET OIDC_CF_HASH
 provision_oidc_client authelia-oidc-stirling-pdf-secret Stirling-PDF OIDC_STIRLING_SECRET OIDC_STIRLING_HASH
 provision_oidc_client authelia-oidc-bookorbit-secret BookOrbit OIDC_BOOKORBIT_SECRET OIDC_BOOKORBIT_HASH
-provision_oidc_client authelia-oidc-beszel-secret Beszel OIDC_BESZEL_SECRET OIDC_BESZEL_HASH
+provision_oidc_client authelia-oidc-grafana-secret Grafana OIDC_GRAFANA_SECRET OIDC_GRAFANA_HASH
 provision_oidc_client authelia-oidc-jellyfin-secret Jellyfin OIDC_JELLYFIN_SECRET OIDC_JELLYFIN_HASH
 
 # --- Authelia login passwords (LDIF userPassword): generated once, preserved
@@ -185,7 +186,7 @@ fi
   printf 'CLOUDFLARE_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_CF_HASH}"
   printf 'STIRLING_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_STIRLING_HASH}"
   printf 'BOOKORBIT_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_BOOKORBIT_HASH}"
-  printf 'BESZEL_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_BESZEL_HASH}"
+  printf 'GRAFANA_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_GRAFANA_HASH}"
   printf 'JELLYFIN_OIDC_CLIENT_SECRET_HASH=%s\n' "${OIDC_JELLYFIN_HASH}"
   printf 'LDIF_LOGIN_PASSWORD=%s\n' "${LDIF_LOGIN_PASSWORD}"
 } > "${ENV_FILE}.tmp"
@@ -215,10 +216,11 @@ echo "    -> paste the RAW OIDC value as the client secret of the Authelia OIDC"
 echo "       provider in BookOrbit's Settings > OIDC/SSO form (in-app config,"
 echo "       client_id bookorbit):"
 echo "       ${OIDC_BOOKORBIT_SECRET}"
-echo "    -> paste the RAW OIDC value as the client secret of the Authelia OIDC"
-echo "       provider in Beszel's in-app OAuth2 form (Settings -> users"
-echo "       collection -> OAuth2, client_id beszel; in-app config, never a file):"
-echo "       ${OIDC_BESZEL_SECRET}"
+echo "    -> the RAW OIDC value for Grafana (client_id grafana) lands in"
+echo "       monitoring/.env.secret as GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET via"
+echo "       provision-monitoring-secrets.sh (same Bitwarden item"
+echo "       authelia-oidc-grafana-secret; keep it hex):"
+echo "       ${OIDC_GRAFANA_SECRET}"
 echo "    -> paste the RAW OIDC value as the OID Secret of the Authelia provider"
 echo "       in the Jellyfin SSO-Auth plugin (Dashboard -> Plugins -> SSO-Auth ->"
 echo "       Settings -> Add provider, client_id jellyfin; in-app config, never a file):"

@@ -26,7 +26,10 @@ podman-compose@<project>`**. Runbook: `deploy` skill.
 `homeassistant`→`@homeassistant`
 (`config/.storage/`, `secrets.yaml`) · `authelia`→`@authelia` (LDAP users, sqlite factors,
 `config/keys/`) · `cloudflared`→`@cloudflared` (tunnel credentials JSON, gitignored) ·
-`rustdesk`→`@rustdesk` (`rustdesk/data/` server keypair + ID registry + tailscale state).
+`rustdesk`→`@rustdesk` (`rustdesk/data/` server keypair + ID registry + tailscale state) ·
+`monitoring`→`@monitoring` (`monitoring/data/` VictoriaMetrics TSDB + grafana sqlite +
+alertmanager state; the declarative config in `monitoring/` is the gitops source of truth) +
+the `node-exporter` and `podman-stats-export.timer` user units.
 Images, tags, ports: read each `compose.yaml`.
 
 `caddy-proxy` (pinned `10.89.0.0/24` by `caddy/ensure_proxy_network.sh`) must exist before any
@@ -65,14 +68,17 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
 - New/changed `.env` / `.env.secret` keys need `podman-compose up -d --force-recreate` in the
   service dir, **not** a unit restart (env is baked in at container creation).
 - Secrets come from Bitwarden CLI: `provision-*-secrets.sh` (caddy, wanderer, authelia,
-  cloudflared, rustdesk) generates them; `homepage/.env` is provisioned manually per `docs/services.md`.
+  cloudflared, rustdesk, monitoring) generates them; `homepage/.env` is provisioned manually per
+  `docs/services.md`.
   `.env*`, `authelia/config/keys/`, `cloudflared/credentials.json`,
   rendered LDIF, `homeassistant/config/secrets.yaml` are gitignored. Never write secret values to
   tracked files; never print them.
-- Authelia down = walled apps (AdGuard UI, Uptime Kuma, Navidrome web UI, Wanderer via the tunnel
-  `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed `/rest/*`).
-  Jellyfin is a native OIDC client (SSO-Auth plugin), not walled: it keeps
+- Authelia down = walled apps (AdGuard UI, VictoriaMetrics UI, Alertmanager UI, Navidrome web UI,
+  Wanderer via the tunnel `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed
+  `/rest/*`). Jellyfin is a native OIDC client (SSO-Auth plugin), not walled: it keeps
   serving, only its SSO login redirect fails (break-glass: local admin login).
+  Grafana is a native OIDC client, not walled: it keeps serving, only its login redirect fails
+  (break-glass: admin password login).
   HA is a native OIDC client, not walled:
   it keeps serving, only its login redirect fails (break-glass `?skip_oidc_redirect=true`).
   Cockpit, Homepage, VPN, SSH are break-glass.
