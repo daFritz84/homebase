@@ -1427,17 +1427,22 @@ update can reset them, see operations.md). Homepage card: `fritzbox` widget
 (same UPnP surface, no key). This 7530 has an **Ethernet WAN uplink** — the
 DSL actions return empty, so there are no sync-rate/attenuation metrics.
 
-**TrueNAS SCALE (192.168.178.58):** scrape job `truenas` →
-`https://192.168.178.58/api/v2.0/prometheus` (SCALE 24.10+ built-in endpoint;
-pool/disk/SMART/temperature), bearer from `vm/secrets/truenas-api-key`,
-`insecure_skip_verify` (self-signed). Create the key in the TrueNAS UI
-(Settings → Access → API & Scanning Keys, role **READONLY**) and store it in
-Bitwarden `truenas-api-key` (password field). Homepage card: `truenas` widget
-(`version: 1` REST mode, `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`,
-`enablePools: true`, `nasType: scale`). Alert rule names
-(`zpool_state`, `disk_temperature_celsius`) must be verified against the live
-endpoint at first deploy — adjust `vmalert/rules/network.yml` if the
-middleware renames them.
+**TrueNAS SCALE (192.168.178.58, TrueNAS-25.10.0.8):** metrics via the
+**graphite stream**: TrueNAS UI System → Advanced → **Graphite export** →
+host `192.168.178.249`, port `2003`, prefix `truenas`, no TLS — collectd
+PUSHes pool/disk/temp/CPU/RAM to `graphite-exporter`'s carbon port (published
+to the host), which converts them (lite mapping, `graphite/mapping.conf`) and
+the scrape job `graphite` reads `graphite-exporter:9102`. **25.10 removed the
+built-in `/api/v2.0/prometheus` endpoint** (probed 2026-11-15: 404, no plugin
+in the catalog — the 24.10 bearer scrape is dead; the "Metrics" app is the
+other supported option). Metric names = graphite path
+(`truenas_<host>_..._value`); verify the live names before writing pool/disk
+alert rules (`vmalert/rules/network.yml` has a staleness alert only until
+then). The REST API key (Bitwarden `truenas-api-key`, READONLY role, Settings
+→ Access → API & Scanning Keys) is still needed for the homepage `truenas`
+widget (`version: 1` REST mode works on 25.10: pool/alerts endpoints 200,
+probed 2026-11-15; `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`, `enablePools: true`,
+`nasType: scale`).
 
 **Supermicro BMC (192.168.178.190):** scrape job `ipmi` →
 `ipmi-exporter:9290/ipmi?target=192.168.178.190&module=autoconf` (IPMI

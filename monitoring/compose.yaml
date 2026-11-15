@@ -18,6 +18,10 @@
 #                        (docker.io image bundling FreeIPMI; config file with
 #                        the BMC auth is gitignored, rendered by the provision
 #                        script — no env_file)
+#   graphite-exporter    TrueNAS (.58) collectd stream: carbon :2003 published
+#                        to the host (the NAS pushes), Prometheus conversion
+#                        on the internal net (25.10 REMOVED the built-in
+#                        /api/v2.0/prometheus endpoint — probed 2026-11-15)
 #
 # NOT in this compose (host processes, systemd user units — the beszel-agent
 # model, the clean rootless answer for /proc + the podman socket):
@@ -235,6 +239,49 @@ services:
       test:
         - CMD-SHELL
         - wget -q -O /dev/null http://localhost:9290/ >/dev/null 2>&1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  graphite-exporter:
+    # TrueNAS SCALE (.58) metrics. 25.10 REMOVED the built-in
+    # /api/v2.0/prometheus endpoint (probed 2026-11-15: 404, no plugin in the
+    # catalog) — collectd's write_graphite plugin is the supported stream:
+    # TrueNAS UI System -> Advanced -> Graphite export -> host
+    # 192.168.178.249, port 2003, prefix "truenas", no TLS. carbon :2003
+    # (tcp+udp) is published to the host because the NAS PUSHES to it; the
+    # converted /metrics (:9102) stays internal on caddy-proxy.
+    image: docker.io/prom/graphite-exporter:v0.17.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - --graphite.listen-address=0.0.0.0:2003
+      - --web.listen-address=0.0.0.0:9102
+      - --graphite.mapping-config=/etc/graphite-exporter/mapping.conf
+    volumes:
+      # mapping.conf is public (no secrets) -> tracked, world-readable, so the
+      # image's pinned Config.User=nobody (probed at first pull 2026-11-15)
+      # can read it — no user: override needed (unlike ipmi-exporter's 0600).
+      - ./graphite:/etc/graphite-exporter:ro
+    ports:
+      - "2003:2003/tcp"
+      - "2003:2003/udp"
+    networks:
+      caddy-proxy:
+        aliases:
+          - graphite-exporter
+    # v0.17.0 (non-distroless tag) ships a shell (the -distrolees variant is a
+    # separate tag) -> healthcheck OK; landing page, not /metrics (scrape
+    # spam, ipmi-exporter precedent).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:9102/ >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3

@@ -1,9 +1,10 @@
 ---
 # vmalert rules — network devices (Fritzbox WAN, TrueNAS, Supermicro BMC).
 # Metric sources: fritzbox_* (node_exporter textfile, export-fritzbox-stats.sh),
-# zpool_*/disk_* (TrueNAS /api/v2.0/prometheus), ipmi_* (ipmi-exporter).
-# TrueNAS metric names verified against the live endpoint at first deploy
-# (docs/services.md); adjust here if the middleware renames them.
+# truenas_* (collectd write_graphite -> graphite-exporter, lite mapping),
+# ipmi_* (ipmi-exporter). TrueNAS metric names verified against the live
+# graphite stream at first deploy (docs/services.md); adjust here if the
+# collectd plugins rename them.
 groups:
   - name: network-fritzbox
     rules:
@@ -36,32 +37,20 @@ groups:
             (docs/operations.md)
   - name: network-truenas
     rules:
-      - alert: TrueNASTargetDown
-        expr: up{job="truenas"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "TrueNAS Prometheus endpoint down"
-          description: >-
-            /api/v2.0/prometheus scrape failed for 5m — API key revoked by an
-            upgrade? (docs/operations.md)
-      - alert: TrueNASTankNotOnline
-        expr: zpool_state{state!~"ONLINE|OPTIMAL"} == 1
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "TrueNAS pool {{ $labels.name }} state {{ $labels.state }}"
-          description: "ZFS pool not ONLINE/OPTIMAL for 5m."
-      - alert: TrueNASDiskHot
-        expr: disk_temperature_celsius > 50
+      - alert: TrueNASGraphiteStale
+        expr: absent({__name__=~"truenas_.+"})
         for: 15m
         labels:
-          severity: warning
+          severity: critical
         annotations:
-          summary: "TrueNAS disk {{ $labels.disk }} hot"
-          description: "Disk temperature > 50C for 15m ({{ $value | printf \"%.0f\" }}C)."
+          summary: "TrueNAS graphite stream stale"
+          description: >-
+            No truenas_* series for 15m — Graphite export disabled in the
+            TrueNAS UI (System -> Advanced), collectd dead, or carbon :2003
+            blocked (docs/services.md).
+      # Pool-state / disk-temp rules are added once the live graphite metric
+      # names are observed (lite mapping: truenas_<host>_..._value) —
+      # docs/services.md "Monitoring -> Network devices".
   - name: network-bmc
     rules:
       - alert: BmcUnreachable
