@@ -1,0 +1,27 @@
+[Unit]
+Description=node_exporter (host CPU/RAM/disk/net + podman-stats textfile collector)
+Documentation=file:///home/chef/src/homebase/docs/services.md
+# Scraped by VictoriaMetrics (a compose unit) over the host-loopback relay
+# (host.containers.internal:9100). Order behind the network gate so the relay is
+# live; the textfile dir is fed by podman-stats-export.timer.
+Wants=podman-network-online.service
+After=podman-network-online.service
+
+[Service]
+ExecStart=%h/.local/bin/node_exporter \
+  --web.listen-address=:9100 \
+  --collector.textfile.directory=%h/.local/share/node-exporter/textfile
+Restart=on-failure
+RestartSec=5
+
+# Hardening subset (beszel-agent pattern). node_exporter reads /proc + /sys
+# (host, unprivileged) and the textfile dir under ~/.local/share. Do NOT set
+# ProtectHome=read-only (it would block the textfile dir write path the timer
+# uses). ProtectSystem=full (read-only /usr,/boot,/etc) is fine: the binary is
+# in ~/.local/bin.
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

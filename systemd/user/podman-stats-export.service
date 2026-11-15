@@ -1,0 +1,9 @@
+[Unit]
+Description=Export podman container stats to the node_exporter textfile collector
+Documentation=file:///home/chef/src/homebase/docs/services.md
+# Runs `podman stats --no-stream` (the local rootless engine, not the API socket)
+# and writes podman.prom to the node_exporter textfile dir.
+
+[Service]
+Type=oneshot
+ExecStart=%h/src/homebase/monitoring/export-podman-stats.sh

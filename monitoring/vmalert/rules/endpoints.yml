@@ -1,0 +1,20 @@
+# vmalert rules — endpoint availability (blackbox probes + scrape liveness).
+groups:
+  - name: endpoints
+    rules:
+      - alert: EndpointDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Endpoint down: {{ $labels.instance }}"
+          description: "Probe of {{ $labels.instance }} (job {{ $labels.job }}) has failed for 2m."
+      - alert: TargetMissing
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scrape target down: {{ $labels.instance }} ({{ $labels.job }})"
+          description: "VictoriaMetrics has failed to scrape {{ $labels.instance }} (job {{ $labels.job }}) for 3m."

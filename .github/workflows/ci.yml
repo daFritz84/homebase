@@ -29,19 +29,19 @@ jobs:
         env:
           XDG_RUNTIME_DIR: /tmp # homepage mounts ${XDG_RUNTIME_DIR}/podman/podman.sock
         run: |
-          touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret stirling-pdf/.env.secret bookorbit/.env.secret rustdesk/.env.secret
+          touch caddy/.env homepage/.env wanderer/.env.secret authelia/.env.secret stirling-pdf/.env.secret bookorbit/.env.secret rustdesk/.env.secret monitoring/.env.secret
           # rustdesk needs a stub: env_file .env.secret (TS_AUTHKEY for the
           #   tailscale subnet-router sidecar; the key itself is a Bitwarden
           #   item, the stub is empty)
+          # monitoring needs a stub: grafana + alertmanager use env_file
+          #   .env.secret (Grafana admin pw + OIDC secret + Telegram token/chat;
+          #   the values are Bitwarden items, the stub is empty)
           # cloudflared needs no stub: no env_file (credentials.json is a
           # bind-mount, and volume targets need not exist for `config`)
           # navidrome needs no stub: no env_file (config lives in the image ENV)
           # jellyfin needs no stub: no env_file (config lives in data/jellyfin.xml)
-          # uptime-kuma needs no stub: no env_file (config lives in the UI/DB)
-          # beszel needs no stub: no env_file (hub env is all non-secret; the
-          #   agent's KEY/TOKEN live in beszel/agent.env, a systemd unit file,
-          #   not a compose env_file)
-          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin stirling-pdf bookorbit uptime-kuma beszel rustdesk; do
+          # uptime-kuma/beszel are retired (replaced by monitoring/)
+          for f in caddy adguard-home homeassistant homepage wanderer authelia cloudflared navidrome jellyfin stirling-pdf bookorbit rustdesk monitoring; do
             echo "::group::$f"
             docker compose -f "$f/compose.yaml" config -q
             echo "::endgroup::"
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: reviewdog/action-yamllint@v1
         with:
-          yamllint_flags: "homepage/config/"
+          yamllint_flags: "homepage/config/ monitoring/"
 
   hadolint:
     runs-on: ubuntu-latest
@@ -88,3 +88,29 @@ jobs:
             -v "$PWD/caddy:/etc/caddy:ro" \
             homebase-caddy \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+  monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate blackbox config
+        run: |
+          docker run --rm -v "$PWD/monitoring/blackbox:/c:ro" \
+            docker.io/prom/blackbox-exporter:v0.25.0 \
+            --config.file=/c/blackbox.yml --config.test_and_exit
+      - name: Validate alertmanager config
+        run: |
+          docker run --rm -v "$PWD/monitoring/alertmanager:/c:ro" \
+            -e TELEGRAM_BOT_TOKEN=ci-dummy -e TELEGRAM_CHAT_ID=1 \
+            --entrypoint amtool docker.io/prom/alertmanager:v0.28.1 \
+            check-config /c/alertmanager.yml
+      - name: Validate vmalert rules (promtool, Prometheus-compatible)
+        run: |
+          curl -fsSL https://github.com/prometheus/prometheus/releases/download/v2.53.0/prometheus-2.53.0.linux-amd64.tar.gz -o /tmp/p.tar.gz
+          tar -xzf /tmp/p.tar.gz -C /tmp
+          /tmp/prometheus-2.53.0.linux-amd64/promtool check rules monitoring/vmalert/rules/*.yml
+      - name: Validate Grafana dashboard JSON
+        run: |
+          for f in monitoring/grafana/dashboards/*.json; do
+            python3 -c "import json,sys; d=json.load(open('$f')); assert d['uid'] and d['panels'], '$f'"
+          done

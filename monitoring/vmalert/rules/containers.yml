@@ -1,0 +1,21 @@
+# vmalert rules — container state (podman_container_* from the podman-stats
+# textfile collector, scraped on the node_exporter endpoint).
+groups:
+  - name: containers
+    rules:
+      - alert: ContainerDown
+        expr: podman_container_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container down: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is not running for 2m."
+      - alert: ContainerHighMem
+        expr: podman_container_mem_percent > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high memory: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} memory > 90% of its limit for 10m."
