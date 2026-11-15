@@ -208,6 +208,11 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
+    # The image pins Config.User=nobody (probed at first start 2026-11-15) —
+    # nobody cannot read the 0600 rendered ipmi.yml (rootless maps container
+    # root to chef, nobody to an unmapped subuid). Override to container root
+    # = host chef: the repo's ownership model, the minimal fix.
+    user: "0:0"
     command:
       - --config.file=/etc/ipmi/ipmi.yml
     volumes:
