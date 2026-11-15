@@ -21,6 +21,7 @@ systemctl --user status podman-compose@bookorbit
 systemctl --user status podman-compose@monitoring
 systemctl --user status node-exporter
 systemctl --user status podman-stats-export.timer
+systemctl --user status fritzbox-stats-export.timer
 systemctl --user status podman-compose@rustdesk
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
@@ -670,7 +671,7 @@ Notes:
   - **Idle-timeout tuning**: `x-systemd.idle-timeout=60` in the fstab
     options; after editing: `sudo systemctl daemon-reload && sudo systemctl
     restart srv-media-{filme,serien}.automount`.
-  - **Periodic scans wake the NAS disks**: every scheduled Jellyfin library
+   - **Periodic scans wake the NAS disks**: every scheduled Jellyfin library
     scan performs disk I/O on the NAS (the container mount is persistent,
     see above), spinning the disks up on the scan schedule. Pick the
     interval deliberately (e.g. daily); do not claim "NAS fully idle"
@@ -686,9 +687,38 @@ Notes:
     via TrueNAS idle settings (idle session = no disk I/O). Full NAS
     idle: `systemctl --user stop podman-compose@jellyfin`. Diagnose the
     split view: `podman exec jellyfin_jellyfin_1 grep -c cifs
-    /proc/mounts` (container copies) vs `mount | grep -c cifs` (host
-    copies); a container count > 0 with host 0 is the normal persistent
-    state, not a fault.
+     /proc/mounts` (container copies) vs `mount | grep -c cifs` (host
+     copies); a container count > 0 with host 0 is the normal persistent
+     state, not a fault.
+- **Network-device integrations break on device updates** (Fritzbox, TrueNAS,
+  BMC — design: [services.md](services.md) "Monitoring → Network devices"):
+  - **Fritzbox UPnP metrics go stale** (`FritzboxStatsStale`, homepage widget
+    blank): a firmware update resets the Home Network → Network → Network
+    Settings → Access Settings toggles — re-enable "Allow access for
+    applications" + "Transmit status information over UPnP". No credentials
+    are involved (unauthenticated UPnP), so there is nothing to rotate.
+  - **TrueNAS scrape 401** (`TrueNASTargetDown`): a TrueNAS upgrade can revoke
+    API keys. Create a new READONLY key, update Bitwarden `truenas-api-key`,
+    re-run `monitoring/provision-monitoring-secrets.sh` — the rendered
+    `vm/secrets/truenas-api-key` is re-read by VM, no restart needed. The
+    homepage `truenas` widget uses the same key
+    (`HOMEPAGE_VAR_TRUENAS_KEY` in `homepage/.env`) — update both.
+  - **BMC scrape fails** (`BmcUnreachable`): a BMC firmware update can reset
+    users and disable IPMI-over-LAN. Recreate the "monitoring" user
+    (Administrator privilege), enable IPMI-over-LAN, update Bitwarden
+    `bmc-ipmi`, re-run the provision script (renders `ipmi/ipmi.yml`), then
+    `podman-compose up -d --force-recreate` in `monitoring/` (the container
+    reads the file at start).
+  - **TrueNAS metric renames** (pool/disk alerts stop firing, dashboard panels
+    empty): the middleware Prometheus metric names (`zpool_state`,
+    `disk_temperature_celsius`) can change across major upgrades — list them
+    with the key (`curl -sk -H "Authorization: Bearer $(cat
+    monitoring/vm/secrets/truenas-api-key)"
+    https://192.168.178.58/api/v2.0/prometheus | grep -E '^zpool|^disk'`) and
+    adjust `vmalert/rules/network.yml` + `grafana/dashboards/network.json`.
+  - **Proxmox PVE integration is NOT deployed** — the PVE API (:8006) is
+    firewalled from the LAN (user decision 2026-11-15). If that ever changes,
+    the homepage `proxmox.yaml` stub + a pve-exporter are the entry points.
 
 ## Power Outage Recovery
 
@@ -701,8 +731,9 @@ Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on t
 `podman-compose@monitoring`, `podman-compose@homeassistant`,
 `podman-compose@authelia` and
 `podman-compose@cloudflared` — plus the `node-exporter` user unit and the
-`podman-stats-export.timer` (enabled via
-`systemctl --user enable node-exporter podman-stats-export.timer`) — no manual action is needed.
+`podman-stats-export.timer` + `fritzbox-stats-export.timer` (enabled via
+`systemctl --user enable node-exporter podman-stats-export.timer fritzbox-stats-export.timer`)
+— no manual action is needed.
 
 ## Appstore as Inspiration
 

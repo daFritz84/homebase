@@ -61,6 +61,13 @@ bookorbit/data/
 # Telegram) is covered by the global **/.env.secret rule.
 monitoring/data/
 
+# Rendered network-device scrape secrets (Bitwarden -> files, 0600, by
+# provision-monitoring-secrets.sh): the BMC auth (ipmi-exporter config) and
+# the TrueNAS API-key bearer token (VM authorization.credentials_file).
+# Templates/docs are tracked (monitoring/ipmi/ipmi.yml.example).
+monitoring/ipmi/ipmi.yml
+monitoring/vm/secrets/
+
 # RustDesk runtime data (id_ed25519 PRIVATE key + id_ed25519.pub + db_v2.sqlite3
 # client registry + tailscale/ node-key state) — data, not code; covered by
 # backup-rustdesk-data.sh. rustdesk/.env.secret (TS_AUTHKEY) is covered by the

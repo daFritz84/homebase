@@ -26,13 +26,54 @@ global:
 scrape_configs:
   # Host resources (CPU/RAM/disk/net) + container stats (the podman-stats
   # textfile collector writes podman_container_* into node_exporter's textfile
-  # dir, so they arrive on this same endpoint). Scraped via the host-loopback
+  # dir, so they arrive on this same endpoint) + Fritzbox WAN stats (the
+  # fritzbox-stats-export timer writes fritzbox_* to the same dir — UPnP SOAP,
+  # no exporter, no credentials). Scraped via the host-loopback
   # relay (caddy-proxy cannot resolve `homebase`; the LAN IP lands in the
   # firewalld public zone — the adguard/HA/cockpit pattern).
   - job_name: node
     static_configs:
       - targets:
           - host.containers.internal:9100
+
+  # Supermicro BMC (.190, the TrueNAS box's mgmt port) via ipmi-exporter,
+  # multi-target pattern (metrics_path /ipmi, NOT /probe). collector_timeout
+  # 20s is set in ipmi/ipmi.yml; collectors run serially, so keep the interval
+  # above the product (docs). UDP 623 open (probed 2026-11-15); the exporter
+  # reaches the LAN directly (caddy-proxy outbound, probed same day).
+  - job_name: ipmi
+    metrics_path: /ipmi
+    params:
+      module: [autoconf]
+    scrape_interval: 1m
+    scrape_timeout: 30s
+    static_configs:
+      - targets:
+          - 192.168.178.190
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ipmi-exporter:9290
+
+  # TrueNAS SCALE built-in Prometheus endpoint (24.10+). Bearer = read-only
+  # API key from vm/secrets/truenas-api-key (gitignored, rendered by the
+  # provision script; VM re-reads credentials_file, no restart on rotation).
+  # Self-signed cert -> skip verify. Pool/disk/SMART/temperature metrics.
+  - job_name: truenas
+    metrics_path: /api/v2.0/prometheus
+    scheme: https
+    scrape_interval: 30s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/vm/secrets/truenas-api-key
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets:
+          - 192.168.178.58:443
 
   # App liveness — HTTP 200 probes via blackbox (internal alias:port).
   - job_name: blackbox_http
@@ -88,11 +129,18 @@ scrape_configs:
     params:
       module: [tcp_connect]
     static_configs:
+      # Network devices (LAN IPs; caddy-proxy outbound probed 2026-11-15):
+      # Fritzbox :49000 (404 on / = open, UPnP/TR-064 port), TrueNAS :443
+      # (middleware API), BMC :623 (IPMI; TCP side — UDP 623 probed from the
+      # host, blackbox has no UDP module).
       - targets:
           - host.containers.internal:21116
           - host.containers.internal:21117
           - 10.89.0.200:443
           - host.containers.internal:9090
+          - 192.168.178.1:49000
+          - 192.168.178.58:443
+          - 192.168.178.190:623
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
