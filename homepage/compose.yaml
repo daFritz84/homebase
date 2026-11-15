@@ -7,6 +7,8 @@ services:
     # Strict on purpose: a missing .env must fail the start — the widgets need
     # the ADGUARD keys and would silently render degraded otherwise.
     env_file: .env
+    environment:
+      LOG_LEVEL: debug
     volumes:
       - ./config:/app/config
       # Homepage substitutes {{HOMEPAGE_VAR_*}} in the config files from a .env
