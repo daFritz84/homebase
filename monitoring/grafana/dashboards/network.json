@@ -48,8 +48,8 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
-      "targets": [ { "refId": "A", "expr": "count(zpool_state{state=~\"ONLINE|OPTIMAL\"} == 1) or vector(0)" } ]
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DEGRADED", "color": "red" }, "1": { "text": "ONLINE", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "truenas_pool_status", "legendFormat": "{{name}}" } ]
     },
     {
       "type": "timeseries",
@@ -69,8 +69,8 @@
       "id": 6,
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 50 } ] } }, "overrides": [] },
-      "targets": [ { "refId": "A", "expr": "disk_temperature_celsius", "legendFormat": "{{disk}}" } ]
+      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 60 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "truenas_disk_temperature_celsius", "legendFormat": "{{disk}}" } ]
     },
     {
       "type": "stat",
@@ -109,6 +109,46 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 3 } ] } }, "overrides": [] },
       "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192\\.168\\.178\\.(1:49000|58:443|190:623)\"} == 1)" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "NAS CPU temperature",
+      "id": 11,
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 85 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "scale_truenas_cputemp_temperatures_cpu", "legendFormat": "cpu" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "NAS load",
+      "id": 12,
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        { "refId": "A", "expr": "scale_truenas_system_load_load1", "legendFormat": "load1" },
+        { "refId": "B", "expr": "scale_truenas_system_load_load5", "legendFormat": "load5" },
+        { "refId": "C", "expr": "scale_truenas_system_load_load15", "legendFormat": "load15" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "ZFS ARC size",
+      "id": 13,
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "scale_truenas_truenas_arcstats_size_size", "legendFormat": "arc" } ]
+    },
+    {
+      "type": "stat",
+      "title": "NAS uptime",
+      "id": 14,
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "scale_truenas_system_uptime_uptime" } ]
     }
   ]
 }

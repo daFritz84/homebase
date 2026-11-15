@@ -1251,7 +1251,12 @@ textfile collector) every minute. `fritzbox-stats-export.{service,timer}` runs
 `:49000` — **unauthenticated**, the same surface Homepage's `fritzbox` widget
 uses, verified 2026-11-15; no TR-064 user, no credentials → `fritzbox_*`
 metrics to the same textfile dir) every 60s (the Fritzbox web server throttles
-rapid SOAP). **Container stats via podman-exporter are NOT
+rapid SOAP). `truenas-stats-export.{service,timer}` runs
+`monitoring/export-truenas-stats.sh` (REST v2.0 compat with the READONLY key:
+`GET /pool` + `POST /disk/temperatures` — the 25.x graphite stream carries
+neither pool state nor disk temps — → `truenas_pool_status` +
+`truenas_disk_temperature_celsius` to the same textfile dir) every 60s.
+**Container stats via podman-exporter are NOT
 used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
 2026-11-15) and podman's built-in metrics endpoint does not initialize on podman
 5.4.2 (`metrics_enabled` not honored — probed 2026-11-15); the textfile path is
@@ -1435,10 +1440,19 @@ to the host), which converts them (lite mapping, `graphite/mapping.conf`) and
 the scrape job `graphite` reads `graphite-exporter:9102`. **25.10 removed the
 built-in `/api/v2.0/prometheus` endpoint** (probed 2026-11-15: 404, no plugin
 in the catalog — the 24.10 bearer scrape is dead; the "Metrics" app is the
-other supported option). Metric names = graphite path
-(`truenas_<host>_..._value`); verify the live names before writing pool/disk
-alert rules (`vmalert/rules/network.yml` has a staleness alert only until
-then). The REST API key (Bitwarden `truenas-api-key`, READONLY role, Settings
+other supported option). Metric names = graphite path with the namespace the
+NAS prepends: **`scale_truenas_<name>_..._value`** (UI Graphite export:
+Namespace `truenas`, Name `nas`, Prefix empty — `scale` is TrueNAS's product
+namespace, probed on the live stream 2026-11-15). The stream carries
+CPU/RAM/net/load/uptime/ARC/disk-ops (`cputemp`, `system_*`, `net_*`,
+`truenas_arcstats_*`, `truenas_disk_stats_*`) but **no pool state and no disk
+temps** (no zfs-pool/smart plugins in the 25.x graphite export) — those two
+safety-critical signals come from the REST v2.0 compat API via
+`export-truenas-stats.sh` (textfile, see "Host processes" above):
+`GET /api/v2.0/pool` (status ONLINE) + `POST /api/v2.0/disk/temperatures`
+(GET is 405; returns `{dev: celsius}`; Ultrastar operating spec tops at 60C —
+the hot-disk alert threshold). The REST API key (Bitwarden `truenas-api-key`,
+READONLY role, Settings
 → Access → API & Scanning Keys) is still needed for the homepage `truenas`
 widget (`version: 1` REST mode works on 25.10: pool/alerts endpoints 200,
 probed 2026-11-15; `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`, `enablePools: true`,

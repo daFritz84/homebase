@@ -1,0 +1,10 @@
+[Unit]
+Description=Run TrueNAS REST exporter every 60s (feeds node_exporter textfile)
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

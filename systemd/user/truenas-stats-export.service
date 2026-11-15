@@ -1,0 +1,10 @@
+[Unit]
+Description=Export TrueNAS pool state + disk temps (REST) to the node_exporter textfile collector
+Documentation=file:///home/chef/src/homebase/docs/services.md
+# GETs /pool + POSTs /disk/temperatures on the middleware API (READONLY key
+# from monitoring/vm/secrets/truenas-api-key) and writes truenas.prom to the
+# node_exporter textfile dir. The graphite stream carries neither signal.
+
+[Service]
+Type=oneshot
+ExecStart=%h/src/homebase/monitoring/export-truenas-stats.sh
