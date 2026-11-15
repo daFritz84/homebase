@@ -1,6 +1,8 @@
 ---
 # VictoriaMetrics scrape config (Prometheus-compatible; -promscrape.config).
-# Hot-reloaded: VictoriaMetrics re-reads this file on a timer (no restart).
+# Hot-reloaded: VictoriaMetrics re-reads this file on `podman kill -s HUP
+# monitoring_victoriametrics_1` (no restart; verified 2026-11-15 — there is no
+# automatic timer, the SIGHUP is required after editing this file).
 # ---
 # The whole monitoring surface is declared here. Adding a service = a target;
 # adding a machine = add a node_exporter target (see docs/services.md

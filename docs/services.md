@@ -1376,8 +1376,9 @@ bump**; `podman-compose pull` + unit restart. node_exporter: bump the pinned
 version in `install-node-exporter.sh` + re-run it +
 `systemctl --user restart node-exporter`. Alert rules, scrape targets, probe
 modules, dashboards: edit the files in git, `podman-compose restart
-<service>` (or hot-reload: VM/blackbox/vmalert/alertmanager all watch their
-config files).
+<service>` (or hot-reload: VM needs `podman kill -s HUP
+monitoring_victoriametrics_1` after a promscrape edit — no auto timer, verified
+2026-11-15; blackbox/vmalert/alertmanager watch their config files).
 
 ## RustDesk (Remote Support)
 
