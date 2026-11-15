@@ -62,6 +62,12 @@ uptime-kuma/data/
 beszel/data/
 beszel/agent.env
 
+# RustDesk runtime data (id_ed25519 PRIVATE key + id_ed25519.pub + db_v2.sqlite3
+# client registry + tailscale/ node-key state) — data, not code; covered by
+# backup-rustdesk-data.sh. rustdesk/.env.secret (TS_AUTHKEY) is covered by the
+# global **/.env.secret rule.
+rustdesk/data/
+
 # Authelia runtime data + key material (sqlite DB, OIDC signing keys, notifier
 # outbox) — data, not code; covered by backup-authelia.sh
 authelia/config/db/
