@@ -37,10 +37,11 @@ scrape_configs:
           - host.containers.internal:9100
 
   # Supermicro BMC (.190, the TrueNAS box's mgmt port) via ipmi-exporter,
-  # multi-target pattern (metrics_path /ipmi, NOT /probe). collector_timeout
-  # 20s is set in ipmi/ipmi.yml; collectors run serially, so keep the interval
-  # above the product (docs). UDP 623 open (probed 2026-11-15); the exporter
-  # reaches the LAN directly (caddy-proxy outbound, probed same day).
+  # multi-target pattern (metrics_path /ipmi, NOT /probe). v1.10.1 has no
+  # collector_timeout (master-only) — scrape_timeout 30s is the outer bound;
+  # collectors run serially, keep the 1m interval. UDP 623 open (probed
+  # 2026-11-15); the exporter reaches the LAN directly (caddy-proxy outbound,
+  # probed same day).
   - job_name: ipmi
     metrics_path: /ipmi
     params:
