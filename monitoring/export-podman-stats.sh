@@ -27,7 +27,9 @@ ps_json="$(podman ps -a --format json 2>/dev/null || echo '[]')"
 out="$(mktemp)"
 trap 'rm -f "${out}"' EXIT
 
-STATS_JSON="${stats_json}" PS_JSON="${ps_json}" python3 - "${out}" <<'PY'
+# podman 5.4.2 JSON keys (probed 2026-11-15): stats = name, cpu_percent,
+# mem_usage, mem_percent (snake_case); ps -a = Names (list), State.
+STATS_JSON="${stats_json}" PS_JSON="${ps_json}" python3 > "${out}" <<'PY'
 import json, os, sys, re
 
 def esc(name):
@@ -60,18 +62,19 @@ ps = json.loads(os.environ['PS_JSON'])
 
 by_name = {}
 for c in ps:
-    name = c.get('Name', '')
-    state = c.get('State', '').lower()
+    names = c.get('Names') or []
+    name = names[0] if names else ''
+    state = (c.get('State') or '').lower()
     by_name[name] = 1 if state == 'running' else 0
 
 # running containers: emit up=1 + stats
 for c in stats:
-    name = c.get('Name', '')
+    name = c.get('name', '')
     n = esc(name)
-    used, limit = parse_bytes(c.get('MemUsage', ''))
+    used, limit = parse_bytes(c.get('mem_usage', ''))
     print('podman_container_up{name="%s"} 1' % n)
-    print('podman_container_cpu_percent{name="%s"} %g' % (n, pct(c.get('CPUPerc', ''))))
-    print('podman_container_mem_percent{name="%s"} %g' % (n, pct(c.get('MemPerc', ''))))
+    print('podman_container_cpu_percent{name="%s"} %g' % (n, pct(c.get('cpu_percent', ''))))
+    print('podman_container_mem_percent{name="%s"} %g' % (n, pct(c.get('mem_percent', ''))))
     if used is not None:
         print('podman_container_mem_used_bytes{name="%s"} %d' % (n, used))
     if limit is not None:
