@@ -1444,6 +1444,17 @@ widget (`version: 1` REST mode works on 25.10: pool/alerts endpoints 200,
 probed 2026-11-15; `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`, `enablePools: true`,
 `nasType: scale`).
 
+Firewall (the NAS PUSHes to the public zone; carbon has no auth, so the rule
+is source-restricted to the NAS — RustDesk `--add-port` precedent):
+
+```bash
+sudo firewall-cmd --permanent --zone=public \
+  --add-rich-rule='rule family="ipv4" source address="192.168.178.58" port port="2003" protocol="tcp" accept'
+sudo firewall-cmd --permanent --zone=public \
+  --add-rich-rule='rule family="ipv4" source address="192.168.178.58" port port="2003" protocol="udp" accept'
+sudo firewall-cmd --reload
+```
+
 **Supermicro BMC (192.168.178.190):** scrape job `ipmi` →
 `ipmi-exporter:9290/ipmi?target=192.168.178.190&module=autoconf` (IPMI
 LANplus over **UDP 623** — open, probed 2026-11-15; if a BMC firmware update

@@ -701,7 +701,10 @@ Notes:
     export setting (System → Advanced) is a UI toggle — a major upgrade can
     disable it, and it has no auth, so keep it LAN-only. Check
     `podman logs monitoring_graphite-exporter_1` (carbon receiving?), the
-    TrueNAS UI setting, and `nc -z 192.168.178.249 2003` from the NAS side.
+    TrueNAS UI setting, and the firewalld rich rule (source-restricted to
+    `192.168.178.58`, port 2003 tcp+udp — commands in
+    [services.md](services.md) "Monitoring → Network devices"; a firewalld
+    upgrade/reinstall drops permanent rules? `--list-rich-rules` needs sudo).
     The homepage `truenas` widget uses the REST API key
     (`HOMEPAGE_VAR_TRUENAS_KEY` in `homepage/.env`, Bitwarden
     `truenas-api-key`) — a TrueNAS upgrade can revoke the key (widget shows
