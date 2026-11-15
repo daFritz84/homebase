@@ -236,7 +236,7 @@ services:
           memory: 128m
 
   blackbox-exporter:
-    image: docker.io/prom/blackbox-exporter:v0.25.0
+    image: docker.io/prom/blackbox-exporter:v0.29.1
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
