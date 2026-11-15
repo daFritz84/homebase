@@ -76,24 +76,25 @@
         href: https://grafana.sseifried.link
         description: GitOps observability — endpoints, host & container metrics
 
-        # The grafana widget reads committed dashboard panels via a Grafana
-        # service-account API key (viewer role, scoped to the dashboard). The
-        # panels are the fleet-health stats (targets up, endpoints up). URL is
-        # the INTERNAL caddy-proxy alias (grafana:3000) — the wall fronts only
-        # the public hostname, so the internal port bypasses it (the
-        # status:3001/beszel:8090 pattern the old widgets used).
+        # Homepage v2.8's `grafana` widget is a STATUS widget (admin/stats +
+        # alerts endpoints, needs Admin creds) — the v1 panel-stats mode with
+        # apiKey/stats was removed, so the fleet-health numbers come straight
+        # from VictoriaMetrics (Prometheus-compatible API, internal caddy-proxy
+        # alias, no auth, no secret) via the prometheusmetric widget.
         widgets:
-          - type: grafana
-            url: http://grafana:3000
-            apiKey: {{HOMEPAGE_VAR_GRAFANA_APIKEY}}
-            stats:
-              - type: stat
-                position: 0
-                id: 1
-                dashboardUid: homebase-overview
-                panelId: 1
-              - type: stat
-                position: 1
-                id: 2
-                dashboardUid: homebase-overview
-                panelId: 2
+          - type: prometheusmetric
+            url: http://victoriametrics:8428
+            metrics:
+              - label: Targets up
+                query: count(up == 1)
+              - label: Endpoints up
+                query: count(probe_success == 1)
+              - label: Containers up
+                query: count(podman_container_up == 1)
+              - label: CPU %
+                query: >-
+                  100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
+                format:
+                  type: number
+                  options:
+                    maximumFractionDigits: 1

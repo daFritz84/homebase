@@ -1252,9 +1252,13 @@ the working, gitops-native, rootless answer.
 **Authelia:** Grafana is a **native OIDC client** (the beszel/jellyfin/stirling
 pattern — `generic_oauth`, client `grafana`, redirect
 `https://grafana.sseifried.link/login/generic_oauth`, `client_secret_basic`,
-scopes `openid profile email groups`, role mapping
-`contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'`); **no wall**,
-password login stays break-glass. VictoriaMetrics (`metrics.sseifried.link`) and
+`use_pkce` on (Authelia enforces PKCE — Grafana sends no `code_challenge`
+without it), scopes `openid profile email groups`, role mapping
+`contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'` — the `grafana`
+claims_policy hydrates `groups` into the **ID token** (4.39's minimal ID token
+has scope claims only on UserInfo; Grafana's JMESPath reads the ID token, so
+without the policy the login lands as org Viewer — observed 2026-11-15);
+**no wall**, password login stays break-glass. VictoriaMetrics (`metrics.sseifried.link`) and
 Alertmanager (`alerts.sseifried.link`) have **no OIDC** → `forward_auth` wall
 (`two_factor`, `group:homebase-admins`, the AdGuard pattern). `metrics.`,
 `grafana.`, `alerts.` are absent from `cloudflared/config.yml` — **never add
@@ -1361,11 +1365,13 @@ systemctl --user enable --now podman-compose@monitoring
 
 8. Back up right after setup: `./backup-grafana-data.sh`.
 
-9. Homepage: the Monitoring card's `grafana` widget needs
-   `HOMEPAGE_VAR_GRAFANA_APIKEY` (Bitwarden `homepage-grafana-api-key`, created
-   in Grafana → Service accounts → Viewer role) —
-   `./provision-homepage-monitoring.sh` writes it; restart
-   `podman-compose@homepage` (new `.env` keys need
+9. Homepage: the Monitoring card's widget is Homepage v2.8's
+   `prometheusmetric` widget reading VictoriaMetrics
+   (`http://victoriametrics:8428`, internal alias, no auth, no key) —
+   Homepage v2's `grafana` widget is a status widget needing Admin creds
+   (the v1 panel-stats `apiKey` mode was removed), so no secret is involved.
+   `./provision-homepage-monitoring.sh` prunes the retired widget keys from
+   `.env`; restart `podman-compose@homepage` (config changes need
    `podman-compose up -d --force-recreate`).
 
 ### Upgrade procedure

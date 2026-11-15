@@ -7,8 +7,6 @@ services:
     # Strict on purpose: a missing .env must fail the start — the widgets need
     # the ADGUARD keys and would silently render degraded otherwise.
     env_file: .env
-    environment:
-      LOG_LEVEL: debug
     volumes:
       - ./config:/app/config
       # Homepage substitutes {{HOMEPAGE_VAR_*}} in the config files from a .env
@@ -32,8 +30,8 @@ services:
 # read-only Docker-API surface is removed entirely. The monitoring host
 # processes (node_exporter + the podman-stats exporter) read /proc and chef's
 # own podman.sock directly for host + container stats — no proxy.
-# The widgets (grafana, adguard) reach their backends over the shared
-# caddy-proxy network by service alias (grafana:3000) — Homepage
+# The widgets (prometheusmetric -> victoriametrics:8428, adguard) reach their
+# backends over the shared caddy-proxy network by service alias — Homepage
 # joins caddy-proxy, so no internal network is needed.
 
 networks:
