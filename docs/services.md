@@ -16,6 +16,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [BookOrbit (Reading Space)](#bookorbit-reading-space)
 - [Uptime Kuma (Uptime Monitoring)](#uptime-kuma-uptime-monitoring)
 - [Beszel (Host & Container Metrics)](#beszel-host--container-metrics)
+- [RustDesk (Remote Support)](#rustdesk-remote-support)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
 - [Cloudflare Tunnel (cloudflared)](#cloudflare-tunnel-cloudflared)
@@ -1435,6 +1436,172 @@ Pin the hub tag in `compose.yaml` and the agent version in `install-agent.sh`
 **pinned** version's docs (the Homepage beszel widget has a `version: 1`/`2` split
 at Beszel 0.9.0).
 
+## RustDesk (Remote Support)
+
+Self-hosted remote-desktop server ([rustdesk-server](https://github.com/rustdesk/rustdesk-server))
+— ID/rendezvous (hbbs) + relay (hbbr) + tailscale subnet-router sidecar. Compose file:
+`rustdesk/compose.yaml`. Unit: `podman-compose@rustdesk` (shared pattern above).
+
+**Topology:** one pod, three containers: `hbbs` (ID server — publishes 21116/tcp+udp,
+loopback 21115), `hbbr` (relay — publishes 21117/tcp), `tailscale` (userspace subnet
+router advertising `192.168.178.249/32`, no published ports). No `caddy-proxy`
+network — nothing is proxied: RustDesk is not HTTP and **rustdesk has NO
+`*.sseifried.link` hostname** (never create one, never add anything to
+`cloudflared/config.yml` — admin-tool doctrine). podman-compose names:
+`rustdesk_hbbs_1`, `rustdesk_hbbr_1`, `rustdesk_tailscale_1`.
+
+**Exposure (user decision 2026-11-14): LAN/VPN/tailnet-only.** Controlled machines
+live on the LAN; the controlling laptop reaches the server over the tailnet
+(tailscale sidecar, primary) or the Fritz!Box WireGuard VPN (break-glass). No port
+forwarding, no public DNS record. The Cloudflare tunnel cannot carry hbbs: the client
+needs TCP+UDP on the *same* host:port (21116), and tunnel ingress maps one hostname
+to one service.
+
+**Ports (verified against `rustdesk-server/docs/environment-variables.md`):**
+21116/tcp+udp = ID server (registration, hole punching); 21117/tcp = relay;
+21115/tcp = NAT-type test + **raw-TCP runtime console (NOT HTTP)** — the "web
+console" is a Server **Pro** feature (decision revision 2026-11-15: no Caddy site,
+no Authelia wall; console is loopback-only: `podman exec rustdesk_hbbs_1 sh -c
+"printf <cmd> | nc -q1 127.0.0.1 21115"`); 21118/21119 (web-client WebSocket) are
+**not published** (upstream install docs: keep them closed). firewalld:
+`21116/tcp 21116/udp 21117/tcp` permanent (LAN + VPN arrival on the public zone;
+the sidecar needs none — outbound-only).
+
+**Keypair:** hbbs auto-generates `id_ed25519`/`id_ed25519.pub` into `./data` on
+first start (default key `-`). The **public** key is the client-config "Key"
+(Bitwarden `rustdesk-server-key`); the private key never leaves `./data`.
+`hbbr -k _` shares the same keypair → relay key validation (clients present the
+Key; keyless clients are refused — deliberate hardening, the upstream docs demand
+the tradeoff be chosen deliberately). `-r 192.168.178.249:21117` advertises the
+relay address to clients (LAN-facing reference — LAN, VPN and tailnet clients all
+reach the LAN IP via the /32 route). Baked at container creation: changing it needs
+`podman-compose up -d --force-recreate`.
+
+**Tailscale sidecar:** `TS_USERSPACE=true` (the image default; no `/dev/net/tun`,
+no `NET_ADMIN` — the only Tailscale mode that works rootless, same constraint class
+as HA's AF_PACKET limits), `TS_ROUTES=192.168.178.249/32` (host-only, user decision
+— NOT the LAN /24), `TS_AUTH_ONCE=true`, `TS_HOSTNAME=homebase-rustdesk`,
+`TS_STATE_DIR=/var/lib/tailscale` (volume `./data/tailscale`),
+`TS_ENABLE_HEALTH_CHECK=true` (unauthenticated healthz on `:9002`). Auth:
+`TS_AUTHKEY` from `.env.secret` (Bitwarden `tailscale-authkey` — **reusable,
+NON-ephemeral**, tagged `tag:homebase`; ephemeral nodes are removed from the
+tailnet shortly after disconnecting, so a persistent subnet router must use a
+non-ephemeral key; tagged nodes have key expiry disabled by default). Traffic path
+(probed 2026-11-15): tailnet client → tailscaled (userspace) → pod netns default
+route → netavark SNAT → host LAN IP:21116/21117 — lands in the firewalld public
+zone, where exactly those ports are permanently opened (the documented
+"bridge → LAN IP" trap applies only to ports NOT opened there). Subnet routers
+SNAT by default → hbbs sees the sidecar's source for all tailnet clients (the
+console shows one shared source IP for them — expected, not a fault). ACL grants
+rule gates the route:
+`{ "src": ["tag:homebase", "<tailnet user>"], "dst": ["192.168.178.249"], "ip": ["*:*"] }`.
+Route approval: admin console → Machines → sidecar → Subnets. Clients must accept
+routes (apps: "Use Tailscale subnets"; Linux CLI: `tailscale set --accept-routes`).
+
+**Controlled-client posture (user decision):** unattended-access **password only**
+(Bitwarden `rustdesk-access-password`) — confirmation prompts off, no IP allowlist.
+The server has **no authentication**: the password is the sole gate; anyone on
+LAN/VPN/tailnet with it gets full control of a machine. Strong password; E2E
+encryption stays on (hbbr relays ciphertext only).
+
+**Ownership:** probed 2026-11-15 (`podman image inspect <image> --format
+'{{.Config.User}}'`): empty (root) for both images → rootless Podman maps container
+root to host `chef`, `data/` is host-user-owned — **no chown ritual**
+(jellyfin/uptime-kuma pattern).
+
+**Healthchecks:** hbbs/hbbr ship WITHOUT healthchecks (image shell/nc availability
+unprobed — cloudflared/beszel trap: podman-compose runs healthchecks as
+`/bin/sh -c`). Probe `podman exec rustdesk_hbbs_1 sh -c 'command -v nc wget'`; if
+it passes, add `nc -z 127.0.0.1 21116` (hbbs) / `nc -z 127.0.0.1 21117` (hbbr) to
+`compose.yaml` and record it here. tailscale healthcheck: healthz on
+`127.0.0.1:9002` (shipped).
+
+Data that cannot be rebuilt: `rustdesk/data/` — `id_ed25519` (PRIVATE key),
+`id_ed25519.pub`, `db_v2.sqlite3` (client ID registry), `tailscale/` (node-key
+state). Covered by `backup-rustdesk-data.sh` (see [operations.md](operations.md),
+"RustDesk data backups"); run right after first start and **before every image
+bump** (sqlite migrations are forward-only). Losing it = reconfiguring every
+client (keypair rotation) + re-registering IDs.
+
+### First run
+
+The steps below run in the service checkout — on the server that is the
+`~/src/homebase` clone.
+
+1. Tailscale admin console (one-time): create a **reusable, NON-ephemeral** auth
+   key tagged `tag:homebase` → save to Bitwarden item `tailscale-authkey`; add the
+   ACL grants rule above.
+2. Ownership probe + dirs (record probe output; the `Config.User` probe is repo
+   doctrine):
+
+```bash
+cd rustdesk
+podman image inspect docker.io/rustdesk/rustdesk-server:1.1.16 --format '{{.Config.User}}'   # probed 2026-11-15: empty (root)
+podman image inspect docker.io/tailscale/tailscale:v1.104.7 --format '{{.Config.User}}'      # probed 2026-11-15: empty (root)
+mkdir -p data
+touch .env.secret   # stub so `up` works before the key exists; tailscale crash-loops until provisioned (authelia precedent)
+```
+
+3. Provision secrets (Bitwarden unlocked): `./provision-rustdesk-secrets.sh`
+4. `podman-compose up -d` (no caddy-proxy dependency)
+5. Public key: `cat data/id_ed25519.pub` → Bitwarden `rustdesk-server-key` (public
+   value — the client-config "Key"). Never print `id_ed25519`.
+6. Shell probe (decides healthchecks): `podman exec rustdesk_hbbs_1 sh -c
+   'command -v nc wget'` — pass → add the TCP healthchecks above, recreate, record.
+7. Console probe (raw TCP, NOT HTTP): `podman exec rustdesk_hbbs_1 sh -c "printf
+   'help' | nc -q1 127.0.0.1 21115"`
+8. Tailscale probes: `podman exec rustdesk_tailscale_1 tailscale ip -4` (100.x),
+   `tailscale status` (advertised route), healthz 200; approve the route in the
+   admin console (Machines → sidecar → Subnets).
+9. Firewall (LAN + VPN arrival; the sidecar needs none):
+
+```bash
+sudo firewall-cmd --permanent --add-port=21116/tcp --add-port=21116/udp --add-port=21117/tcp
+sudo firewall-cmd --reload
+```
+
+10. Traffic-path probe from a tailnet client (routes accepted): `nc -vz
+    192.168.178.249 21116` (TCP), `nc -zuv 192.168.178.249 21116` (UDP),
+    `nc -vz 192.168.178.249 21117`.
+11. Deploy with the shared pattern above (unit: `podman-compose@rustdesk`):
+
+```bash
+podman-compose systemd
+systemctl --user enable --now podman-compose@rustdesk
+```
+
+12. Back up right after first start (data/ now holds the keypair + node key):
+    `./backup-rustdesk-data.sh`.
+
+### Client setup (manual)
+
+- **Controlled machines** (home desktop, laptop at home): RustDesk client →
+  Settings → ID/Relay server: `192.168.178.249` (port 21116 default), relay empty
+  (hbbs advertises it), Key = `id_ed25519.pub`; set the unattended-access password
+  (Bitwarden `rustdesk-access-password`); confirmation prompts **off**
+  (password-only posture, user decision).
+- **Controlling machine** (work laptop): RustDesk client with the same ID server +
+  key, **and** the Tailscale client with subnet routes accepted (Linux CLI:
+  `tailscale set --accept-routes`). Break-glass: Fritz!Box WireGuard VPN → same
+  client config.
+- End-to-end probe: RustDesk Settings → Network → "Test TCP Connection / UDP NAT
+  Type".
+
+### Upgrade procedure
+
+Pin the tags in `compose.yaml`; `./backup-rustdesk-data.sh` **before every bump**
+(sqlite migrations are forward-only); `podman-compose pull` + unit restart.
+`-r`/`TS_ROUTES` LAN-IP coupling: if the VM's static IP changes, update both and
+`podman-compose up -d --force-recreate` (baked at container creation).
+
+### Troubleshooting
+
+- **UDP 21116 is load-bearing:** firewalld dropping UDP → clients show "server
+  unreachable"/offline IDs while TCP probes look fine (probe `nc -zuv`).
+- **Tailscale control-plane outage:** existing tailnet connections survive, **new**
+  sessions may fail to negotiate → Fritz!Box WG is the break-glass transport.
+- **Client without the Key** → relay refused (`hbbr -k _`).
+
 ## Home Assistant (Home Automation)
 
 Home automation platform ([home-assistant](https://www.home-assistant.io/)).
@@ -2008,9 +2175,10 @@ allowlist: **wanderer + authelia ONLY**, fallback `http_status:404`.
 `stirling` are deliberately absent — **never add them** (user decision:
 admin tools stay LAN/VPN-only; navidrome/jellyfin/stirling additionally
 gate on their own app logins, which a cookie wall could not serve).
-Cockpit's exclusion is enforced 4-fold: absent from the allowlist, 404
-fallback, no public DNS record (NXDOMAIN from the internet), TLS-only site
-+ PAM.
+rustdesk has **no hostname at all** (not HTTP, not proxied) — never create
+a public record for it. Cockpit's exclusion is enforced 4-fold: absent
+from the allowlist, 404 fallback, no public DNS record (NXDOMAIN from the
+internet), TLS-only site + PAM.
 
 ### Workstation setup (one-time, manual)
 

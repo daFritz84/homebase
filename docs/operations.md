@@ -21,6 +21,7 @@ systemctl --user status podman-compose@bookorbit
 systemctl --user status podman-compose@uptime-kuma
 systemctl --user status podman-compose@beszel
 systemctl --user status beszel-agent
+systemctl --user status podman-compose@rustdesk
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
 systemctl --user status podman-compose@cloudflared
@@ -185,6 +186,31 @@ and **before every image bump** (DB migrations are forward-only). Restore: stop
 the hub, `rm -rf data && tar xzf <archive>`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@beszel` to re-adopt the pod.
+
+### RustDesk data backups
+
+`rustdesk/data/` is the irreplaceable, secret-bearing artifact: `id_ed25519`
+(the server **private** key) + `id_ed25519.pub` (the Key every client
+configures), `db_v2.sqlite3` (the client ID registry) and `tailscale/` (the
+sidecar's node-key state). Losing it means rotating the keypair and
+reconfiguring **every** controlled client, re-registering every ID, and
+re-authing the tailnet node. Run from the service checkout on the server:
+
+```bash
+cd rustdesk && ./backup-rustdesk-data.sh
+```
+
+The script stops the service, archives `data/` (owner-only, mode `0600` — the
+archive contains private keys) to
+`~/.local/share/rustdesk/backups/rustdesk-data-<date>.tar.gz`, and restarts
+it. No `podman unshare` needed — both images run as root and rootless Podman
+maps container root to the host user, so `data/` is host-user-owned
+(services.md, "RustDesk"). Cadence: right after first start (the keypair is
+born there) and **before every image bump** (sqlite migrations are
+forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+start. The script (re)starts the containers directly, so the unit shows
+`inactive` afterwards — `systemctl --user start podman-compose@rustdesk` to
+re-adopt the pod.
 
 ### Home Assistant config backups
 
