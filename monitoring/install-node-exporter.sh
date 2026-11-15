@@ -24,7 +24,9 @@ cd "$(dirname "$(readlink -f "$0")")"
 VERSION="1.12.1"
 ASSET="node_exporter-${VERSION}.linux-amd64.tar.gz"
 URL="https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/${ASSET}"
-CHECKSUM_URL="${URL}.sha256"
+# node_exporter publishes a single sha256sums.txt per release (no per-asset
+# .sha256 — that URL 404s).
+CHECKSUM_URL="https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/sha256sums.txt"
 DEST="${HOME}/.local/bin/node_exporter"
 
 command -v curl >/dev/null || { echo "[ERR] curl not found"; exit 1; }
@@ -42,8 +44,8 @@ trap 'rm -rf "${tmp}"' EXIT
 # 2026-11-15: same URL 404s from the script, 200s on manual retry) — retry.
 curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "${URL}" -o "${tmp}/${ASSET}"
 
-# Verify against the per-asset sha256 (fail closed).
-expected="$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "${CHECKSUM_URL}" | awk '{print $1}')"
+# Verify against the release sha256sums.txt (fail closed).
+expected="$(curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors "${CHECKSUM_URL}" | grep " ${ASSET}\$" | awk '{print $1}')"
 actual="$(sha256sum "${tmp}/${ASSET}" | cut -d' ' -f1)"
 [ -n "${expected}" ] || { echo "[ERR] no checksum in ${CHECKSUM_URL}"; exit 1; }
 [ "${expected}" = "${actual}" ] || { echo "[ERR] sha256 mismatch: expected ${expected}, got ${actual}"; exit 1; }
