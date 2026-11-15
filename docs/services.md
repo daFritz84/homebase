@@ -1232,7 +1232,10 @@ port 8428, `-promscrape.config=vm/promscrape.yml`, 12-month retention),
 `grafana` (dashboards from `grafana/provisioning/` + `grafana/dashboards/`, alias
 `grafana`, 3000), `alertmanager` (routing + Telegram receiver, alias
 `alertmanager`, 9093), `blackbox-exporter` (endpoint probes, alias `blackbox`,
-9115 — internal-only, no UI).
+9115 — internal-only, no UI), `ipmi-exporter` (Supermicro BMC sensors via IPMI
+LANplus, alias `ipmi-exporter`, 9290 — internal-only; docker.io image
+**bundling the FreeIPMI suite** — the static binary needs those host packages,
+the container does not; remote lanplus scraping needs no root).
 
 **Host processes (systemd user units — the beszel-agent model, the clean rootless
 answer for `/proc` + the podman socket):** `node_exporter` (host CPU/RAM/disk/net;
@@ -1243,7 +1246,12 @@ mount it; installed by `monitoring/install-node-exporter.sh`, unit
 LAN IP lands in the firewalld public zone, so the gateway address is the working
 target). `podman-stats-export.{service,timer}` runs
 `monitoring/export-podman-stats.sh` (`podman stats --no-stream` → node_exporter's
-textfile collector) every minute. **Container stats via podman-exporter are NOT
+textfile collector) every minute. `fritzbox-stats-export.{service,timer}` runs
+`monitoring/export-fritzbox-stats.sh` (UPnP/IGD SOAP to the FRITZ!Box
+`:49000` — **unauthenticated**, the same surface Homepage's `fritzbox` widget
+uses, verified 2026-11-15; no TR-064 user, no credentials → `fritzbox_*`
+metrics to the same textfile dir) every 60s (the Fritzbox web server throttles
+rapid SOAP). **Container stats via podman-exporter are NOT
 used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
 2026-11-15) and podman's built-in metrics endpoint does not initialize on podman
 5.4.2 (`metrics_enabled` not honored — probed 2026-11-15); the textfile path is
@@ -1287,8 +1295,14 @@ is empty → rootless Podman maps container root to host `chef`
 `telegram-bot-token`). The Telegram **chat id** is not a secret and lives as a
 literal in `alertmanager/alertmanager.yml` (amtool cannot validate an
 env-expanded int64) — `provision-monitoring-secrets.sh` prints it from Bitwarden
-`telegram-chat-id`. victoriametrics/vmalert/blackbox have **no
-env_file** (config is files; CI needs no stub for them). New `.env.secret` keys
+`telegram-chat-id`. victoriametrics/vmalert/blackbox/ipmi-exporter have **no
+env_file** (config is files; CI needs no stub for them). The script also
+renders two **file-based** secrets (gitignored, 0600; templates tracked):
+`ipmi/ipmi.yml` (BMC auth from Bitwarden `bmc-ipmi` username+password —
+ipmi-exporter has no env expansion, so the auth lives in the rendered file)
+and `vm/secrets/truenas-api-key` (Bitwarden `truenas-api-key`, bearer for the
+TrueNAS scrape via `authorization.credentials_file` — VM re-reads the file,
+key rotation needs no restart). New `.env.secret` keys
 need `podman-compose up -d --force-recreate`, not a unit restart.
 
 Data that cannot be rebuilt: `monitoring/data/grafana/` (sqlite: users, API keys,
@@ -1336,10 +1350,12 @@ curl -s http://victoriametrics:8428/health         # VM OK (from a caddy-proxy s
 
 ```bash
 ./install-node-exporter.sh               # pinned node_exporter binary
-../systemd/install-user-units.sh         # symlinks node-exporter + podman-stats-export
+../systemd/install-user-units.sh         # symlinks node-exporter + podman-stats-export + fritzbox-stats-export
 systemctl --user enable --now node-exporter
 systemctl --user enable --now podman-stats-export.timer
+systemctl --user enable --now fritzbox-stats-export.timer
 curl -s localhost:9100/metrics | grep homebase_podman   # textfile stats present
+curl -s localhost:9100/metrics | grep fritzbox_         # Fritzbox WAN metrics present
 ```
 
 5. Caddy last: validate + restart `podman-compose@caddy`. Verify:
@@ -1385,6 +1401,61 @@ modules, dashboards: edit the files in git, `podman-compose restart
 <service>` (or hot-reload: VM needs `podman kill -s HUP
 monitoring_victoriametrics_1` after a promscrape edit — no auto timer, verified
 2026-11-15; blackbox/vmalert/alertmanager watch their config files).
+
+### Network devices (Fritzbox, TrueNAS, BMC)
+
+LAN devices discovered by the 2026-11-15 sweep (ping + `ip neigh` + Fritzbox
+PTR + service probes + mDNS) integrated into monitoring + homepage. Full
+sweep result: `.1` Fritzbox 7530, `.58` TrueNAS SCALE, `.190` Supermicro BMC
+(the TrueNAS box's mgmt port — MAC serial adjacent to `.58`), `.68` Proxmox
+host (**PVE API :8006 firewalled from the LAN — integration dropped by user
+decision; opening it is a PVE-UI firewall change**), `.64` Shelly Plus 1PM,
+`.72` Tasmota, `.31/.32/.33` BSH Home Connect appliances (cloud-only),
+`.34/.36/.47/.59` IoT (HomeKit/StreamUnlimited/cloud), `.40/.200`
+workstations. `.201–.203` are Fritzbox proxy-ARP ghosts for unassigned DHCP
+leases — ignore them in scans. Tier 2 (Shelly `/metrics`, tasmota-exporter,
+HA Prometheus exporter) and presence tracking (homepage v2.8 has **no**
+device tracker; NetAlertX would be a separate service) are out of scope.
+
+**FRITZ!Box 7530 (192.168.178.1):** WAN metrics via the
+`fritzbox-stats-export` textfile timer (UPnP SOAP, unauthenticated — see
+"Host processes" above). No credentials, no Bitwarden item. Fritzbox UI
+prereq (Home Network → Network → Network Settings → Access Settings in the
+Home Network): **"Allow access for applications"** + **"Transmit status
+information over UPnP"** (already enabled — probed 2026-11-15; a firmware
+update can reset them, see operations.md). Homepage card: `fritzbox` widget
+(same UPnP surface, no key). This 7530 has an **Ethernet WAN uplink** — the
+DSL actions return empty, so there are no sync-rate/attenuation metrics.
+
+**TrueNAS SCALE (192.168.178.58):** scrape job `truenas` →
+`https://192.168.178.58/api/v2.0/prometheus` (SCALE 24.10+ built-in endpoint;
+pool/disk/SMART/temperature), bearer from `vm/secrets/truenas-api-key`,
+`insecure_skip_verify` (self-signed). Create the key in the TrueNAS UI
+(Settings → Access → API & Scanning Keys, role **READONLY**) and store it in
+Bitwarden `truenas-api-key` (password field). Homepage card: `truenas` widget
+(`version: 1` REST mode, `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`,
+`enablePools: true`, `nasType: scale`). Alert rule names
+(`zpool_state`, `disk_temperature_celsius`) must be verified against the live
+endpoint at first deploy — adjust `vmalert/rules/network.yml` if the
+middleware renames them.
+
+**Supermicro BMC (192.168.178.190):** scrape job `ipmi` →
+`ipmi-exporter:9290/ipmi?target=192.168.178.190&module=autoconf` (IPMI
+LANplus over **UDP 623** — open, probed 2026-11-15; if a BMC firmware update
+disables it, re-enable "IPMI over LAN" in the BMC UI). Create user
+"monitoring" with **Administrator** privilege in the BMC web UI and store in
+Bitwarden `bmc-ipmi` (username + password fields) → rendered to
+`ipmi/ipmi.yml` (template `ipmi/ipmi.yml.example`). Homepage card:
+`prometheusmetric` widget (homepage has **no** redfish/ipmi widget — checked
+the v2.8 widget list) reading `ipmi_up` / max temp / min fan from VM.
+
+**Probes:** `blackbox_tcp` gained `192.168.178.1:49000`, `192.168.178.58:443`,
+`192.168.178.190:623` (no ICMP — rootless has no CAP_NET_RAW). caddy-proxy
+outbound to LAN IPs works (probed 2026-11-15; the LAN-IP warning above is
+about inbound hairpin to homebase's own address).
+
+**Grafana:** provisioned dashboard `homebase-network`
+(`grafana/dashboards/network.json`).
 
 ## RustDesk (Remote Support)
 

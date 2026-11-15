@@ -1,0 +1,92 @@
+---
+# vmalert rules — network devices (Fritzbox WAN, TrueNAS, Supermicro BMC).
+# Metric sources: fritzbox_* (node_exporter textfile, export-fritzbox-stats.sh),
+# zpool_*/disk_* (TrueNAS /api/v2.0/prometheus), ipmi_* (ipmi-exporter).
+# TrueNAS metric names verified against the live endpoint at first deploy
+# (docs/services.md); adjust here if the middleware renames them.
+groups:
+  - name: network-fritzbox
+    rules:
+      - alert: FritzboxWanDisconnected
+        expr: fritzbox_wan_physical_link_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fritzbox WAN link down"
+          description: "FRITZ!Box physical link has been down for 5m."
+      - alert: FritzboxReboot
+        expr: fritzbox_wan_uptime_seconds < 600
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fritzbox rebooted"
+          description: "FRITZ!Box WAN uptime < 10m (reboot? {{ $value | printf \"%.0f\" }}s)."
+      - alert: FritzboxStatsStale
+        expr: time() - fritzbox_exporter_last_scrape_timestamp > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fritzbox UPnP scrape stale"
+          description: >-
+            fritzbox-stats-export has not produced fresh metrics for 5m —
+            UPnP app-access toggles reset by a firmware update?
+            (docs/operations.md)
+  - name: network-truenas
+    rules:
+      - alert: TrueNASTargetDown
+        expr: up{job="truenas"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TrueNAS Prometheus endpoint down"
+          description: >-
+            /api/v2.0/prometheus scrape failed for 5m — API key revoked by an
+            upgrade? (docs/operations.md)
+      - alert: TrueNASTankNotOnline
+        expr: zpool_state{state!~"ONLINE|OPTIMAL"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TrueNAS pool {{ $labels.name }} state {{ $labels.state }}"
+          description: "ZFS pool not ONLINE/OPTIMAL for 5m."
+      - alert: TrueNASDiskHot
+        expr: disk_temperature_celsius > 50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TrueNAS disk {{ $labels.disk }} hot"
+          description: "Disk temperature > 50C for 15m ({{ $value | printf \"%.0f\" }}C)."
+  - name: network-bmc
+    rules:
+      - alert: BmcUnreachable
+        expr: ipmi_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BMC {{ $labels.instance }} unreachable"
+          description: >-
+            ipmi-exporter lanplus scrape failed for 5m — BMC down, IPMI-over-LAN
+            disabled, or user credentials changed (docs/operations.md).
+      - alert: BmcFanLow
+        expr: ipmi_fan_speed_rpm < 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BMC fan {{ $labels.name }} low"
+          description: "Fan < 1000 RPM for 10m on {{ $labels.instance }}."
+      - alert: BmcTempHigh
+        expr: ipmi_temperature_celsius > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BMC sensor {{ $labels.name }} hot"
+          description: "IPMI temperature sensor > 85C for 10m on {{ $labels.instance }}."

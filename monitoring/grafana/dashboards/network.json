@@ -1,0 +1,114 @@
+{
+  "uid": "homebase-network",
+  "title": "Homebase Network",
+  "tags": ["homebase", "gitops", "network"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Fritzbox WAN link",
+      "id": 1,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "fritzbox_wan_physical_link_up" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Fritzbox WAN uptime",
+      "id": 2,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 600 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "fritzbox_wan_uptime_seconds" } ]
+    },
+    {
+      "type": "stat",
+      "title": "WAN external IP",
+      "id": 3,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "name" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "fritzbox_wan_external_ip_info", "legendFormat": "{{ip}}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "TrueNAS pools online",
+      "id": 4,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "count(zpool_state{state=~\"ONLINE|OPTIMAL\"} == 1) or vector(0)" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "WAN traffic (bytes/s)",
+      "id": 5,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(fritzbox_wan_bytes_received_total[10m])", "legendFormat": "down" },
+        { "refId": "B", "expr": "rate(fritzbox_wan_bytes_sent_total[10m])", "legendFormat": "up" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "TrueNAS disk temperatures",
+      "id": 6,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 50 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "disk_temperature_celsius", "legendFormat": "{{disk}}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "BMC scrape up",
+      "id": 7,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "ipmi_up" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "BMC temperatures",
+      "id": 8,
+      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 85 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "ipmi_temperature_celsius", "legendFormat": "{{name}}" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "BMC fans",
+      "id": 9,
+      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "fieldConfig": { "defaults": { "unit": "rpm", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1000 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "ipmi_fan_speed_rpm", "legendFormat": "{{name}}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Network probes up",
+      "id": 10,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 3 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192\\.168\\.178\\.(1:49000|58:443|190:623)\"} == 1)" } ]
+    }
+  ]
+}
