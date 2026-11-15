@@ -1,0 +1,10 @@
+[Unit]
+Description=Run podman-stats exporter every 15s (feeds node_exporter textfile)
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

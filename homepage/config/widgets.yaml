@@ -2,9 +2,9 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/info-widgets/
 #
-# The host `resources` widget is removed: host CPU/RAM/disk now live in the Beszel
-# widget on the Beszel card (services.yaml) — the resources widget read the
-# homepage container's cgroup, not the host, so Beszel is the real source.
+# The host `resources` widget is removed: host CPU/RAM/disk now live in the
+# Grafana overview dashboard (the monitoring stack's node_exporter is the real
+# source) — the resources widget read the homepage container's cgroup, not the host.
 
 - search:
     provider: duckduckgo

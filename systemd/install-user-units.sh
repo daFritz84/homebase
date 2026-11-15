@@ -12,12 +12,14 @@ install -d "${dest}/podman-compose@.service.d"
 ln -sfn "${src}/podman-network-online.service" "${dest}/podman-network-online.service"
 ln -sfn "${src}/podman-compose@.service.d/network-online.conf" \
   "${dest}/podman-compose@.service.d/network-online.conf"
-ln -sfn "${src}/beszel-agent.service" "${dest}/beszel-agent.service"
+ln -sfn "${src}/node-exporter.service" "${dest}/node-exporter.service"
+ln -sfn "${src}/podman-stats-export.service" "${dest}/podman-stats-export.service"
+ln -sfn "${src}/podman-stats-export.timer" "${dest}/podman-stats-export.timer"
 
 systemctl --user daemon-reload
 systemctl --user enable podman-network-online.service
 
-# The beszel-agent unit is symlinked but NOT auto-enabled: it needs the binary
-# (beszel/install-agent.sh) and beszel/agent.env (KEY/TOKEN from the hub's Add
-# System) in place first, or it crash-loops. Enable it after that setup:
-#   systemctl --user enable --now beszel-agent
+# The node-exporter + podman-stats-export units are symlinked but NOT
+# auto-enabled: node-exporter needs the binary (monitoring/install-node-exporter.sh)
+# in place first, or it crash-loops. Enable them after that setup:
+#   systemctl --user enable --now node-exporter podman-stats-export.timer

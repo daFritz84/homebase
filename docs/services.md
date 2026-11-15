@@ -14,8 +14,7 @@ systemd unit. Prerequisites (Podman, firewalld, unprivileged ports, linger) are 
 - [Jellyfin (Media Server)](#jellyfin-media-server)
 - [Stirling PDF (PDF Editor)](#stirling-pdf-pdf-editor)
 - [BookOrbit (Reading Space)](#bookorbit-reading-space)
-- [Uptime Kuma (Uptime Monitoring)](#uptime-kuma-uptime-monitoring)
-- [Beszel (Host & Container Metrics)](#beszel-host--container-metrics)
+- [Monitoring (VictoriaMetrics + Grafana + Alertmanager)](#monitoring-victoriametrics--grafana--alertmanager)
 - [RustDesk (Remote Support)](#rustdesk-remote-support)
 - [Home Assistant (Home Automation)](#home-assistant-home-automation)
 - [Authelia (SSO)](#authelia-sso)
@@ -1217,224 +1216,166 @@ forward-only); `podman-compose pull` + unit restart.
 upstream; a PG major bump refuses to open an old data dir (upstream
 documents the dump/restore path; staying on pg18 is fine).
 
-## Uptime Kuma (Uptime Monitoring)
+## Monitoring (VictoriaMetrics + Grafana + Alertmanager)
 
-Availability/uptime/latency monitor ([Uptime Kuma](https://github.com/louislam/uptime-kuma))
-— HTTP(s)/TCP/ping monitors, status pages, notifications. Compose file:
-`uptime-kuma/compose.yaml`. Unit: `podman-compose@uptime-kuma` (shared pattern).
+GitOps observability stack — endpoint uptime/latency probes, host + container
+metrics, alert rules, dashboards — **replaces Uptime Kuma + Beszel** (retired
+2026-11: their config lives in a SQLite/PocketBase DB with no config-file model,
+so it cannot be git-versioned; every monitoring definition here is a YAML/JSON
+file in `monitoring/`, hot-reloaded). Compose file: `monitoring/compose.yaml`.
+Unit: `podman-compose@monitoring` (shared pattern).
 
-Single container on `caddy-proxy` (alias `status`, container port 3001), no host
-ports — served by Caddy at `https://status.sseifried.link`.
+**Components (one pod, all on `caddy-proxy`, no published ports):**
+`victoriametrics` (TSDB + Prometheus-compatible scraper, alias `victoriametrics`,
+port 8428, `-promscrape.config=vm/promscrape.yml`, 12-month retention),
+`vmalert` (evaluates `vmalert/rules/*.yml` → Alertmanager, alias `vmalert`, 8880),
+`grafana` (dashboards from `grafana/provisioning/` + `grafana/dashboards/`, alias
+`grafana`, 3000), `alertmanager` (routing + Telegram receiver, alias
+`alertmanager`, 9093), `blackbox-exporter` (endpoint probes, alias `blackbox`,
+9115 — internal-only, no UI).
 
-**Behind the Authelia wall (the AdGuard pattern), on purpose:** Uptime Kuma has
-**no native OIDC** (its docs/env expose none; the often-cited issue #1057 is about
-2FA, not OIDC — confirm at first start), so the `forward_auth` wall
-(`two_factor`, `group:homebase-admins`) is the only Authelia SSO path. Its own
-login stays enabled as defense-in-depth. The wall checks the Socket.IO upgrade
-request (cookie present → pass); Caddy passes WebSockets by default (AdGuard UI
-precedent). `status.sseifried.link` is absent from `cloudflared/config.yml` —
-**never add it** (admin-tool doctrine).
+**Host processes (systemd user units — the beszel-agent model, the clean rootless
+answer for `/proc` + the podman socket):** `node_exporter` (host CPU/RAM/disk/net;
+a plain process as `chef` reading `/proc` directly — a rootless container cannot
+mount it; installed by `monitoring/install-node-exporter.sh`, unit
+`systemd/user/node-exporter.service`, scraped by VM as
+`host.containers.internal:9100` — caddy-proxy cannot resolve `homebase` and the
+LAN IP lands in the firewalld public zone, so the gateway address is the working
+target). `podman-stats-export.{service,timer}` runs
+`monitoring/export-podman-stats.sh` (`podman stats --no-stream` → node_exporter's
+textfile collector) every minute. **Container stats via podman-exporter are NOT
+used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
+2026-11-15) and podman's built-in metrics endpoint does not initialize on podman
+5.4.2 (`metrics_enabled` not honored — probed 2026-11-15); the textfile path is
+the working, gitops-native, rootless answer.
 
-**Runs as root, on purpose (no `user:` directive):** the image's `Config.User` is
-empty (probe at first start: `podman image inspect docker.io/louislam/uptime-kuma:2
---format '{{.Config.User}}'`). Under rootless Podman container root maps to host
-`chef` (jellyfin/homeassistant mapping), so `data/` is host-user-owned — **no
-`podman unshare chown` ritual**. If you switch to `user: "1000:1000"` (the image
-supports non-root), chown `data/` once and record the deviation here.
+**Authelia:** Grafana is a **native OIDC client** (the beszel/jellyfin/stirling
+pattern — `generic_oauth`, client `grafana`, redirect
+`https://grafana.sseifried.link/login/generic_oauth`, `client_secret_basic`,
+scopes `openid profile email groups`, role mapping
+`contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'`); **no wall**,
+password login stays break-glass. VictoriaMetrics (`metrics.sseifried.link`) and
+Alertmanager (`alerts.sseifried.link`) have **no OIDC** → `forward_auth` wall
+(`two_factor`, `group:homebase-admins`, the AdGuard pattern). `metrics.`,
+`grafana.`, `alerts.` are absent from `cloudflared/config.yml` — **never add
+them** (admin-tool doctrine). `status.sseifried.link` (Kuma) is **removed** from
+Caddy and Authelia.
 
-**The Homepage widget reads a STATUS PAGE, not an API key:** Uptime Kuma has no
-full API, so the homepage `uptimekuma` widget consumes a *status page* (create one
-in the UI, group the monitored sites, record its slug → `HOMEPAGE_VAR_KUMA_SLUG`).
-The widget shows the aggregate (up/down/uptime/incident) — fleet-wide basic
-health. The status page is public-by-design; it is reachable on the internal
-`caddy-proxy` port (`http://status:3001`), never exposed publicly.
+**Healthchecks:** grafana (Alpine `wget`) / alertmanager + blackbox (busybox)
+ship a shell → in-container healthcheck OK. victoriametrics + vmalert ship
+**distroless** images (no `/bin/sh`) → **no** container healthcheck (the
+podman-compose CMD-array→CMD-SHELL trap, beszel/rustdesk/cloudflared precedent);
+liveness = systemd unit + the `up` scrape.
 
-Data that cannot be rebuilt: `uptime-kuma/data/` — the SQLite DB (monitors, status
-pages, notification configs, 2FA secrets, settings). Covered by
-`backup-uptime-kuma-data.sh` (see [operations.md](operations.md), "Uptime Kuma data
-backups"); run it right after setup and **before every image bump** (DB migrations
-are forward-only).
+**Runs as root, on purpose (no `user:` directive):** every image's `Config.User`
+is empty → rootless Podman maps container root to host `chef`
+(jellyfin/uptime-kuma mapping) → `data/` is host-user-owned, **no
+`podman unshare chown` ritual**. Probe at first start:
+`podman image inspect <image> --format '{{.Config.User}}'`.
 
-### First run
+**Secrets** (`monitoring/.env.secret`, gitignored, 0600 —
+`provision-monitoring-secrets.sh` from Bitwarden): `GF_SECURITY_ADMIN_PASSWORD`
+(Bitwarden `grafana-admin-password`, break-glass),
+`GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` (RAW hex from Bitwarden
+`authelia-oidc-grafana-secret` — the Authelia client digest
+`GRAFANA_OIDC_CLIENT_SECRET_HASH` is provisioned by
+`authelia/provision-authelia-secrets.sh`), `TELEGRAM_BOT_TOKEN` +
+`TELEGRAM_CHAT_ID` (Bitwarden `monitoring-telegram-bot-token` /
+`monitoring-telegram-chat-id`). victoriametrics/vmalert/blackbox have **no
+env_file** (config is files; CI needs no stub for them). New `.env.secret` keys
+need `podman-compose up -d --force-recreate`, not a unit restart.
 
-The steps below run in the service checkout — on the server that is the
-`~/src/homebase` clone.
-
-1. Dirs (the `caddy-proxy` network must exist — `../caddy/ensure_proxy_network.sh`):
-
-```bash
-cd uptime-kuma
-mkdir -p data
-```
-
-2. Start and verify:
-
-```bash
-podman-compose up -d
-podman healthcheck run uptime-kuma_uptime-kuma_1   # exit 0 (node-based healthcheck)
-```
-
-3. Caddy last: validate + restart `podman-compose@caddy`. Verify:
-
-```bash
-curl -k https://status.sseifried.link   # 302 -> authelia.sseifried.link (the wall)
-```
-
-4. Browser: open `https://status.sseifried.link` → Authelia portal (2FA) → lands in
-   Kuma. Create the admin, add monitors (HTTP(s) for every `*.sseifried.link`
-   service + a ping/TCP for the host), then **Settings → Status Pages**: add a
-   status page, group the monitors, set a slug (e.g. `homebase`) — that slug is the
-   Homepage widget's `HOMEPAGE_VAR_KUMA_SLUG`.
-
-5. Deploy with the shared pattern above (unit: `podman-compose@uptime-kuma`):
-
-```bash
-podman-compose systemd
-systemctl --user enable --now podman-compose@uptime-kuma
-```
-
-6. Back up right after setup: `./backup-uptime-kuma-data.sh`.
-
-7. Homepage: add the `uptimekuma` widget (slug) to the Uptime Kuma card; restart
-   `podman-compose@homepage` (config bind-mounted; new `.env` keys need
-   `podman-compose up -d --force-recreate`).
-
-### Upgrade procedure
-
-Pin the tag in `compose.yaml`; `./backup-uptime-kuma-data.sh` **before every bump**
-(DB migrations are forward-only); `podman-compose pull` + unit restart.
-
-## Beszel (Host & Container Metrics)
-
-Host + container metrics ([Beszel](https://github.com/henrygd/beszel)) — CPU/RAM/disk/
-network/temp + Podman container stats, threshold alerts. **Hub** (compose) +
-**agent** (systemd user unit). Hub compose: `beszel/compose.yaml`, unit
-`podman-compose@beszel`. Agent unit: `systemd/user/beszel-agent.service`.
-
-**Topology:** the hub is a single container on `caddy-proxy` (alias `beszel`,
-container port 8090), publishing **only** `127.0.0.1:8090` (loopback — for the
-agent's `HUB_URL` + the healthcheck); the UI is proxied by Caddy at
-`https://metrics.sseifried.link`. The agent is a **plain host process** (a systemd
-**user** unit), NOT a container.
-
-**Why a plain-process agent (the rootless constraint):** host CPU/RAM/disk come
-from `/proc`, which a rootless container cannot mount — a host process running as
-`chef` reads `/proc` directly (the clean rootless answer; netdata/cAdvisor as
-rootless containers cannot). Container stats come from the **Podman API**: the
-agent runs as `chef` and reads chef's own rootless `podman.sock` directly
-(`DOCKER_HOST=unix:///run/user/1000/podman/podman.sock`) — **no socket-proxy**
-(the homepage `dockerproxy` that fed the old `showStats` is deleted, not moved).
-`podman.socket` must be enabled (it is, for the homepage).
-
-**Hub = native Authelia OIDC client (no wall), on purpose:** the hub is a PocketBase
-app; its OAuth2/OIDC provider is configured **in-app** (Settings → users collection
-→ OAuth2, the BookOrbit/Wanderer pattern), redirect
-`https://metrics.sseifried.link/api/oauth2-redirect`. Login redirects to Authelia
-(one portal login end-to-end); the password form stays break-glass
-(`DISABLE_PASSWORD_AUTH=false`). `USER_CREATION=true` auto-provisions accounts on
-first OIDC login. No `access_control` rule (rules apply only to walled apps).
-`metrics.sseifried.link` is absent from `cloudflared/config.yml` — **never add it**.
-
-**WebSocket-only (no SSH):** the agent dials the hub over the loopback-published
-port (`HUB_URL=http://127.0.0.1:8090`) via an outgoing WebSocket authenticated by
-`KEY` (public key) + `TOKEN` (from the hub's Add System). Set `DISABLE_SSH=true` on
-**both** hub and agent so the hub never dials the agent over SSH.
-
-**Hub runs as root (PocketBase image), no `user:` directive:** under rootless
-Podman container root maps to host `chef`, so `data/` is host-user-owned — no
-chown. The hub has **no JWT secret** (the env-var list has no `HUB_JWT_SECRET`;
-PocketBase manages its own) and **no port env** (the binary default is 8090) — so
-the hub needs **no `.env.secret`** and CI needs **no stub**. Its only secrets are
-the agent `KEY`/`TOKEN` (in `beszel/agent.env`, gitignored) and the UI-created
-superuser password (Bitwarden `beszel-superuser-password`, used by the Homepage
-widget).
-
-Data that cannot be rebuilt: `beszel/data/` — the hub PocketBase SQLite (users,
-systems, alerts, API keys). Covered by `backup-beszel-data.sh` (see
-[operations.md](operations.md), "Beszel data backups"); run it right after setup
-and **before every image bump**. The agent is stateless (secrets in `agent.env`).
+Data that cannot be rebuilt: `monitoring/data/grafana/` (sqlite: users, API keys,
+dashboard edits beyond the provisioned files) — covered by
+`monitoring/backup-grafana-data.sh` (see [operations.md](operations.md),
+"Grafana data backups"); `monitoring/data/alertmanager/` (silences — ephemeral,
+not backed up); `monitoring/data/victoriametrics/` (the TSDB — the metric
+history; rebuildable only from future scrapes, so back it up if history matters).
+Dashboards, datasources, scrape targets, probe modules, alert rules and routing
+are **git** (the gitops source of truth) — not data.
 
 ### First run
 
 The steps below run in the service checkout — on the server that is the
 `~/src/homebase` clone.
 
-1. **Authelia first** (the OIDC client must exist before Beszel's provider test):
-   re-run `../authelia/provision-authelia-secrets.sh` (writes
-   `BESZEL_OIDC_CLIENT_SECRET_HASH`; save a generated `authelia-oidc-beszel-secret`
-   to Bitwarden), validate the config offline, then **`podman-compose up -d
-   --force-recreate`** in `authelia/` (new `.env.secret` key — a unit restart does
-   NOT re-read env), verify the portal is healthy.
+1. **Authelia first** (the OIDC client must exist before Grafana's provider
+   test): re-run `../authelia/provision-authelia-secrets.sh` (writes
+   `GRAFANA_OIDC_CLIENT_SECRET_HASH`; save a generated
+   `authelia-oidc-grafana-secret` to Bitwarden), validate the config offline,
+   then **`podman-compose up -d --force-recreate`** in `authelia/` (new
+   `.env.secret` key — a unit restart does NOT re-read env), verify the portal
+   is healthy.
 
-2. Dirs (the `caddy-proxy` network must exist — `../caddy/ensure_proxy_network.sh`):
+2. Secrets + dirs (the `caddy-proxy` network must exist —
+   `../caddy/ensure_proxy_network.sh`):
 
 ```bash
-cd beszel
-mkdir -p data
+cd monitoring
+./provision-monitoring-secrets.sh        # Bitwarden -> .env.secret (0600)
+mkdir -p data/victoriametrics data/grafana data/alertmanager
 ```
 
 3. Start and verify:
 
 ```bash
 podman-compose up -d
-podman healthcheck run beszel_beszel_1   # exit 0 (/beszel health)
+podman healthcheck run monitoring_grafana_1        # exit 0
+podman healthcheck run monitoring_alertmanager_1   # exit 0
+podman healthcheck run monitoring_blackbox-exporter_1   # exit 0
+curl -s http://victoriametrics:8428/health         # VM OK (from a caddy-proxy shell)
 ```
 
-4. Caddy last: validate + restart `podman-compose@caddy`. Verify:
+4. Host processes:
 
 ```bash
-curl -k https://metrics.sseifried.link   # 200 (beszel UI, no wall)
+./install-node-exporter.sh               # pinned node_exporter binary
+../systemd/install-user-units.sh         # symlinks node-exporter + podman-stats-export
+systemctl --user enable --now node-exporter
+systemctl --user enable --now podman-stats-export.timer
+curl -s localhost:9100/metrics | grep homebase_podman   # textfile stats present
 ```
 
-5. Browser: open `https://metrics.sseifried.link` → create the **superuser**
-   (email + password — save the password to Bitwarden `beszel-superuser-password`;
-   it is the Homepage widget's credential). **Add System** → record the **`KEY`**
-   (public key) and **`TOKEN`** (save to Bitwarden `beszel-agent-key` /
-   `beszel-agent-token`); record the **system id** (the Homepage widget's
-   `HOMEPAGE_VAR_BESZEL_SYSTEMID`).
-
-6. OIDC provider (in-app): Settings → toggle off "hide collection create/edit
-   controls" → edit the `users` collection → Options → enable OAuth2, provider
-   **Authelia** (issuer `https://authelia.sseifried.link`, client `beszel`, RAW
-   secret from Bitwarden `authelia-oidc-beszel-secret`) → **Test** → toggle the
-   hide switch back on. Log out → login via Authelia → the superuser is linked by
-   `preferred_username` (`sseifried`); keep the password as break-glass.
-
-7. Agent: install the binary + env + unit:
+5. Caddy last: validate + restart `podman-compose@caddy`. Verify:
 
 ```bash
-./install-agent.sh                       # fetches the pinned beszel-agent binary
-cp agent.env.example agent.env && chmod 0600 agent.env
-# fill KEY/TOKEN (from step 5) into agent.env
-../systemd/install-user-units.sh         # symlinks beszel-agent.service
-systemctl --user enable --now beszel-agent
+curl -k https://metrics.sseifried.link   # 302 -> authelia (the wall)
+curl -k https://alerts.sseifried.link    # 302 -> authelia (the wall)
+curl -k https://grafana.sseifried.link   # 200 (login page, no wall)
 ```
 
-   The hub shows the system **connected** with host + container stats.
+6. Browser: `https://grafana.sseifried.link` → sign in via Authelia (the
+   `homebase-admins` group lands as Grafana Admin) → the provisioned
+   `homebase-overview` dashboard shows panels once scrapes land (allow ~2
+   scrape intervals). Break-glass: admin password (Bitwarden
+   `grafana-admin-password`).
 
-8. Deploy the hub with the shared pattern (unit: `podman-compose@beszel`) and back
-   up:
+7. Deploy with the shared pattern (unit: `podman-compose@monitoring`):
 
 ```bash
 podman-compose systemd
-systemctl --user enable --now podman-compose@beszel
-./backup-beszel-data.sh
+systemctl --user enable --now podman-compose@monitoring
 ```
 
-9. Homepage: add the `beszel` widget (superuser creds + systemId) to the Beszel
-   card; restart `podman-compose@homepage` (new `.env` keys need
+8. Back up right after setup: `./backup-grafana-data.sh`.
+
+9. Homepage: the Monitoring card's `grafana` widget needs
+   `HOMEPAGE_VAR_GRAFANA_APIKEY` (Bitwarden `homepage-grafana-api-key`, created
+   in Grafana → Service accounts → Viewer role) —
+   `./provision-homepage-monitoring.sh` writes it; restart
+   `podman-compose@homepage` (new `.env` keys need
    `podman-compose up -d --force-recreate`).
 
 ### Upgrade procedure
 
-Pin the hub tag in `compose.yaml` and the agent version in `install-agent.sh`
-**together** (the agent asset URL is versioned:
-`.../releases/download/v<X.Y.Z>/beszel-agent_Linux_x86_64.tar.gz`);
-`./backup-beszel-data.sh` **before every bump** (DB migrations are forward-only);
-`podman-compose pull` + unit restart; re-run `install-agent.sh` +
-`systemctl --user restart beszel-agent`. Verify the widget/agent schema against the
-**pinned** version's docs (the Homepage beszel widget has a `version: 1`/`2` split
-at Beszel 0.9.0).
+Pin every tag in `compose.yaml` (all verified to pull on the server; ghcr.io is
+403-blocked — stay on docker.io); `./backup-grafana-data.sh` **before every
+bump**; `podman-compose pull` + unit restart. node_exporter: bump the pinned
+version in `install-node-exporter.sh` + re-run it +
+`systemctl --user restart node-exporter`. Alert rules, scrape targets, probe
+modules, dashboards: edit the files in git, `podman-compose restart
+<service>` (or hot-reload: VM/blackbox/vmalert/alertmanager all watch their
+config files).
 
 ## RustDesk (Remote Support)
 
@@ -1512,12 +1453,12 @@ encryption stays on (hbbr relays ciphertext only).
 **Ownership:** probed 2026-11-15 (`podman image inspect <image> --format
 '{{.Config.User}}'`): empty (root) for both images → rootless Podman maps container
 root to host `chef`, `data/` is host-user-owned — **no chown ritual**
-(jellyfin/uptime-kuma pattern).
+(jellyfin/monitoring pattern).
 
 **Healthchecks:** hbbs/hbbr have **no healthchecks, permanently** — probed
 2026-11-15: the image has no shell at all (`podman run --entrypoint sh` → crun
 "`sh` not found"; static binary), so podman-compose healthchecks (`/bin/sh -c`)
-and `nc` TCP probes are impossible (cloudflared/beszel trap moot). Liveness:
+and `nc` TCP probes are impossible (cloudflared/victoriametrics trap moot). Liveness:
 systemd unit + published ports; host-side probes (`nc`/`curl` exist on the
 server). tailscale healthcheck (shipped): `tailscale status --peers=false` —
 the image has `/bin/sh` but no wget/nc/curl (probed 2026-11-15), so the
@@ -1735,12 +1676,12 @@ Remote (public internet, no VPN)
 Caddy (wildcard cert)
    ├─ homepage.sseifried.link ──► homepage:3000 (native OIDC gate → Authelia)
    ├─ homeassistant.sseifried.link ──► host.containers.internal:8123 (native OIDC client → Authelia (gate))
-   ├─ stirling|bookorbit|metrics ──► upstream (native OIDC clients → Authelia, no wall)
+    ├─ stirling|bookorbit|grafana ──► upstream (native OIDC clients → Authelia, no wall)
    ├─ wanderer.sseifried.link ──► wanderer:3000 (native OIDC client, no wall — LAN/VPN)
    ├─ wanderer.sseifried.link:8443 ──► forward_auth authelia:9091 (wall) ──► wanderer:3000
    │     (tunnel-only listener: cloudflared ingresses wanderer here; :8443 is
    │     NOT published on the host, so only the tunnel can reach it)
-   ├─ adguard|status ──► forward_auth authelia:9091 (wall) ──► upstream
+    ├─ adguard|metrics|alerts ──► forward_auth authelia:9091 (wall) ──► upstream
    ├─ navidrome ──► wall + ExtAuth header SSO (Remote-User auto-login,
    │     trusted source = Caddy pinned IP 10.89.0.200; /rest/* bypassed —
    │     Subsonic per-request auth at the app)
@@ -1756,8 +1697,8 @@ authelia stack: authelia (9091) ── authelia-internal ── openldap (389)
 ```
 
 Policies (`access_control` in `authelia/config/configuration.yml`):
-**default deny**; `two_factor` for `group:homebase-admins` on AdGuard, Uptime
-Kuma, Navidrome, and Wanderer (the internet-published app —
+**default deny**; `two_factor` for `group:homebase-admins` on AdGuard,
+VictoriaMetrics, Alertmanager, Navidrome, and Wanderer (the internet-published app —
 admins-only since the partner account was removed, 2026-11-08; the Wanderer
 rule is evaluated only on the `:8443` tunnel listener); no rules for the
 Authelia portal (its endpoints are exempt from ACL), Homepage (no
@@ -1766,11 +1707,11 @@ forward_auth — its own OIDC gate enforces auth: Authelia authorizes the
 authorizes), Home Assistant (no forward_auth — gated by its OIDC client's
 `authorization_policy` + the component's `roles`: only `homebase-admins` is
 admitted, admins-only as the old wall rule), Stirling PDF, BookOrbit,
-Beszel and Jellyfin (native OIDC clients — Jellyfin via the SSO-Auth plugin,
+Grafana and Jellyfin (native OIDC clients — Jellyfin via the SSO-Auth plugin,
 gated on the `groups` claim → homebase-admins — no wall). Cockpit has **no
 rule and no forward_auth** — it stays outside Authelia entirely. Session cookie domain
 `sseifried.link` → one login, all walled apps (true SSO). OIDC clients:
-`homepage`, `homeassistant`, `stirling-pdf`, `bookorbit`, `beszel`,
+`homepage`, `homeassistant`, `stirling-pdf`, `bookorbit`, `grafana`,
 `wanderer` (PocketBase app-level SSO — see "Wanderer SSO"), `jellyfin`
 (SSO-Auth plugin app-level SSO — see "Jellyfin → SSO") and
 `cloudflare-access` (Cloudflare Access federation — the raw client
@@ -1797,9 +1738,10 @@ Authelia wall is stacked on a native OIDC app.
 | homeassistant | native OIDC | hass-oidc-auth, roles → homebase-admins |
 | stirling | native OIDC | Spring Security SSO; REST API keys are per-request (no wall) |
 | bookorbit | native OIDC | in-app provider; OPDS/device creds per-request (no wall) |
-| metrics (Beszel) | native OIDC | PocketBase OAuth2 |
+| grafana | native OIDC | generic_oauth → `grafana` client; groups→Admin role |
 | adguard | wall | two_factor + homebase-admins |
-| status (Uptime Kuma) | wall | two_factor + homebase-admins |
+| metrics (VictoriaMetrics) | wall | two_factor + homebase-admins |
+| alerts (Alertmanager) | wall | two_factor + homebase-admins |
 | navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
 | jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.) |
 | wanderer (LAN/VPN) | native OIDC | no wall on `:443` |

@@ -188,27 +188,35 @@ bookorbit.sseifried.link {
 	reverse_proxy bookorbit:3000
 }
 
-# Uptime Kuma (availability/uptime monitor) — behind the Authelia wall
-# (two_factor for homebase-admins): Uptime Kuma has NO native OIDC, so the wall
-# is the SSO path; its own login stays as defense-in-depth. LAN/VPN-only — never
-# add to the tunnel allowlist. Caddy passes the Socket.IO WebSockets through by
-# default (the wall checks the upgrade request; AdGuard UI precedent).
-status.sseifried.link {
+# VictoriaMetrics UI (the GitOps monitoring TSDB) — behind the Authelia wall
+# (two_factor for homebase-admins): VictoriaMetrics has NO native OIDC, so the
+# wall is the SSO path (the Uptime Kuma/AdGuard pattern). LAN/VPN-only — never
+# add to the tunnel allowlist.
+metrics.sseifried.link {
 	import tls
 	route {
 		import authelia-fa
-		reverse_proxy status:3001
+		reverse_proxy victoriametrics:8428
 	}
 }
 
-# Beszel hub (host/container metrics) — NO forward_auth wall, on purpose: Beszel
-# is a native Authelia OIDC client (in-app PocketBase OAuth2, the BookOrbit/
-# Wanderer pattern): login redirects to Authelia (SSO), the app's password form
-# stays break-glass. LAN/VPN-only exposure (AdGuard split DNS) — never add to the
-# tunnel allowlist.
-metrics.sseifried.link {
+# Grafana (dashboards) — NO forward_auth wall, on purpose: Grafana is a native
+# Authelia OIDC client (generic_oauth, the beszel/jellyfin/stirling pattern):
+# login redirects to Authelia (SSO), the admin password stays break-glass.
+# LAN/VPN-only exposure (AdGuard split DNS) — never add to the tunnel allowlist.
+grafana.sseifried.link {
 	import tls
-	reverse_proxy beszel:8090
+	reverse_proxy grafana:3000
+}
+
+# Alertmanager UI — behind the Authelia wall (two_factor for homebase-admins):
+# no native OIDC. LAN/VPN-only — never add to the tunnel allowlist.
+alerts.sseifried.link {
+	import tls
+	route {
+		import authelia-fa
+		reverse_proxy alertmanager:9093
+	}
 }
 
 # AdGuard Home — behind the Authelia wall (two_factor for homebase-admins)

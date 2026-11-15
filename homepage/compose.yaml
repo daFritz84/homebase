@@ -22,11 +22,12 @@ services:
           memory: 512m
 
 # No dockerproxy sidecar / podman.sock mount: the per-container showStats that
-# fed it are gone (metrics moved to Beszel, uptime to Uptime Kuma), so the
-# read-only Docker-API surface is removed entirely. The Beszel agent (a host
-# process) reads chef's own podman.sock directly for container stats — no proxy.
-# The widgets (uptimekuma, beszel, adguard) reach their backends over the shared
-# caddy-proxy network by service alias (status:3001, beszel:8090) — Homepage
+# fed it are gone (metrics/uptime moved to the monitoring stack), so the
+# read-only Docker-API surface is removed entirely. The monitoring host
+# processes (node_exporter + the podman-stats exporter) read /proc and chef's
+# own podman.sock directly for host + container stats — no proxy.
+# The widgets (grafana, adguard) reach their backends over the shared
+# caddy-proxy network by service alias (grafana:3000) — Homepage
 # joins caddy-proxy, so no internal network is needed.
 
 networks:

@@ -18,9 +18,9 @@ systemctl --user status podman-compose@navidrome
 systemctl --user status podman-compose@jellyfin
 systemctl --user status podman-compose@stirling-pdf
 systemctl --user status podman-compose@bookorbit
-systemctl --user status podman-compose@uptime-kuma
-systemctl --user status podman-compose@beszel
-systemctl --user status beszel-agent
+systemctl --user status podman-compose@monitoring
+systemctl --user status node-exporter
+systemctl --user status podman-stats-export.timer
 systemctl --user status podman-compose@rustdesk
 systemctl --user status podman-compose@homeassistant
 systemctl --user status podman-compose@authelia
@@ -145,47 +145,33 @@ uid 0 has DAC override over the mapped range. Cadence: right after setup
 directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@bookorbit` to re-adopt the pod.
 
-### Uptime Kuma data backups
+### Grafana data backups
 
-Uptime Kuma's `uptime-kuma/data/` is the irreplaceable, secret-bearing artifact:
-the SQLite DB holds monitors, status pages, notification configs, 2FA secrets and
-settings. Run from the service checkout on the server:
+Grafana's `monitoring/data/grafana/` is the irreplaceable, secret-bearing
+artifact: the sqlite DB holds the admin account, service-account API keys (the
+Homepage grafana widget's key), folders and non-provisioned dashboards.
+Dashboards, datasources, scrape targets, alert rules and routing are **git**
+(`monitoring/`) — not data — so this archive is the small irreplaceable part.
+VictoriaMetrics' `monitoring/data/victoriametrics/` (the TSDB) is the metric
+history: rebuildable only from future scrapes, so back it up if history matters
+(a plain `tar czf` of `data/victoriametrics/` with the service stopped; VM's
+enterprise snapshot API is not in the OSS image). Alertmanager's
+`data/alertmanager/` (silences) is ephemeral — not backed up. Run from the
+service checkout on the server:
 
 ```bash
-cd uptime-kuma && ./backup-uptime-kuma-data.sh
+cd monitoring && ./backup-grafana-data.sh
 ```
 
-The script stops the service, archives `data/` (owner-only, mode `0600`) to
-`~/.local/share/uptime-kuma/backups/uptime-kuma-data-<date>.tar.gz`, and restarts
+The script stops the service, archives `data/grafana/` (owner-only, mode `0600`)
+to `~/.local/share/monitoring/backups/grafana-data-<date>.tar.gz`, and restarts
 it. No `podman unshare` needed — the image runs as root and rootless Podman maps
-container root to the host user, so `data/` is host-user-owned
-(services.md, "Uptime Kuma"). Cadence: right after setup (monitors + status page +
-notification tokens) and **before every image bump** (DB migrations are
-forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
-start. The script (re)starts the containers directly, so the unit shows `inactive`
-afterwards — `systemctl --user start podman-compose@uptime-kuma` to re-adopt the
-pod.
-
-### Beszel data backups
-
-The Beszel hub's `beszel/data/` is the irreplaceable artifact: the PocketBase
-SQLite DB holds users, systems, alerts and API keys. The agent is stateless (its
-`KEY`/`TOKEN` live in `beszel/agent.env`, gitignored). Run from the service
-checkout on the server:
-
-```bash
-cd beszel && ./backup-beszel-data.sh
-```
-
-The script stops the hub, archives `data/` (owner-only, mode `0600`) to
-`~/.local/share/beszel/backups/beszel-data-<date>.tar.gz`, and restarts it. No
-`podman unshare` needed — the hub runs as root and rootless Podman maps container
-root to the host user, so `data/` is host-user-owned (services.md, "Beszel").
-Cadence: right after setup (the DB then holds users + systems + the agent link)
-and **before every image bump** (DB migrations are forward-only). Restore: stop
-the hub, `rm -rf data && tar xzf <archive>`, start. The script (re)starts the
+container root to the host user, so `data/` is host-user-owned (services.md,
+"Monitoring"). Cadence: right after setup (the API key + admin prefs) and
+**before every image bump**. Restore: stop the service,
+`rm -rf data/grafana && tar xzf <archive>`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards — `systemctl --user
-start podman-compose@beszel` to re-adopt the pod.
+start podman-compose@monitoring` to re-adopt the pod.
 
 ### RustDesk data backups
 
@@ -341,10 +327,7 @@ podman-compose pull
 cd ../bookorbit
 podman-compose pull
 
-cd ../uptime-kuma
-podman-compose pull
-
-cd ../beszel
+cd ../monitoring
 podman-compose pull
 
 cd ../homeassistant
@@ -373,9 +356,8 @@ systemctl --user restart podman-compose@navidrome
 systemctl --user restart podman-compose@jellyfin
 systemctl --user restart podman-compose@stirling-pdf
 systemctl --user restart podman-compose@bookorbit
-systemctl --user restart podman-compose@uptime-kuma
-systemctl --user restart podman-compose@beszel
-systemctl --user restart beszel-agent
+systemctl --user restart podman-compose@monitoring
+systemctl --user restart node-exporter
 systemctl --user restart podman-compose@homeassistant
 systemctl --user restart podman-compose@authelia
 systemctl --user restart podman-compose@cloudflared
@@ -410,8 +392,11 @@ podman logs --tail=50 navidrome_navidrome_1
 podman logs --tail=50 jellyfin_jellyfin_1
 podman logs --tail=50 stirling-pdf_stirling-pdf_1
 podman logs --tail=50 bookorbit_app_1
-podman logs --tail=50 uptime-kuma_uptime-kuma_1
-podman logs --tail=50 beszel_beszel_1
+podman logs --tail=50 monitoring_victoriametrics_1
+podman logs --tail=50 monitoring_vmalert_1
+podman logs --tail=50 monitoring_grafana_1
+podman logs --tail=50 monitoring_alertmanager_1
+podman logs --tail=50 monitoring_blackbox-exporter_1
 podman logs --tail=50 <homeassistant-container>
 podman logs --tail=50 authelia_authelia_1
 podman logs --tail=50 authelia_openldap_1
@@ -526,12 +511,15 @@ Notes:
   "Reverse proxy (trusted_proxies)").
 - **AdGuard dashboard** — use `https://adguard.sseifried.link`; plain HTTP on :80
   redirects to the Homepage HTTPS UI by design (Caddyfile `:80` block).
-- **Walled apps (AdGuard UI, Uptime Kuma, Navidrome web UI, Wanderer via the
-  tunnel) return
+- **Walled apps (AdGuard UI, VictoriaMetrics UI, Alertmanager UI, Navidrome web
+  UI, Wanderer via the tunnel) return
   502** — the authelia stack is
   down. Check `systemctl --user status podman-compose@authelia` and
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
-  Homepage, VPN and SSH are unaffected (not walled). Home Assistant keeps
+  Homepage, VPN and SSH are unaffected (not walled). Grafana keeps
+  serving (native OIDC client, not walled) — only its login redirect to
+  Authelia fails; break-glass: the admin password login (Bitwarden
+  `grafana-admin-password`). Home Assistant keeps
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; existing HA sessions keep working, break-glass form:
   `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
@@ -706,14 +694,15 @@ Notes:
 
 Recovery is automatic when Proxmox VM autostart is enabled: set `onboot: 1` on the VM
 (`qm set <VMID> --onboot 1`). Once the host is back, linger (see
-[host-setup.md](host-setup.md)) starts all thirteen compose user units —
+[host-setup.md](host-setup.md)) starts all twelve compose user units —
 `podman-compose@caddy`, `podman-compose@adguard-home`, `podman-compose@homepage`,
 `podman-compose@wanderer`, `podman-compose@navidrome`, `podman-compose@jellyfin`,
 `podman-compose@stirling-pdf`, `podman-compose@bookorbit`,
-`podman-compose@uptime-kuma`, `podman-compose@beszel`,
-`podman-compose@homeassistant`, `podman-compose@authelia` and
-`podman-compose@cloudflared` — plus the `beszel-agent` user unit (enabled via
-`systemctl --user enable beszel-agent`) — no manual action is needed.
+`podman-compose@monitoring`, `podman-compose@homeassistant`,
+`podman-compose@authelia` and
+`podman-compose@cloudflared` — plus the `node-exporter` user unit and the
+`podman-stats-export.timer` (enabled via
+`systemctl --user enable node-exporter podman-stats-export.timer`) — no manual action is needed.
 
 ## Appstore as Inspiration
 
