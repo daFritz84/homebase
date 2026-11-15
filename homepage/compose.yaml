@@ -9,6 +9,10 @@ services:
     env_file: .env
     volumes:
       - ./config:/app/config
+      # Homepage substitutes {{HOMEPAGE_VAR_*}} in the config files from a .env
+      # in the CONFIG dir (not the container env) — mount the service-root .env
+      # (gitignored, provisioned) in, read-only.
+      - ./.env:/app/config/.env:ro
       # Local custom icons: Homepage serves /app/public/icons at /icons/...
       # (the config mount is NOT served) — restart needed after adding files.
       - ./config/icons:/app/public/icons
