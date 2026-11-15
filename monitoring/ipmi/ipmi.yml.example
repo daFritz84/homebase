@@ -1,0 +1,19 @@
+---
+# ipmi-exporter config TEMPLATE. The live file ipmi/ipmi.yml is gitignored
+# (0600) and rendered by provision-monitoring-secrets.sh from the Bitwarden
+# item `bmc-ipmi` (username + password fields) — it carries the BMC
+# credentials, never commit it.
+#
+# Remote multi-target pattern: scrape
+#   /ipmi?target=192.168.178.190&module=autoconf
+# (see vm/promscrape.yml job `ipmi`). autoconf picks the lanplus collectors
+# for remote addresses. collector_timeout bounds each FreeIPMI invocation
+# (collectors run serially; the first ipmi run rebuilds the SDR cache — keep
+# scrape_interval above collector_timeout x number-of-collectors, docs).
+modules:
+  autoconf:
+    collector_timeout: 20s
+auth:
+  - address: 192.168.178.190
+    username: BMC_USERNAME
+    password: BMC_PASSWORD

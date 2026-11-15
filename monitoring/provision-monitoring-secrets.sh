@@ -15,6 +15,18 @@ set -euo pipefail
 #
 ## Run from the monitoring directory on the server.
 ##
+## Also renders the two file-based secrets consumed by the network-device
+## scrape jobs (gitignored, 0600; templates + docs in docs/services.md):
+##   ipmi/ipmi.yml               <- Bitwarden `bmc-ipmi` (username + password
+##                                  fields) — the Supermicro BMC auth for
+##                                  ipmi-exporter (no env expansion there, so
+##                                  the auth lives in the rendered file)
+##   vm/secrets/truenas-api-key  <- Bitwarden `truenas-api-key` (password
+##                                  field) — bearer token for the TrueNAS
+##                                  /api/v2.0/prometheus scrape
+##                                  (authorization.credentials_file in
+##                                  vm/promscrape.yml; VM re-reads the file)
+##
 ## Inputs (Bitwarden password fields; env overrides for testing):
 ##   grafana-admin-password        -> GF_SECURITY_ADMIN_PASSWORD (env override GF_SECURITY_ADMIN_PASSWORD)
 ##   authelia-oidc-grafana-secret  -> GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET (env override GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET)
@@ -26,6 +38,8 @@ set -euo pipefail
 ##   telegram-chat-id              -> printed only (set it as the literal chat_id
 ##                                    in alertmanager/alertmanager.yml; env
 ##                                    override TELEGRAM_CHAT_ID)
+##   bmc-ipmi                      -> ipmi/ipmi.yml (env overrides BMC_USER, BMC_PASS)
+##   truenas-api-key               -> vm/secrets/truenas-api-key (env override TRUENAS_API_KEY)
 ##
 ## Missing items are generated and printed on stderr — save them to Bitwarden
 ## under the same names before the next run. The Grafana OIDC secret is generated
@@ -58,6 +72,18 @@ resolve() {
   printf '%s' "${value}"
 }
 
+# resolve_required <item> <field> <env-override> — fetch a Bitwarden field
+# (password|username) that CANNOT be generated (it is created in a device UI:
+# TrueNAS API key, BMC user). Fail closed with the creation hint.
+resolve_required() {
+  local item="$1" field="$2" override="${3:-}" value
+  if [ -n "${override}" ]; then printf '%s' "${override}"; return; fi
+  value="$(bw get "${field}" "${item}" 2>/dev/null || true)"
+  [ -n "${value}" ] || { echo "[ERR] Bitwarden item '${item}' (${field} field) not found —" >&2; echo "      create the credential on the device first (see docs/services.md)." >&2; exit 1; }
+  echo "[*] ${item} (${field}): fetched from Bitwarden" >&2
+  printf '%s' "${value}"
+}
+
 echo "[*] Provisioning monitoring secrets -> ${ENV_FILE}"
 GF_SECURITY_ADMIN_PASSWORD="$(resolve grafana-admin-password "${GF_SECURITY_ADMIN_PASSWORD:-}")"
 GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET="$(resolve authelia-oidc-grafana-secret "${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:-}" hex)"
@@ -77,7 +103,33 @@ TELEGRAM_CHAT_ID="$(resolve telegram-chat-id "${TELEGRAM_CHAT_ID:-}")"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
 
+# --- network-device scrape secrets (file-based, gitignored, 0600) ---
+BMC_USER="$(resolve_required bmc-ipmi username "${BMC_USER:-}")"
+BMC_PASS="$(resolve_required bmc-ipmi password "${BMC_PASS:-}")"
+TRUENAS_API_KEY="$(resolve_required truenas-api-key password "${TRUENAS_API_KEY:-}")"
+
+umask 077
+mkdir -p ipmi vm/secrets
+{
+  echo "---"
+  echo "# Rendered by provision-monitoring-secrets.sh from Bitwarden \`bmc-ipmi\`"
+  echo "# (gitignored, 0600). Template: ipmi.yml.example. Docs: docs/services.md."
+  echo "modules:"
+  echo "  autoconf:"
+  echo "    collector_timeout: 20s"
+  echo "auth:"
+  echo "  - address: 192.168.178.190"
+  printf '    username: %s\n' "${BMC_USER}"
+  printf '    password: %s\n' "${BMC_PASS}"
+} > ipmi/ipmi.yml.tmp
+mv -f ipmi/ipmi.yml.tmp ipmi/ipmi.yml
+chmod 0600 ipmi/ipmi.yml
+printf '%s' "${TRUENAS_API_KEY}" > vm/secrets/truenas-api-key.tmp
+mv -f vm/secrets/truenas-api-key.tmp vm/secrets/truenas-api-key
+chmod 0600 vm/secrets/truenas-api-key
+
 echo "[+] Wrote ${ENV_FILE} (Grafana admin pw + OIDC client secret + Telegram bot token)."
+echo "[+] Wrote ipmi/ipmi.yml (BMC auth) + vm/secrets/truenas-api-key (TrueNAS bearer)."
 echo "    Telegram chat id (not a secret): ${TELEGRAM_CHAT_ID}"
 echo "    Set it as the literal chat_id in alertmanager/alertmanager.yml (git)."
 echo "    The Grafana OIDC RAW secret must match the argon2 digest in"
