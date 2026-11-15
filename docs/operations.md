@@ -697,12 +697,16 @@ Notes:
     Settings → Access Settings toggles — re-enable "Allow access for
     applications" + "Transmit status information over UPnP". No credentials
     are involved (unauthenticated UPnP), so there is nothing to rotate.
-  - **TrueNAS scrape 401** (`TrueNASTargetDown`): a TrueNAS upgrade can revoke
-    API keys. Create a new READONLY key, update Bitwarden `truenas-api-key`,
-    re-run `monitoring/provision-monitoring-secrets.sh` — the rendered
-    `vm/secrets/truenas-api-key` is re-read by VM, no restart needed. The
-    homepage `truenas` widget uses the same key
-    (`HOMEPAGE_VAR_TRUENAS_KEY` in `homepage/.env`) — update both.
+  - **TrueNAS graphite stream stale** (`TrueNASGraphiteStale`): the Graphite
+    export setting (System → Advanced) is a UI toggle — a major upgrade can
+    disable it, and it has no auth, so keep it LAN-only. Check
+    `podman logs monitoring_graphite-exporter_1` (carbon receiving?), the
+    TrueNAS UI setting, and `nc -z 192.168.178.249 2003` from the NAS side.
+    The homepage `truenas` widget uses the REST API key
+    (`HOMEPAGE_VAR_TRUENAS_KEY` in `homepage/.env`, Bitwarden
+    `truenas-api-key`) — a TrueNAS upgrade can revoke the key (widget shows
+    an error): create a new READONLY key, update Bitwarden, update
+    `homepage/.env`, `podman-compose up -d --force-recreate` in `homepage/`.
   - **BMC scrape fails** (`BmcUnreachable`): a BMC firmware update can reset
     users and disable IPMI-over-LAN. Recreate the "monitoring" user
     (Administrator privilege), enable IPMI-over-LAN, update Bitwarden
@@ -710,12 +714,12 @@ Notes:
     `podman-compose up -d --force-recreate` in `monitoring/` (the container
     reads the file at start).
   - **TrueNAS metric renames** (pool/disk alerts stop firing, dashboard panels
-    empty): the middleware Prometheus metric names (`zpool_state`,
-    `disk_temperature_celsius`) can change across major upgrades — list them
-    with the key (`curl -sk -H "Authorization: Bearer $(cat
-    monitoring/vm/secrets/truenas-api-key)"
-    https://192.168.178.58/api/v2.0/prometheus | grep -E '^zpool|^disk'`) and
-    adjust `vmalert/rules/network.yml` + `grafana/dashboards/network.json`.
+    empty): the collectd plugin names in the graphite path
+    (`truenas_<host>_..._value`, lite mapping) can change across major
+    upgrades — list what arrives (`podman exec caddy curl -s
+    http://graphite-exporter:9102/metrics | grep '^truenas_'` — VM is
+    distroless, caddy has curl) and adjust
+    `vmalert/rules/network.yml` + `grafana/dashboards/network.json`.
   - **Proxmox PVE integration is NOT deployed** — the PVE API (:8006) is
     firewalled from the LAN (user decision 2026-11-15). If that ever changes,
     the homepage `proxmox.yaml` stub + a pve-exporter are the entry points.

@@ -59,22 +59,19 @@ scrape_configs:
       - target_label: __address__
         replacement: ipmi-exporter:9290
 
-  # TrueNAS SCALE built-in Prometheus endpoint (24.10+). Bearer = read-only
-  # API key from vm/secrets/truenas-api-key (gitignored, rendered by the
-  # provision script; VM re-reads credentials_file, no restart on rotation).
-  # Self-signed cert -> skip verify. Pool/disk/SMART/temperature metrics.
-  - job_name: truenas
-    metrics_path: /api/v2.0/prometheus
-    scheme: https
+  # TrueNAS SCALE (.58) metrics via graphite-exporter: the NAS's collectd
+  # write_graphite plugin PUSHES to carbon :2003 (published to the host),
+  # graphite-exporter converts (lite mapping, graphite/mapping.conf) and we
+  # scrape :9102. 25.10 REMOVED the built-in /api/v2.0/prometheus endpoint
+  # (probed 2026-11-15: 404, plugin absent) — the graphite stream is the
+  # supported path. Metric names = graphite path (truenas_<host>_..._value);
+  # pool state, disk temps, SMART, CPU/RAM. The TrueNAS REST API key stays
+  # for the homepage widget (REST v2.0 compat works: pool/alerts 200).
+  - job_name: graphite
     scrape_interval: 30s
-    authorization:
-      type: Bearer
-      credentials_file: /etc/vm/secrets/truenas-api-key
-    tls_config:
-      insecure_skip_verify: true
     static_configs:
       - targets:
-          - 192.168.178.58:443
+          - graphite-exporter:9102
 
   # App liveness — HTTP 200 probes via blackbox (internal alias:port).
   - job_name: blackbox_http
