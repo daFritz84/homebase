@@ -7,12 +7,9 @@
 # Remote multi-target pattern: scrape
 #   /ipmi?target=192.168.178.190&module=autoconf
 # (see vm/promscrape.yml job `ipmi`). autoconf picks the lanplus collectors
-# for remote addresses. collector_timeout bounds each FreeIPMI invocation
-# (collectors run serially; the first ipmi run rebuilds the SDR cache — keep
-# scrape_interval above collector_timeout x number-of-collectors, docs).
-modules:
-  autoconf:
-    collector_timeout: 20s
+# for remote addresses. v1.10.1 has NO collector_timeout (master-only field —
+# "unknown fields in modules" at startup, probed 2026-11-15); the VM
+# scrape_timeout 30s is the outer bound.
 auth:
   - address: 192.168.178.190
     username: BMC_USERNAME
