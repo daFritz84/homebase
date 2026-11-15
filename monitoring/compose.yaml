@@ -226,12 +226,15 @@ services:
       caddy-proxy:
         aliases:
           - ipmi-exporter
-    # Alpine-based (FreeIPMI via apk) -> shell + busybox wget present; verify
-    # at first start (repo doctrine) and probe Config.User for ownership.
+    # Alpine-based (FreeIPMI via apk) -> shell + busybox wget present (verified
+    # at first start 2026-11-15). Config.User=nobody -> overridden to root=chef
+    # (see user: above). Healthcheck hits the landing page, NOT /metrics:
+    # /metrics with no target triggers an inband scrape every 30s ->
+    # "could not find inband device" log spam (observed at first deploy).
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -q -O - http://localhost:9290/metrics >/dev/null 2>&1
+        - wget -q -O /dev/null http://localhost:9290/ >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
