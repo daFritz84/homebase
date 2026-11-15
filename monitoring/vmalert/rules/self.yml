@@ -1,3 +1,4 @@
+---
 # vmalert rules — self-monitoring of the observability stack.
 groups:
   - name: self
@@ -9,12 +10,15 @@ groups:
           severity: critical
         annotations:
           summary: "Monitoring component down: {{ $labels.instance }}"
-          description: "{{ $labels.instance }} (job self) is not being scraped for 3m — the monitoring stack itself is degraded."
+          description: "{{ $labels.instance }} (self) scrape gap 3m"
       - alert: TSDBDiskUsage
-        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_avail_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
+        expr: >-
+          (node_filesystem_size_bytes{mountpoint="/"}
+          - node_filesystem_avail_bytes{mountpoint="/"})
+          / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: "TSDB host disk usage high on {{ $labels.instance }}"
-          description: "Root filesystem > 85% for 15m on {{ $labels.instance }} — VictoriaMetrics retention (12mo) grows here."
+          description: "Root fs > 85% for 15m on {{ $labels.instance }}"

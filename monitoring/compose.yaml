@@ -1,3 +1,4 @@
+---
 # monitoring — GitOps observability stack (replaces Uptime Kuma + Beszel)
 # ---
 # Declarative, git-versioned monitoring: every definition (scrape targets, probe
@@ -12,12 +13,12 @@
 #   grafana          dashboards (provisioning/ + dashboards/ in git), native
 #                    Authelia OIDC client (the beszel/jellyfin/stirling pattern)
 #   alertmanager     routing + Telegram receiver
-#   blackbox-exporter endpoint probes (http_2xx / http_2xx_homepage / tcp_connect)
+#   blackbox-exporter endpoint probes (http_2xx / http_2xx_homepage / tcp)
 #
 # NOT in this compose (host processes, systemd user units — the beszel-agent
 # model, the clean rootless answer for /proc + the podman socket):
 #   node_exporter            host CPU/RAM/disk/net, scraped as
-#                            host.containers.internal:9100 (the adguard/HA/cockpit
+#                         host.containers.internal:9100 (the adguard/HA/cockpit
 #                            host-loopback relay pattern — caddy-proxy cannot
 #                            resolve `homebase` and the LAN IP lands in the
 #                            firewalld public zone). install-node-exporter.sh +
@@ -125,12 +126,16 @@ services:
       GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
       GF_USERS_ALLOW_SIGN_UP: "true"
       GF_AUTH_GENERIC_OAUTH_SCOPES: openid profile email groups
-      GF_AUTH_GENERIC_OAUTH_AUTH_URL: https://authelia.sseifried.link/api/oidc/authorization
-      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: https://authelia.sseifried.link/api/oidc/token
-      GF_AUTH_GENERIC_OAUTH_API_URL: https://authelia.sseifried.link/api/oidc/userinfo
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: >-
+        https://authelia.sseifried.link/api/oidc/authorization
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: >-
+        https://authelia.sseifried.link/api/oidc/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: >-
+        https://authelia.sseifried.link/api/oidc/userinfo
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
       # JMESPath role mapping: homebase-admins group -> Grafana Admin
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: >-
+        contains(groups, 'homebase-admins') && 'Admin' || 'Viewer'
       GF_AUTH_GENERIC_OAUTH_ROLE_LIST: Admin,Editor,Viewer
       GF_AUTH_GENERIC_OAUTH_TEAM_ROLE: Admin
     volumes:
@@ -142,7 +147,9 @@ services:
         aliases:
           - grafana
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health >/dev/null 2>&1"]
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:3000/api/health >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
@@ -170,7 +177,9 @@ services:
         aliases:
           - alertmanager
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:9093/-/healthy >/dev/null 2>&1"]
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:9093/-/healthy >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
@@ -193,7 +202,9 @@ services:
         aliases:
           - blackbox
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:9115/-/healthy >/dev/null 2>&1"]
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://localhost:9115/-/healthy >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3

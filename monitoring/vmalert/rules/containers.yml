@@ -1,3 +1,4 @@
+---
 # vmalert rules — container state (podman_container_* from the podman-stats
 # textfile collector, scraped on the node_exporter endpoint).
 groups:
@@ -18,4 +19,4 @@ groups:
           severity: warning
         annotations:
           summary: "Container high memory: {{ $labels.name }}"
-          description: "Container {{ $labels.name }} memory > 90% of its limit for 10m."
+          description: "{{ $labels.name }} memory > 90% of its limit for 10m."

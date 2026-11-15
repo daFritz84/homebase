@@ -69,9 +69,9 @@
         description: SSO — login portal, 2FA enrollment, OIDC
 
     - Monitoring:
-        # abbr (no icon) — avoids a dashboard-icons 404; the GitOps observability
-        # stack (VictoriaMetrics + Grafana + blackbox + node_exporter) replaced
-        # Uptime Kuma + Beszel.
+        # abbr (no icon) — avoids a dashboard-icons 404; the GitOps
+        # observability stack (VictoriaMetrics + Grafana + blackbox +
+        # node_exporter) replaced Uptime Kuma + Beszel.
         abbr: MO
         href: https://grafana.sseifried.link
         description: GitOps observability — endpoints, host & container metrics
