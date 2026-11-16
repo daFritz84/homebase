@@ -32,6 +32,13 @@ scrape_configs:
   # relay (caddy-proxy cannot resolve `homebase`; the LAN IP lands in the
   # firewalld public zone — the adguard/HA/cockpit pattern).
   - job_name: node
+    # node_exporter renders /metrics in ~10s (podman-stats + fritzbox textfile
+    # collectors + disk stats), over the 10s global scrape_timeout -> every
+    # scrape times out, up=0, TargetMissing fires. Give this job headroom:
+    # 30s interval, 20s timeout (timeout <= interval). Host metrics do not
+    # need 15s resolution.
+    scrape_interval: 30s
+    scrape_timeout: 20s
     static_configs:
       - targets:
           - host.containers.internal:9100
