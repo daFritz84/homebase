@@ -90,7 +90,7 @@ services:
           memory: 1024m
 
   vmalert:
-    image: docker.io/victoriametrics/vmalert:v1.111.0
+    image: docker.io/victoriametrics/vmalert:v1.156.0
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
