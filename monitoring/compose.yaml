@@ -44,10 +44,13 @@
 # pull on the server 2026-11-15 (docker.io reachable; ghcr.io token endpoint is
 # 403-blocked, so no ghcr images).
 #
-# Ownership: every image's Config.User is empty (root) -> rootless Podman maps
+# Ownership: most images' Config.User is empty (root) -> rootless Podman maps
 # container root to host chef (jellyfin/uptime-kuma pattern) -> ./data is
 # host-user-owned, NO `podman unshare chown` ritual. Probe at first start
 # (repo doctrine): `podman image inspect <image> --format '{{.Config.User}}'`.
+# EXCEPTIONS (probed 2026-11-15/18): ipmi-exporter and alertmanager pin
+# Config.User=nobody -> they need `user: "0:0"` to write their 0600 config /
+# data dir (rootless maps nobody to an unmapped subuid).
 #
 # Healthchecks: grafana (Alpine) / alertmanager (busybox) / blackbox (busybox)
 # ship a shell -> in-container healthcheck OK (probe at first start).
@@ -210,6 +213,14 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
+    # The image pins Config.User=nobody (probed 2026-11-18: id=65534), NOT root
+    # — the header's "every image is root" assumption does NOT hold here. Rootless
+    # maps nobody to an unmapped subuid, so the chef-owned ./data/alertmanager is
+    # unwritable -> "open /alertmanager/nflog...: permission denied" + the same
+    # for silences (observed in logs 2026-11-18): silences + notification-log
+    # persistence break. Override to container root = host chef (ipmi-exporter
+    # precedent).
+    user: "0:0"
     env_file:
       - .env.secret
     command:

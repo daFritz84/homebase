@@ -1297,7 +1297,13 @@ is empty → rootless Podman maps container root to host `chef`
 `authelia-oidc-grafana-secret` — the Authelia client digest
 `GRAFANA_OIDC_CLIENT_SECRET_HASH` is provisioned by
 `authelia/provision-authelia-secrets.sh`), `TELEGRAM_BOT_TOKEN` (Bitwarden
-`telegram-bot-token`). The Telegram **chat id** is not a secret and lives as a
+`telegram-bot-token`). The Telegram bot token is consumed by Alertmanager as a
+**file** (`alertmanager/bot_token`, gitignored, 0600, rendered by
+`provision-monitoring-secrets.sh`) via `bot_token_file` — Alertmanager does NOT
+expand `$(VAR)` in config string/secret fields (probed v0.35.0 2026-11-18;
+upstream issue #2917 is open), so a `$(TELEGRAM_BOT_TOKEN)` in the config is
+sent literally and the request path `/bot$(TELEGRAM_BOT_TOKEN)/sendMessage`
+404s. The Telegram **chat id** is not a secret and lives as a
 literal in `alertmanager/alertmanager.yml` (amtool cannot validate an
 env-expanded int64) — `provision-monitoring-secrets.sh` prints it from Bitwarden
 `telegram-chat-id`. victoriametrics/vmalert/blackbox/ipmi-exporter have **no

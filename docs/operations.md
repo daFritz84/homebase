@@ -434,6 +434,24 @@ Notes:
 
 ## Troubleshooting
 
+- **No Telegram alerts ever arrive; alertmanager logs `telegram: Not Found (404)`
+  on every notify** — the bot token is not reaching the Telegram URL. Alertmanager
+  does **not** expand `$(VAR)` in config string/secret fields (probed v0.35.0
+  2026-11-18: the only `os.ExpandEnv` in the source is for CLI paths; upstream
+  issue #2917 "Handle env var in config" is open), so a `bot_token:
+  "$(TELEGRAM_BOT_TOKEN)"` is sent **literally** and the request path becomes
+  `/bot$(TELEGRAM_BOT_TOKEN)/sendMessage` → 404. Fix: `bot_token_file:
+  /etc/alertmanager/bot_token` (the token is a gitignored 0600 file rendered by
+  `provision-monitoring-secrets.sh`; `getBotToken()` TrimSpaces it). Probe the
+  token independently of Alertmanager: `podman exec monitoring_alertmanager_1
+  sh -c 'wget -q -O - "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"'`
+  (a valid token returns `ok:true`; a 404 there means the token/path is bad).
+  Same 404 string is reported upstream (kube-prometheus discussion #2735 — there
+  the cause was a base64-encoded token; the mechanism is identical: a malformed
+  `/bot<token>/…` path). Separately, alertmanager pins `Config.User=nobody`, so
+  the chef-owned `data/alertmanager/` is unwritable under rootless →
+  `open /alertmanager/nflog…: permission denied` (silences + nflog fail); the
+  compose sets `user: "0:0"` (container root = host chef) to fix it.
 - **Caddy exits immediately after restart** — config error. Validate before deploying:
   `podman run --rm --env-file .env homebase-caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
   Note: `redir` does not support negated named matchers (`@!name`/`!@name`); use an explicit
