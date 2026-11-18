@@ -1405,7 +1405,11 @@ version in `install-node-exporter.sh` + re-run it +
 modules, dashboards: edit the files in git, `podman-compose restart
 <service>` (or hot-reload: VM needs `podman kill -s HUP
 monitoring_victoriametrics_1` after a promscrape edit — no auto timer, verified
-2026-11-15; blackbox/vmalert/alertmanager watch their config files).
+2026-11-15; vmalert needs `podman kill -s HUP monitoring_vmalert_1` after a
+`vmalert/rules/*.yml` edit — it did NOT auto-reload after a `git pull` for
+~8min, verified 2026-11-18; the recording rule `vm/rules.yaml` is evaluated by
+`vmalert-recording`, which auto-reloads its rule file; blackbox/alertmanager
+watch their config files).
 
 ### Network devices (Fritzbox, TrueNAS, BMC)
 
