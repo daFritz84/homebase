@@ -13,6 +13,16 @@
   "panels": [
     {
       "type": "stat",
+      "title": "TrueNAS state",
+      "id": 15,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "OFFLINE (intended)", "color": "orange" }, "-1": { "text": "OFFLINE (network)", "color": "red" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "homebase:truenas_state" } ]
+    },
+    {
+      "type": "stat",
       "title": "Fritzbox WAN link",
       "id": 1,
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
@@ -45,11 +55,21 @@
       "type": "stat",
       "title": "TrueNAS pools online",
       "id": 4,
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
       "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DEGRADED", "color": "red" }, "1": { "text": "ONLINE", "color": "green" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
       "targets": [ { "refId": "A", "expr": "truenas_pool_status", "legendFormat": "{{name}}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Chassis power (IPMI)",
+      "id": 16,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "1": { "text": "ON", "color": "green" }, "0": { "text": "OFF", "color": "orange" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "orange", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "ipmi_chassis_power_state" } ]
     },
     {
       "type": "timeseries",
@@ -109,6 +129,16 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 3 } ] } }, "overrides": [] },
       "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192\\.168\\.178\\.(1:49000|58:443|190:623)\"} == 1)" } ]
+    },
+    {
+      "type": "statushistory",
+      "title": "TrueNAS probe (tcp :443)",
+      "id": 17,
+      "gridPos": { "h": 4, "w": 18, "x": 6, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "legend": { "displayMode": "hidden", "showLegend": false }, "alignValue": "left", "mergeValues": true, "showLastValue": true, "rowHeight": 0.9 },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "probe_success{instance=\"192.168.178.58:443\"}", "legendFormat": "tcp :443" } ]
     },
     {
       "type": "timeseries",

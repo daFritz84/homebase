@@ -4,7 +4,15 @@ groups:
   - name: endpoints
     rules:
       - alert: EndpointDown
-        expr: probe_success == 0
+        # TrueNAS is not always-on: while the BMC reports the chassis powered
+        # off (homebase:truenas_state == 0, monitoring/vm/rules.yaml) the
+        # probe failure is an intentional shutdown — silenced. The probe has
+        # no name label, so match on the empty label set (on()). Network-down
+        # cases (state -1) keep firing.
+        expr: |
+          probe_success == 0
+          unless on()
+            (homebase:truenas_state == 0)
         for: 2m
         labels:
           severity: critical

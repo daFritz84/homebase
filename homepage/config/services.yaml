@@ -127,16 +127,43 @@
         href: https://truenas.fritz.box
         description: NAS (Supermicro) — pools, disks, SMART
 
+        # The native `truenas` widget (REST + API key) rendered a raw error
+        # when the NAS is powered off — the box is not always-on. Status now
+        # comes from the monitoring stack (no secret). `customapi` + `remap`
+        # is the only homepage widget that maps a numeric value to text (the
+        # prometheusmetric widget has no value->text mapping — verified
+        # against the v2.8.0 source). homebase:truenas_state (recording rule,
+        # monitoring/vm/rules.yaml) = 1 UP / 0 OFFLINE (intended, chassis off
+        # via IPMI) / -1 OFFLINE (network). Pool + disk-temp numbers come from
+        # the REST textfile exporter (truenas_*), 0 when the NAS is off.
         widgets:
-          - type: truenas
-            url: https://192.168.178.58
-            # REST API widget mode (version 1) for SCALE 24.10; READONLY API
-            # key (Bitwarden truenas-api-key, same key feeds the Prometheus
-            # scrape).
-            version: 1
-            key: {{HOMEPAGE_VAR_TRUENAS_KEY}}
-            enablePools: true
-            nasType: scale
+          - type: customapi
+            url: >-
+              http://victoriametrics:8428/api/v1/query?query=homebase:truenas_state
+            mappings:
+              - field: data.result.0.value.1
+                label: Status
+                format: text
+                remap:
+                  - value: 1
+                    to: UP
+                  - value: 0
+                    to: OFFLINE (intended)
+                  - value: -1
+                    to: OFFLINE (network)
+                  - any: true
+                    to: OFFLINE (network)
+          - type: prometheusmetric
+            url: http://victoriametrics:8428
+            metrics:
+              - label: Pools online
+                query: count(truenas_pool_status) or on() vector(0)
+              - label: Max disk temp
+                query: max(truenas_disk_temperature_celsius) or on() vector(0)
+                format:
+                  type: number
+                  options:
+                    maximumFractionDigits: 0
 
     - Supermicro BMC:
         # no dashboard-icons entry — abbr card, Monitoring pattern

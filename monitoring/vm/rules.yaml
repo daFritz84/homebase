@@ -1,0 +1,53 @@
+---
+# VictoriaMetrics recording rules (VM evaluates these natively via the
+# -rule= flag in compose.yaml — NOT vmalert; vmalert only alerts on the
+# recorded series). Hot-reload: `podman kill -s HUP
+# monitoring_victoriametrics_1` (the promscrape SIGHUP ritual covers rules
+# too; VM also auto-reloads rule files on change).
+#
+# homebase:truenas_state — the TrueNAS box (.58, Supermicro, BMC .190) is NOT
+# always-on. One series (label name="truenas") encodes its 4-state
+# availability so the homepage widget, the Grafana network dashboard and the
+# vmalert rules share a single source of truth:
+#
+#   probe .58:443 | chassis gauge | state | meaning
+#   --------------+---------------+-------+--------------------------------
+#   1             | (any)         |  1    | UP
+#   0             | 0 (off)       |  0    | OFFLINE (intended) — planned
+#               |                 |     | shutdown, BMC alive
+#   0             | 1 (on)/BMC dn | -1    | OFFLINE (network) — OS crash,
+#               |                 |     | boot loop, cable/power loss
+#
+# The chassis leg is the IPMI discriminator: ipmi_chassis_power_state is a
+# PLAIN GAUGE with no labels, 1=on / 0=off (verified on the live BMC scrape
+# 2026-11-18). `== bool 1` keeps the series only while the chassis is OFF and
+# maps it to 0 (intended); while ON the leg is empty and the -1 leg takes
+# over. The BMC (.190) stays reachable across an intentional power-off.
+#
+# Each leg is wrapped in max() to strip labels (so `or` matches a single
+# series) and label_set adds the stable name="truenas" label that the alert
+# expressions match on. ipmi_up is per-collector and dcmi is failing, so the
+# -1 leg uses max(ipmi_up{...}) (BMC reachable = any collector answers).
+#
+# `or` picks the first non-empty leg: probe up wins; probe down + chassis off
+# -> 0; probe down + chassis on -> -1. If the BMC is down too, all legs go
+# empty and the series disappears (widget blank, panel "No data",
+# BmcUnreachable fires).
+#
+# Boot caveat: powering the NAS back on flips the chassis to on while the OS
+# boots — state -1 for the boot duration, so TrueNASDown (for: 5m) fires on
+# boots longer than 5m (docs/operations.md).
+groups:
+  - name: truenas-state
+    interval: 30s
+    rules:
+      - record: homebase:truenas_state
+        expr: >-
+          label_set(max(probe_success{instance="192.168.178.58:443"} == 1),
+          "name", "truenas")
+          or
+          label_set(max(ipmi_chassis_power_state{instance="192.168.178.190"}
+          == bool 1), "name", "truenas")
+          or
+          label_set(max(-1 * ipmi_up{instance="192.168.178.190"}),
+          "name", "truenas")

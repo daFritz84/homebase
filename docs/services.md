@@ -1452,11 +1452,32 @@ safety-critical signals come from the REST v2.0 compat API via
 `GET /api/v2.0/pool` (status ONLINE) + `POST /api/v2.0/disk/temperatures`
 (GET is 405; returns `{dev: celsius}`; Ultrastar operating spec tops at 60C —
 the hot-disk alert threshold). The REST API key (Bitwarden `truenas-api-key`,
-READONLY role, Settings
-→ Access → API & Scanning Keys) is still needed for the homepage `truenas`
-widget (`version: 1` REST mode works on 25.10: pool/alerts endpoints 200,
-probed 2026-11-15; `key: {{HOMEPAGE_VAR_TRUENAS_KEY}}`, `enablePools: true`,
-`nasType: scale`).
+READONLY role, Settings → Access → API & Scanning Keys) is now used ONLY by
+`export-truenas-stats.sh` (rendered to `vm/secrets/truenas-api-key`); the
+homepage card no longer needs it (see the offline-state model below).
+
+**Offline-state model (the NAS is not always-on):** the box is powered off
+intentionally, so a down NAS must show as **OFFLINE**, not an error, and a
+planned shutdown must not page. The recording rule `homebase:truenas_state`
+(`monitoring/vm/rules.yaml`, VM `-rule=` flag; label `name="truenas"`) encodes
+a 4-state availability from the blackbox probe + the IPMI chassis gauge:
+`1` UP / `0` OFFLINE (intended — BMC alive, chassis off) / `-1` OFFLINE
+(network — OS crash, boot loop, cable/power loss; BMC down → no series).
+`ipmi_chassis_power_state` is a **plain gauge, no labels, 1=on / 0=off**
+(verified on the live BMC scrape 2026-11-18) — the chassis leg is the
+intentional-vs-accident discriminator. Homepage card: the native `truenas`
+widget was REMOVED (it rendered a raw error when the NAS is off — homepage
+widgets have no offline state); the card now uses a `customapi` widget with
+`remap` (the only homepage widget that maps a numeric value to text — the
+`prometheusmetric` widget has no value→text mapping, verified against the
+v2.8.0 source) reading `homebase:truenas_state` → UP / OFFLINE (intended) /
+OFFLINE (network), plus a `prometheusmetric` widget for pools online + max
+disk temp (0 when off). Grafana `homebase-network` gained a TrueNAS-state
+stat, a Chassis-power (IPMI) stat, and a TrueNAS-probe status-history
+timeline. Alerts: `EndpointDown` + `TrueNASGraphiteStale` + `TrueNASStatsStale`
+are suppressed while the chassis is off (planned shutdown);
+`TrueNASUnexpectedPowerLoss` fires on chassis-off (expected when planned, a
+power cut when not), `TrueNASDown` on chassis-on/network-down.
 
 Firewall (the NAS PUSHes to the public zone; carbon has no auth, so the rule
 is source-restricted to the NAS — RustDesk `--add-port` precedent):
@@ -1477,7 +1498,12 @@ disables it, re-enable "IPMI over LAN" in the BMC UI). Create user
 Bitwarden `bmc-ipmi` (username + password fields) → rendered to
 `ipmi/ipmi.yml` (template `ipmi/ipmi.yml.example`). Homepage card:
 `prometheusmetric` widget (homepage has **no** redfish/ipmi widget — checked
-the v2.8 widget list) reading `ipmi_up` / max temp / min fan from VM.
+the v2.8 widget list) reading `ipmi_up` / max temp / min fan from VM. The
+`chassis` collector's `ipmi_chassis_power_state` gauge (1=on/0=off, no labels)
+is consumed by the TrueNAS offline-state recording rule (see the TrueNAS
+subsection above); `ipmi_up` is per-collector (`{collector=...}`) and `dcmi`
+is failing on this BMC, so the rule uses `max(ipmi_up{...})` for BMC
+reachability.
 
 **Probes:** `blackbox_tcp` gained `192.168.178.1:49000`, `192.168.178.58:443`,
 `192.168.178.190:623` (no ICMP — rootless has no CAP_NET_RAW). caddy-proxy
