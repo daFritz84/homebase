@@ -109,6 +109,12 @@ jobs:
           curl -fsSL https://github.com/prometheus/prometheus/releases/download/v2.53.0/prometheus-2.53.0.linux-amd64.tar.gz -o /tmp/p.tar.gz
           tar -xzf /tmp/p.tar.gz -C /tmp
           /tmp/prometheus-2.53.0.linux-amd64/promtool check rules monitoring/vmalert/rules/*.yml
+          # monitoring/vm/rules.yaml is NOT promtool-checked: it uses
+          # MetricsQL-only functions (label_set) that the Prometheus parser
+          # rejects (promtool: "unknown function with name label_set"). VM
+          # evaluates it natively; the expressions are validated live against
+          # the VM API (docs/services.md "Network devices"). yamllint covers
+          # the file's YAML syntax.
       - name: Validate Grafana dashboard JSON
         run: |
           for f in monitoring/grafana/dashboards/*.json; do
