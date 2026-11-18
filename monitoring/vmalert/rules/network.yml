@@ -121,15 +121,22 @@ groups:
   - name: network-bmc
     rules:
       - alert: BmcUnreachable
-        expr: ipmi_up == 0
+        # ipmi_up is PER-COLLECTOR ({collector="bmc|chassis|dcmi|ipmi|sel"});
+        # the dcmi collector session-times-out on this Supermicro BMC, so a
+        # bare `ipmi_up == 0` pages on that single collector. Aggregate to
+        # "all collectors down for the instance" — the BMC is unreachable
+        # only when every collector fails. by(instance) keeps the label for
+        # the annotation.
+        expr: max(ipmi_up) by (instance) == 0
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "BMC {{ $labels.instance }} unreachable"
           description: >-
-            ipmi-exporter lanplus scrape failed for 5m — BMC down, IPMI-over-LAN
-            disabled, or user credentials changed (docs/operations.md).
+            ipmi-exporter lanplus scrape failed for 5m on every collector —
+            BMC down, IPMI-over-LAN disabled, or user credentials changed
+            (docs/operations.md).
       - alert: BmcFanLow
         expr: ipmi_fan_speed_rpm < 1000
         for: 10m
