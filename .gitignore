@@ -67,6 +67,9 @@ monitoring/data/
 # Templates/docs are tracked (monitoring/ipmi/ipmi.yml.example).
 monitoring/ipmi/ipmi.yml
 monitoring/vm/secrets/
+# Telegram bot token file for Alertmanager's bot_token_file (the alertmanager/
+# dir is tracked config; this one rendered secret is not).
+monitoring/alertmanager/bot_token
 
 # RustDesk runtime data (id_ed25519 PRIVATE key + id_ed25519.pub + db_v2.sqlite3
 # client registry + tailscale/ node-key state) — data, not code; covered by

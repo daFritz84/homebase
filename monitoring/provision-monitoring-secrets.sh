@@ -39,6 +39,10 @@ set -euo pipefail
 ##                                    provision-authelia-secrets.sh — same
 ##                                    Bitwarden item, stirling-pdf precedent)
 ##   telegram-bot-token            -> TELEGRAM_BOT_TOKEN (env override TELEGRAM_BOT_TOKEN)
+##                                    AND alertmanager/bot_token (the file
+##                                    Alertmanager's bot_token_file reads —
+##                                    Alertmanager does not expand $(VAR) in
+##                                    config, so the token must be a file)
 ##   telegram-chat-id              -> printed only (set it as the literal chat_id
 ##                                    in alertmanager/alertmanager.yml; env
 ##                                    override TELEGRAM_CHAT_ID)
@@ -107,6 +111,15 @@ TELEGRAM_CHAT_ID="$(resolve telegram-chat-id "${TELEGRAM_CHAT_ID:-}")"
 mv -f "${ENV_FILE}.tmp" "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
 
+# Telegram bot token as a FILE for Alertmanager's bot_token_file (gitignored,
+# 0600). Alertmanager does NOT expand $(VAR) in config string/secret fields
+# (probed v0.35.0 2026-11-18), so the token cannot live in the config as
+# $(TELEGRAM_BOT_TOKEN) — it must be a file the receiver reads (getBotToken()
+# TrimSpaces it). See alertmanager/alertmanager.yml.
+printf '%s' "${TELEGRAM_BOT_TOKEN}" > alertmanager/bot_token.tmp
+mv -f alertmanager/bot_token.tmp alertmanager/bot_token
+chmod 0600 alertmanager/bot_token
+
 # --- network-device scrape secrets (file-based, gitignored, 0600) ---
 BMC_USER="$(resolve_required bmc-ipmi username "${BMC_USER:-}")"
 BMC_PASS="$(resolve_required bmc-ipmi password "${BMC_PASS:-}")"
@@ -144,6 +157,7 @@ mv -f vm/secrets/truenas-api-key.tmp vm/secrets/truenas-api-key
 chmod 0600 vm/secrets/truenas-api-key
 
 echo "[+] Wrote ${ENV_FILE} (Grafana admin pw + OIDC client secret + Telegram bot token)."
+echo "[+] Wrote alertmanager/bot_token (Telegram bot token file for bot_token_file)."
 echo "[+] Wrote ipmi/ipmi.yml (BMC auth) + vm/secrets/truenas-api-key (TrueNAS REST key for export-truenas-stats.sh)."
 echo "    Telegram chat id (not a secret): ${TELEGRAM_CHAT_ID}"
 echo "    Set it as the literal chat_id in alertmanager/alertmanager.yml (git)."

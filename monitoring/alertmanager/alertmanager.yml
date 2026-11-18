@@ -1,10 +1,18 @@
 ---
-# Alertmanager routing + Telegram receiver. The bot token is a secret,
-# env-expanded from .env.secret (Alertmanager expands $(VAR) in the config) —
-# never in this file. The chat id is NOT a secret (it identifies the target, the
-# authorizes it) and amtool cannot validate an env-expanded int64, so it is a
-# literal here: set the real value (provision-monitoring-secrets.sh prints it
-# from Bitwarden `telegram-chat-id`) on the workstation, in git.
+# Alertmanager routing + Telegram receiver. The bot token is a secret and is
+# read from a file (bot_token_file), NOT env-expanded: Alertmanager does NOT
+# expand $(VAR) in config string/secret fields (probed v0.35.0 2026-11-18 — the
+# only os.ExpandEnv in the source is for CLI paths; issue #2917 "Handle env var
+# in config" is still open). A literal $(TELEGRAM_BOT_TOKEN) is sent as the bot
+# token, so the request path becomes /bot$(TELEGRAM_BOT_TOKEN)/sendMessage and
+# api.telegram.org returns 404 ("telegram: Not Found (404)") — that is why no
+# Telegram message ever arrived. The token file (alertmanager/bot_token,
+# gitignored, 0600) is rendered by provision-monitoring-secrets.sh from
+# Bitwarden `telegram-bot-token`; getBotToken() TrimSpaces it. The chat id is
+# NOT a secret (it identifies/authorizes the target) and amtool cannot validate
+# an env-expanded int64, so it is a literal here: set the real value
+# (provision-monitoring-secrets.sh prints it from Bitwarden `telegram-chat-id`)
+# on the workstation, in git.
 route:
   receiver: telegram
   group_by: ["alertname", "instance"]
@@ -20,7 +28,7 @@ route:
 receivers:
   - name: telegram
     telegram_configs:
-      - bot_token: "$(TELEGRAM_BOT_TOKEN)"
+      - bot_token_file: /etc/alertmanager/bot_token
         chat_id: 8701880617
         api_url: https://api.telegram.org
         parse_mode: HTML
