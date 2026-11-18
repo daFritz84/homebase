@@ -72,6 +72,10 @@ services:
       - no-new-privileges=true
     command:
       - -promscrape.config=/etc/vm/promscrape.yml
+      # recording rules (vm/rules.yaml) — VM evaluates them natively; the
+      # ./vm dir is already bind-mounted at /etc/vm:ro (no extra volume).
+      # Hot-reload: podman kill -s HUP monitoring_victoriametrics_1.
+      - -rule=/etc/vm/rules.yaml
       - -storageDataPath=/vmdata
       - -retentionPeriod=12
       - -httpListenAddr=:8428

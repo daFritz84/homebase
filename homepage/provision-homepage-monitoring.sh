@@ -11,7 +11,11 @@ set -euo pipefail
 ##   - the retired Uptime Kuma / Beszel widget keys,
 ##   - HOMEPAGE_VAR_GRAFANA_APIKEY (the v1 grafana panel-stats widget that used
 ##     it was removed in Homepage v2 — v2's grafana widget is a status widget
-##     needing Admin creds; do not reintroduce a key).
+##     needing Admin creds; do not reintroduce a key),
+##   - HOMEPAGE_VAR_TRUENAS_KEY (the native truenas REST widget was removed —
+##     it rendered a raw error when the NAS is off; the card now reads
+##     VictoriaMetrics, no key. The REST key stays for the monitoring
+##     textfile exporter via monitoring/vm/secrets/truenas-api-key).
 ##
 ## Run from the homepage directory on the server.
 
@@ -22,10 +26,11 @@ ENV_FILE=".env"
 [ -f "${ENV_FILE}" ] || { echo "[ERR] ${ENV_FILE} missing — homepage/.env must exist (OIDC keys)"; exit 1; }
 
 for k in HOMEPAGE_VAR_KUMA_SLUG HOMEPAGE_VAR_BESZEL_USER HOMEPAGE_VAR_BESZEL_PASS \
-         HOMEPAGE_VAR_BESZEL_SYSTEMID HOMEPAGE_VAR_GRAFANA_APIKEY; do
+         HOMEPAGE_VAR_BESZEL_SYSTEMID HOMEPAGE_VAR_GRAFANA_APIKEY \
+         HOMEPAGE_VAR_TRUENAS_KEY; do
   sed -i "/^${k}=/d" "${ENV_FILE}"
 done
 chmod 0600 "${ENV_FILE}"
 
-echo "[+] Pruned retired widget keys from ${ENV_FILE} (KUMA/BESZEL/GRAFANA_APIKEY)."
+echo "[+] Pruned retired widget keys from ${ENV_FILE} (KUMA/BESZEL/GRAFANA_APIKEY/TRUENAS_KEY)."
 echo "    The prometheusmetric widget needs no key — next: podman-compose up -d --force-recreate"
