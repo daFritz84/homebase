@@ -705,19 +705,18 @@ Notes:
     `192.168.178.58`, port 2003 tcp+udp — commands in
     [services.md](services.md) "Monitoring → Network devices"; a firewalld
     upgrade/reinstall drops permanent rules? `--list-rich-rules` needs sudo).
-    The homepage `truenas` widget uses the REST API key
-    (`HOMEPAGE_VAR_TRUENAS_KEY` in `homepage/.env`, Bitwarden
-    `truenas-api-key`) — a TrueNAS upgrade can revoke the key (widget shows
-    an error): create a new READONLY key, update Bitwarden, update
-    `homepage/.env`, `podman-compose up -d --force-recreate` in `homepage/`.
+    The homepage TrueNAS card no longer uses the REST API key (the native
+    `truenas` widget was removed — it rendered a raw error when the NAS is
+    off; the card now reads VictoriaMetrics, no key). A TrueNAS upgrade
+    revoking the key therefore no longer breaks the dashboard; it only
+    affects the REST textfile exporter (see the next bullet).
   - **TrueNAS REST scrape stale** (`TrueNASStatsStale`, pool/disk alerts stop
     firing): a TrueNAS upgrade can revoke API keys. Create a new READONLY key,
     update Bitwarden `truenas-api-key`, re-run
     `monitoring/provision-monitoring-secrets.sh` (renders
     `vm/secrets/truenas-api-key`, read by `export-truenas-stats.sh` at each
-    run — no restart), and update `HOMEPAGE_VAR_TRUENAS_KEY` in
-    `homepage/.env` + `podman-compose up -d --force-recreate` in `homepage/`
-    (the widget uses the same key).
+    run — no restart). The homepage card is unaffected (it reads
+    VictoriaMetrics, no key).
   - **BMC scrape fails** (`BmcUnreachable`): a BMC firmware update can reset
     users and disable IPMI-over-LAN. Recreate the "monitoring" user
     (Administrator privilege), enable IPMI-over-LAN, update Bitwarden
@@ -732,6 +731,17 @@ Notes:
     `grafana/dashboards/network.json`; the textfile names
     (`truenas_pool_status`, `truenas_disk_temperature_celsius`) are ours —
     adjust `export-truenas-stats.sh` if the REST endpoints move.
+  - **TrueNAS chassis power-state changes break offline discrimination**
+    (`homebase:truenas_state`, homepage OFFLINE display, the suppression +
+    `TrueNASUnexpectedPowerLoss`/`TrueNASDown` alerts): the rule keys off
+    `ipmi_chassis_power_state` (plain gauge, 1=on/0=off, no labels — verified
+    2026-11-18). A BMC firmware update can change that gauge's semantics;
+    probe it (`podman exec monitoring_ipmi-exporter_1 wget -q -O -
+    "http://localhost:9290/ipmi?target=192.168.178.190&module=autoconf" |
+    grep ipmi_chassis_power_state`) and adjust the `== bool 1` leg in
+    `monitoring/vm/rules.yaml` if it changes. Boot caveat: powering the NAS
+    back on flips the chassis to on while the OS boots → state -1 for the
+    boot duration, so `TrueNASDown` (`for: 5m`) fires on boots longer than 5m.
   - **Proxmox PVE integration is NOT deployed** — the PVE API (:8006) is
     firewalled from the LAN (user decision 2026-11-15). If that ever changes,
     the homepage `proxmox.yaml` stub + a pve-exporter are the entry points.

@@ -40,7 +40,14 @@ groups:
   - name: network-truenas
     rules:
       - alert: TrueNASGraphiteStale
-        expr: absent({__name__=~"scale_truenas_.+"})
+        # fires only when the NAS is supposed to be running (state != 0): a
+        # planned shutdown (chassis off -> homebase:truenas_state == 0)
+        # legitimately silences the graphite stream, so the alert is
+        # suppressed then. absent() is labelless, so match the state's name
+        # label with and on(name).
+        expr: >-
+          absent({__name__=~"scale_truenas_.+"})
+          and on(name) (homebase:truenas_state != 0)
         for: 15m
         labels:
           severity: critical
@@ -70,7 +77,12 @@ groups:
             Ultrastar operating spec tops out at 60C; check airflow/fans
             (BMC fan metrics on the BMC row).
       - alert: TrueNASStatsStale
-        expr: time() - truenas_exporter_last_scrape_timestamp > 300
+        # suppressed while the NAS is intentionally off (state == 0): the REST
+        # scrape legitimately stops on a planned shutdown. Fires when the NAS
+        # is supposed to be running (state != 0) and the scrape is stale.
+        expr: >-
+          (time() - truenas_exporter_last_scrape_timestamp > 300)
+          and on(name) (homebase:truenas_state != 0)
         for: 5m
         labels:
           severity: warning
@@ -79,6 +91,33 @@ groups:
           description: >-
             export-truenas-stats.sh has not produced fresh metrics for 5m —
             API key revoked by an upgrade? (docs/operations.md)
+      - alert: TrueNASUnexpectedPowerLoss
+        # chassis off + NAS unreachable (homebase:truenas_state == 0): the
+        # BMC saw the chassis go off. Expected during a planned shutdown;
+        # if unplanned this is a power cut / hard shutdown.
+        expr: homebase:truenas_state == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TrueNAS chassis power off (NAS unreachable)"
+          description: >-
+            BMC reports chassis off while the NAS is unreachable — expected
+            for a planned shutdown; if unplanned, a power cut / hard
+            shutdown (IPMI chassis gauge, monitoring/vm/rules.yaml).
+      - alert: TrueNASDown
+        # NAS unreachable with the chassis ON (or BMC state unknown):
+        # homebase:truenas_state < 0 (use < 0, not == -1 — MetricsQL negative
+        # literal). OS crash, boot loop, or NAS network down.
+        expr: homebase:truenas_state < 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TrueNAS unreachable (chassis on / BMC state unknown)"
+          description: >-
+            NAS probe down while the BMC sees the chassis on (or the BMC is
+            unreachable) — OS crash, boot loop, or NAS network down.
   - name: network-bmc
     rules:
       - alert: BmcUnreachable
