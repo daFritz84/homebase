@@ -1,9 +1,10 @@
 ---
-# VictoriaMetrics recording rules (VM evaluates these natively via the
-# -rule= flag in compose.yaml — NOT vmalert; vmalert only alerts on the
-# recorded series). Hot-reload: `podman kill -s HUP
-# monitoring_victoriametrics_1` (the promscrape SIGHUP ritual covers rules
-# too; VM also auto-reloads rule files on change).
+# Recording rules evaluated by the vmalert-recording service (compose.yaml:
+# vmalert -rule=/etc/vm/rules.yaml -remoteWrite.url=...victoriametrics). VM
+# single-node does NOT evaluate recording rules (no -rule= flag — probed
+# v1.156.0 at deploy 2026-11-18); vmalert evaluates them via MetricsQL
+# against the datasource (so label_set/max()/== bool work) and writes the
+# results back to VM. vmalert auto-reloads rule files on change.
 #
 # homebase:truenas_state — the TrueNAS box (.58, Supermicro, BMC .190) is NOT
 # always-on. One series (label name="truenas") encodes its 4-state

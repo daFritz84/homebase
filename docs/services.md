@@ -1459,7 +1459,8 @@ homepage card no longer needs it (see the offline-state model below).
 **Offline-state model (the NAS is not always-on):** the box is powered off
 intentionally, so a down NAS must show as **OFFLINE**, not an error, and a
 planned shutdown must not page. The recording rule `homebase:truenas_state`
-(`monitoring/vm/rules.yaml`, VM `-rule=` flag; label `name="truenas"`) encodes
+(`monitoring/vm/rules.yaml`, evaluated by the `vmalert-recording` service —
+VM single-node has no `-rule=` flag; label `name="truenas"`) encodes
 a 4-state availability from the blackbox probe + the IPMI chassis gauge:
 `1` UP / `0` OFFLINE (intended — BMC alive, chassis off) / `-1` OFFLINE
 (network — OS crash, boot loop, cable/power loss; BMC down → no series).

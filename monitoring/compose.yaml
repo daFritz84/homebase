@@ -72,10 +72,10 @@ services:
       - no-new-privileges=true
     command:
       - -promscrape.config=/etc/vm/promscrape.yml
-      # recording rules (vm/rules.yaml) — VM evaluates them natively; the
-      # ./vm dir is already bind-mounted at /etc/vm:ro (no extra volume).
-      # Hot-reload: podman kill -s HUP monitoring_victoriametrics_1.
-      - -rule=/etc/vm/rules.yaml
+      # NO -rule= flag: VM single-node does NOT evaluate recording rules
+      # (flag provided but not defined: -rule — probed on v1.156.0 at deploy
+      # 2026-11-18). Recording rules are evaluated by vmalert-recording (see
+      # below) via MetricsQL against the datasource and written back to VM.
       - -storageDataPath=/vmdata
       - -retentionPeriod=12
       - -httpListenAddr=:8428
@@ -115,6 +115,36 @@ services:
       resources:
         limits:
           memory: 256m
+
+  vmalert-recording:
+    # VM single-node does NOT evaluate recording rules (no -rule= flag —
+    # probed v1.156.0 at deploy 2026-11-18). vmalert evaluates them via
+    # MetricsQL against the datasource (so label_set/max()/== bool work) and
+    # writes the results back to VM. Dedicated instance (not the alerting
+    # vmalert) so the rule file lives in ./vm (the VM config dir) and the
+    # alerting vmalert's rule glob stays alerts-only. No -notifier.url:
+    # recording rules emit no alerts.
+    image: docker.io/victoriametrics/vmalert:v1.156.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges=true
+    command:
+      - -datasource.url=http://victoriametrics:8428
+      - -remoteWrite.url=http://victoriametrics:8428
+      - -rule=/etc/vm/rules.yaml
+      - -evaluationInterval=30s
+      - -httpListenAddr=:8881
+    volumes:
+      - ./vm:/etc/vm:ro
+    networks:
+      caddy-proxy:
+        aliases:
+          - vmalert-recording
+    # NO healthcheck: distroless image (no /bin/sh) — same trap as VM/vmalert.
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   grafana:
     image: docker.io/grafana/grafana:11.6.1
