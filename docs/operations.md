@@ -561,12 +561,13 @@ Notes:
   host's LAN IP).
   Jellyfin is a native OIDC client (SSO-Auth plugin), not walled — it keeps
   serving; only its SSO login redirect to Authelia fails. The local form is
-   dead-ended (OIDC-only, 2026-11-19): break-glass = `podman exec -it
-   jellyfin_jellyfin_1 /jellyfin/jellyfin --mode SeedSystem -d /config/data
-   -C /cache -c /config/config` with the unit stopped (12.x removed
-   `--reset-password`; the binary is `/jellyfin/jellyfin`, the running server's
-   cache dir is `/cache`) — SeedSystem re-seeds the admin interactively (new
-   password → Bitwarden `jellyfin-admin-password`).
+   dead-ended (OIDC-only, 2026-11-19): break-glass = unit stopped, SQL
+   `UPDATE Users SET AuthenticationProviderId='Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider',
+   EnableLocalPassword=1 WHERE UserName='sseifried'` on
+   `jellyfin/data/data/jellyfin.db` — the local form returns and
+   authenticates with the Bitwarden `jellyfin-admin-password` (12.x removed
+   `--reset-password`; `--mode SeedSystem` is a migration runner, not a
+   reset — verified 2026-11-19).
   Navidrome's Subsonic playback is unaffected (bypassed `/rest/*` path);
   only its web UI 502s. Wanderer's LAN path (native OIDC) keeps serving,
   only its login redirect fails.
