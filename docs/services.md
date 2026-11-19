@@ -1863,7 +1863,18 @@ rule and no forward_auth** — it stays outside Authelia entirely. Session cooki
 (SSO-Auth plugin app-level SSO — see "Jellyfin → SSO") and
 `cloudflare-access` (Cloudflare Access federation — the raw client
 secret goes to the Access IdP form, the argon2 digest to `.env.secret`;
-`scopes: openid/email/profile`). Second factors: **enforced** — every rule
+`scopes: openid/email/profile`). Consent: **`consent_mode: implicit` on all
+eight clients** — the consent screen never appears (user decision
+2026-11-19: every client is self-hosted, confidential, single-user; `auto`
+is the default and resolves to `explicit` = asks on every authorization).
+Forced-consent conditions override the mode (Authelia FAQ): a granted
+refresh token (`offline_access`), `prompt=consent`, `prompt=login` — the
+`homepage` client therefore has **no `offline_access`/`refresh_token`
+grant** (a refresh token would force the consent page on every login); its
+OIDC session re-validates via a silent redirect to Authelia at the 1h
+access-token lifespan (no 2FA prompt while the Authelia session is alive).
+The Cloudflare Access IdP dashboard "Prompt" field must stay empty.
+Second factors: **enforced** — every rule
 and all eight OIDC clients run `two_factor`: a **WebAuthn passkey stored in
 Bitwarden** (primary, registered from the desktop Chrome/Edge Bitwarden
 extension; asserted via the vault on mobile) plus a **TOTP backup factor**,
@@ -1881,7 +1892,7 @@ Authelia wall is stacked on a native OIDC app.
 
 | Service | Protection | Notes |
 | --- | --- | --- |
-| homepage | native OIDC | built-in gate → `homepage` client |
+| homepage | native OIDC | built-in gate → `homepage` client; no refresh grant (refresh forces the consent page) — silent re-auth at the 1h access-token lifespan, no 2FA prompt while the Authelia session lives |
 | homeassistant | native OIDC | hass-oidc-auth, roles → homebase-admins |
 | stirling | native OIDC | Spring Security SSO; REST API keys are per-request (no wall) |
 | bookorbit | native OIDC | in-app provider; OPDS/device creds per-request (no wall) |
