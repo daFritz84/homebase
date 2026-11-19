@@ -400,8 +400,13 @@ path (`:443`) has no wall — the app's native OIDC is the single Authelia
 layer there (no 2nd wall on a native OIDC client).
 
 - **Authelia client:** `wanderer` in `authelia/config/configuration.yml`
-  (confidential, PKCE S256, `client_secret_post` — PocketBase posts
-  credentials in the token body; argon2 digest from `.env.secret`, RAW
+  (confidential, PKCE S256, `client_secret_basic` — PocketBase authenticates at
+  the token endpoint with HTTP Basic, NOT the x/oauth2 POST-body default: its
+  OIDC provider picks the auth style from the discovery doc's
+  `token_endpoint_auth_methods_supported`, where Authelia advertises basic;
+  confirmed via the Authelia log, the cloudflare-access precedent — Authelia is
+  lenient so login worked, pinning the observed method clears the warning;
+  argon2 digest from `.env.secret`, RAW
   secret = Bitwarden `authelia-oidc-wanderer-secret`, printed by
   `provision-authelia-secrets.sh`). Redirect:
   `https://wanderer.sseifried.link/login/redirect` (PocketBase's fixed
