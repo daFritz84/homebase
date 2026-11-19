@@ -22,5 +22,8 @@ modules:
     - bmc
     - ipmi
     - chassis
-    - dcmi
     - sel
+    # NO dcmi: the freeipmi 1.6.15 bundled in the v1.10.1 image has no
+    # --get-power-reading option (probed 2026-11-19: "unrecognized option"),
+    # so the collector can never succeed — it timed out on every scrape
+    # since first deploy. The BMC itself answers fine (sensors/chassis/sel).

@@ -147,8 +147,11 @@ mkdir -p ipmi vm/secrets
   echo "    - bmc"
   echo "    - ipmi"
   echo "    - chassis"
-  echo "    - dcmi"
   echo "    - sel"
+  echo "    # NO dcmi: the freeipmi 1.6.15 bundled in the v1.10.1 image has no"
+  echo "    # --get-power-reading option (probed 2026-11-19: \"unrecognized"
+  echo "    # option\"), so the collector can never succeed — it timed out on"
+  echo "    # every scrape since first deploy. The BMC itself answers fine."
 } > ipmi/ipmi.yml.tmp
 mv -f ipmi/ipmi.yml.tmp ipmi/ipmi.yml
 chmod 0600 ipmi/ipmi.yml
