@@ -434,6 +434,16 @@ Notes:
 
 ## Troubleshooting
 
+- **OIDC consent page appears at login despite `consent_mode: implicit`** —
+  forced-consent conditions override the mode (Authelia FAQ): the client
+  requests `offline_access` (a granted refresh token forces explicit consent —
+  the `homepage` client has no refresh grant for exactly this reason), the
+  client sent `prompt=consent`/`prompt=login` (check the `Authorization
+  Request` log line for the `prompt` parameter; the Cloudflare Access IdP
+  dashboard "Prompt" field must stay empty), or the request mints
+  security-sensitive Authelia API tokens (unused here). `consent_mode: auto`
+  is NOT auto-approve — it is the default and resolves to `explicit` (asks on
+  every authorization).
 - **No Telegram alerts ever arrive; alertmanager logs `telegram: Not Found (404)`
   on every notify** — the bot token is not reaching the Telegram URL. Alertmanager
   does **not** expand `$(VAR)` in config string/secret fields (probed v0.35.0

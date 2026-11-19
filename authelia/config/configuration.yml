@@ -124,6 +124,17 @@ identity_providers:
       # Hydrate groups into the ID token (the cloudflare-access escape hatch).
       grafana:
         id_token: ['groups', 'email', 'preferred_username']
+    # Consent doctrine (user decision 2026-11-19): consent_mode 'implicit'
+    # never shows the consent screen — every client here is self-hosted,
+    # confidential (public: false) and single-user. 'auto' is NOT
+    # auto-approve: it is the default and resolves to 'explicit' (asks on
+    # every authorization). Forced-consent conditions override any mode
+    # (Authelia FAQ): a granted refresh token (offline_access scope),
+    # prompt=consent, prompt=login — the homepage client has no refresh
+    # grant for exactly this reason, and the Cloudflare Access IdP dashboard
+    # must keep its "Prompt" field empty. Accepted trade-off: Authelia
+    # documents implicit as a dev/testing mode discouraged in production;
+    # the documented hazard (public clients) does not apply to this stack.
     clients:
       - client_id: 'homepage'
         client_name: 'Homepage'
@@ -132,17 +143,21 @@ identity_providers:
         client_secret: '{{ env "HOMEPAGE_OIDC_CLIENT_SECRET_HASH" }}'
         public: false
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
+        # NO offline_access/refresh_token grant: a granted refresh token
+        # forces the explicit consent screen on every authorization (Authelia
+        # FAQ), which the implicit consent_mode cannot override. Homepage's
+        # OIDC session re-validates via a silent redirect to Authelia at the
+        # 1h access-token lifespan (no 2FA prompt while the Authelia session
+        # is alive — 12h expiration / 2h inactivity).
         scopes:
           - 'openid'
           - 'email'
           - 'profile'
-          - 'offline_access' # required for the refresh_token grant below
         redirect_uris:
           - 'https://homepage.sseifried.link/api/auth/callback/homepage-oidc'
         grant_types:
           - 'authorization_code'
-          - 'refresh_token'
         response_types:
           - 'code'
       - client_id: 'homeassistant'
@@ -154,7 +169,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         scopes: ['openid', 'profile', 'email', 'groups']
         redirect_uris:
           - 'https://homeassistant.sseifried.link/auth/oidc/callback'
@@ -174,7 +189,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         # Stirling requests exactly openid/profile/email
         scopes: ['openid', 'profile', 'email']
         redirect_uris:
@@ -198,7 +213,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor'
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         scopes: ['openid', 'profile', 'email']
         redirect_uris:
           - 'https://bookorbit.sseifried.link/oauth2-callback'
@@ -230,7 +245,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         # Grafana gates the Admin role on the `groups` claim (JMESPath
         # contains(groups,'homebase-admins') -> Admin; see monitoring/compose.yaml
         # GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH)
@@ -258,7 +273,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         # wanderer requests exactly openid/profile/email
         scopes: ['openid', 'profile', 'email']
         redirect_uris:
@@ -279,7 +294,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         # the email claim feeds the Access policy email-domain condition
         # (@sseifried.link) — the claim comes from the LDAP `mail` attribute
         # and lands in the ID token via the claims_policy escape hatch above
@@ -309,7 +324,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         authorization_policy: 'two_factor' # enforced: passkey + TOTP (docs "MFA enrollment")
-        consent_mode: 'auto'
+        consent_mode: 'implicit'
         # the plugin gates access on the `groups` claim (RoleClaim=groups,
         # Roles/AdminRoles=homebase-admins); the scope is requested via the
         # plugin's "Request Additional Scopes: groups"
