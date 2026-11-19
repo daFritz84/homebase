@@ -238,8 +238,10 @@ adguard.sseifried.link {
 # directly — HA validates its own tokens; there is no wall, so the old
 # @companion UA matcher and @bearer handle (bypasses that existed only to
 # dodge the wall) are gone, and the "Companion UA spoofing" residual risk is
-# retired (nothing left to evade). HA's own login form stays enabled as
-# break-glass (/?skip_oidc_redirect=true).
+# retired (nothing left to evade). OIDC-only login (2026-11-19): HA's local
+# password form is removed (auth_providers in configuration.yaml); break-glass is
+# the trusted_networks user picker at direct http://127.0.0.1:8123 from the host
+# (this proxy's XFF carries the client IP, so the domain path is OIDC-only).
 homeassistant.sseifried.link {
 	import tls
 	reverse_proxy host.containers.internal:8123

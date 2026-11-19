@@ -4,9 +4,11 @@
 # (feed auth, device tokens) per request and can never pass a forward_auth cookie wall —
 # BookOrbit's own auth-proxy docs document the failure (navidrome/jellyfin/stirling
 # doctrine). BookOrbit is a native Authelia OIDC client (stirling/HA pattern): browser
-# login redirects to Authelia (SSO), the app's password form stays break-glass
-# (DISABLE_LOCAL_AUTH stays false). LAN/VPN-only exposure via AdGuard split DNS — NEVER
-# add bookorbit.sseifried.link to cloudflared/config.yml.
+# login redirects to Authelia (SSO); the app's password form is DISABLED
+# (DISABLE_LOCAL_AUTH=true, user decision 2026-11-19 — OIDC-only login; recovery =
+# flip to false + force-recreate, requires a superuser linked to the authelia
+# provider, see docs/services.md "BookOrbit SSO"). LAN/VPN-only exposure via AdGuard
+# split DNS — NEVER add bookorbit.sseifried.link to cloudflared/config.yml.
 # Secrets come from .env.secret (gitignored, 0600, provisioned by
 # provision-bookorbit-secrets.sh) via env_file — no ${VAR:?} interpolation, so
 # `docker compose config` passes with a touched .env.secret (CI).
@@ -42,6 +44,13 @@ services:
       # The OIDC issuer (authelia.sseifried.link) resolves to the LAN IP from the
       # server — private-address discovery needs this flag (docs env table).
       OIDC_ALLOW_LOCAL_ISSUERS: "true"
+      # OIDC-only login (user decision 2026-11-19): removes and rejects password
+      # sign-in (login form gone; registration/password changes/resets rejected).
+      # Upstream refuses to start without an active superuser linked to an enabled
+      # provider — precondition verified before enabling (docs/services.md).
+      # Recovery: "false" + force-recreate. OPDS/KOReader/Kobo use dedicated
+      # credentials, proven by probes (docs/services.md, "BookOrbit SSO").
+      DISABLE_LOCAL_AUTH: "true"
       # Pinned explicitly (upstream default true): the root entrypoint repairs
       # /data ownership to PUID/PGID at startup — the header comment's ownership
       # claim depends on this, so it must not ride on an unpinned default.

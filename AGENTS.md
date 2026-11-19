@@ -75,12 +75,22 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
   tracked files; never print them.
 - Authelia down = walled apps (AdGuard UI, VictoriaMetrics UI, Alertmanager UI, Navidrome web UI,
   Wanderer via the tunnel `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed
-  `/rest/*`). Jellyfin is a native OIDC client (SSO-Auth plugin), not walled: it keeps
-  serving, only its SSO login redirect fails (break-glass: local admin login).
-  Grafana is a native OIDC client, not walled: it keeps serving, only its login redirect fails
-  (break-glass: admin password login).
-  HA is a native OIDC client, not walled:
-  it keeps serving, only its login redirect fails (break-glass `?skip_oidc_redirect=true`).
+  `/rest/*`). OIDC-only login (user decision 2026-11-19): the native OIDC clients expose **no**
+  local login form; Authelia-down web-login recovery = SSH (shell is the root of trust):
+  Jellyfin keeps serving, only its SSO login redirect fails (break-glass:
+  `podman exec jellyfin_jellyfin_1 /usr/lib/jellyfin/bin/jellyfin --reset-password` — resets the
+  admin password and restores the default auth provider; the local form is dead-ended by the
+  SSO provider switch + hidden via CSS, Quick Connect disabled).
+  Grafana keeps serving, only its login redirect fails (break-glass: flip
+  `GF_AUTH_DISABLE_LOGIN_FORM` to `"false"` + `podman-compose up -d --force-recreate grafana`,
+  log in with the Bitwarden `grafana-admin-password`; last resort `grafana cli admin
+  reset-admin-password`).
+  HA keeps serving, only its login redirect fails (break-glass: direct
+  `http://127.0.0.1:8123` from the host → passwordless `trusted_networks` user picker; the
+  domain path from the host does NOT auto-login — Caddy's XFF carries the host's LAN IP).
+  BookOrbit: flip `DISABLE_LOCAL_AUTH` to `"false"` + force-recreate (needs a superuser with a
+  local password). Wanderer: re-enable the users-collection password method in the PocketBase
+  admin UI (superuser keeps its password). Stirling PDF keeps `/login?all` (no removal flag).
   Cockpit, Homepage, VPN, SSH are break-glass.
 - Update-coupling gotchas (Cloudflare plugin pin in `caddy/Dockerfile`, `caddy-proxy` CIDR ↔
   `trusted_proxies static` in `caddy/Caddyfile`; Caddy's pinned `ipv4_address` 10.89.0.200 ↔
