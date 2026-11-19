@@ -1491,9 +1491,14 @@ OFFLINE (network), plus a `prometheusmetric` widget for pools online + max
 disk temp (0 when off). Grafana `homebase-network` gained a TrueNAS-state
 stat, a Chassis-power (IPMI) stat, and a TrueNAS-probe status-history
 timeline. Alerts: `EndpointDown` + `TrueNASGraphiteStale` + `TrueNASStatsStale`
-are suppressed while the chassis is off (planned shutdown);
-`TrueNASUnexpectedPowerLoss` fires on chassis-off (expected when planned, a
-power cut when not), `TrueNASDown` on chassis-on/network-down.
+are suppressed while the chassis is off (planned shutdown); `TrueNASDown` on
+chassis-on/network-down. Chassis-off itself is deliberately NOT alerted
+(`TrueNASUnexpectedPowerLoss` removed 2026-11-19): state 0 cannot tell a
+planned shutdown from a power cut (the BMC stays alive on standby power in
+both), so a chassis-off page fires on every planned shutdown — and the box is
+powered down regularly. The OFFLINE (intended) state is visible on the
+homepage card and the Grafana stat; pool damage from a hard shutdown
+surfaces as `TrueNASPoolNotOnline`.
 
 Firewall (the NAS PUSHes to the public zone; carbon has no auth, so the rule
 is source-restricted to the NAS — RustDesk `--add-port` precedent):

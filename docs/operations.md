@@ -761,7 +761,7 @@ Notes:
     adjust `export-truenas-stats.sh` if the REST endpoints move.
   - **TrueNAS chassis power-state changes break offline discrimination**
     (`homebase:truenas_state`, homepage OFFLINE display, the suppression +
-    `TrueNASUnexpectedPowerLoss`/`TrueNASDown` alerts): the rule keys off
+    `TrueNASDown` alert): the rule keys off
     `ipmi_chassis_power_state` (plain gauge, 1=on/0=off, no labels — verified
     2026-11-18). A BMC firmware update can change that gauge's semantics;
     probe it (`podman exec monitoring_ipmi-exporter_1 wget -q -O -
