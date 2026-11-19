@@ -200,7 +200,7 @@ identity_providers:
         grant_types: ['authorization_code']
         response_types: ['code']
         # Spring Security authenticates at the token endpoint with HTTP Basic
-        # (its default; homeassistant/wanderer use post)
+        # (its default; homeassistant uses post, wanderer/PocketBase basic)
         token_endpoint_auth_method: 'client_secret_basic'
       - client_id: 'bookorbit'
         client_name: 'BookOrbit'
@@ -281,9 +281,17 @@ identity_providers:
           - 'https://wanderer.sseifried.link/login/redirect'
         grant_types: ['authorization_code']
         response_types: ['code']
-        # PocketBase authenticates at the token endpoint with POST body
-        # credentials (x/oauth2 default)
-        token_endpoint_auth_method: 'client_secret_post'
+        # PocketBase authenticates at the token endpoint with HTTP Basic
+        # (client_secret_basic) — verified via the Authelia log (the
+        # cloudflare-access precedent: "request ... using 'client_secret_basic',
+        # client configured for 'client_secret_post'"). PocketBase's OIDC
+        # provider sets its token-endpoint auth style from the discovery doc's
+        # token_endpoint_auth_methods_supported (Authelia advertises basic), NOT
+        # the x/oauth2 AuthStyleInParams (POST body) default the earlier comment
+        # assumed. Authelia is lenient — it authenticates the client via the
+        # arriving method and logs the mismatch as a warning — so SSO login
+        # worked throughout; pinning the observed method removes the warning.
+        token_endpoint_auth_method: 'client_secret_basic'
       - client_id: 'cloudflare-access'
         client_name: 'Cloudflare Access'
         # argon2 digest injected from .env.secret by the template filter
