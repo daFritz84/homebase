@@ -452,9 +452,13 @@ podman run -d --rm --name pb-admin-proxy --network wanderer-internal \
   `sub` claim), attach that credential (auth-method `oidc` + Provider ID)
   to your EXISTING account, delete the fresh account. Your trails stay
   on the old account.
-- **Optional:** disable PocketBase password auth (users → Options →
-  Identity/Password toggle) once SSO works — keep it as break-glass if
-  Authelia-down app access matters.
+- **Password auth disabled (user decision 2026-11-19, OIDC-only):** the
+  `users` collection's Identity/Password (token) auth method is OFF — the
+  login page shows only the Authelia button. Recovery: re-enable the method
+  in the PocketBase admin UI (socat proxy above). The **superuser**
+  (`admin@sseifried.link`, separate collection, upserted from `.env.secret`
+  at every container start) keeps its password, so the admin UI — and the
+  toggle — stay reachable over SSH = break-glass.
 
 ### Meilisearch upgrades
 
@@ -636,9 +640,12 @@ a unit restart does NOT re-read env). Then in Jellyfin:
     - **Disable Pushed Authorization ✓** (required — see coupling note)
     - Roles: `homebase-admins` · Admin Roles: `homebase-admins`
     - Role Claim: `groups` · Request Additional Scopes: `groups`
-    - Set default username claim: `preferred_username` (maps the LDAP uid
-      `sseifried` to the Jellyfin username) · Scheme Override: `https`
-    - Save.
+     - Set default username claim: `preferred_username` (maps the LDAP uid
+       `sseifried` to the Jellyfin username) · Scheme Override: `https`
+     - Default Provider: `authelia` (OIDC-only, 2026-11-19 — after a successful
+       SSO login the plugin assigns the user's authentication provider to
+       SSO-Auth, so the local password form can no longer authenticate them)
+     - Save.
 4. Log in at `https://jellyfin.sseifried.link/sso/OID/start/authelia` (the
    plugin's start URL; the redirect URI registered in Authelia is
    `/sso/OID/redirect/authelia`). Add a login-page button per the plugin README.
@@ -659,9 +666,35 @@ the plugin tracks a Jellyfin server version (Authelia's guide is written for
 
 On every Jellyfin image bump, back up `jellyfin/data/` first (forward-only DB
 migration), confirm the plugin supports the new server, and re-test SSO login.
-If the plugin lags the server, SSO breaks and the local admin login is the
-break-glass (the plugin gates only the browser SSO path; a local account with a
-password still works).
+If the plugin lags the server, SSO breaks and the CLI reset is the break-glass
+(OIDC-only, 2026-11-19 — the local form is dead-ended, see below).
+
+**OIDC-only login (user decision 2026-11-19):** the SSO-Auth plugin has **no**
+"disable local login" flag (verified against the 4.x config schema; the project
+is archived), so the local form is neutralized in layers, all stored under
+`jellyfin/data/` (gitignored, covered by `backup-jellyfin-data.sh`):
+
+1. **Provider `DefaultProvider: authelia`** (above) — every SSO login switches
+   the account's auth provider to SSO-Auth.
+2. **Admin account switched:** log in once via the Authelia button as the admin
+   (linked by canonical username) — the admin moves to the SSO provider, so the
+   local password form authenticates **nobody**.
+3. **Quick Connect disabled** (Dashboard → Security) — the PIN-based local
+   login path is not covered by the CSS.
+4. **Custom CSS** (Dashboard → General → Branding → Custom CSS) hides the local
+   user list + password form; the Authelia button stays visible. Cosmetic only
+   — the form is a dead end, not removed.
+
+**Break-glass (tested before enabling):**
+`podman exec jellyfin_jellyfin_1 /usr/lib/jellyfin/bin/jellyfin --reset-password
+--datadir /config/data --cachedir /config/cache` — resets the admin password
+**and** restores the default auth provider, bringing the local form back. The
+provider-restore behavior must be re-probed on every major image bump (the
+upstream CLI implementation was refactored after 10.x; probe `--help` first).
+The plugin `Unregister` endpoint (`POST /sso/Unregister/<username>` with body
+`"Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider"`, admin
+API key) is the second recovery path. The reset password lands in Bitwarden
+(`jellyfin-admin-password`).
 
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
@@ -874,7 +907,10 @@ with discovery, clientid `stirling-pdf`, the RAW client secret from
 (`sseifried`) to the local username; `autoCreateUser` creates the account on
 first login. `loginMethod=all` keeps the app's password form reachable at
 `/login?all` (break-glass), `ssoAutoLogin=true` sends browsers straight to
-Authelia — one portal login end-to-end. No `access_control` rule: rules
+Authelia — one portal login end-to-end. Stirling is the documented **exception**
+to the OIDC-only doctrine (2026-11-19): the app has no flag to remove the form
+(`loginMethod=oauth2` hides it by default but `/login?all` stays reachable), so
+the hidden form remains the break-glass. No `access_control` rule: rules
 apply only to walled (forward-auth) apps.
 
 **Root entrypoint, app drops to uid 1000 — NO `user:` directive:** the
@@ -1180,8 +1216,18 @@ from the server and the app's discovery refuses private addresses without
 the flag (the app reaches :443 through the firewalld-opened port, stirling
 precedent). Auto-provision creates accounts on first login; **Allow local
 account linking** links the OIDC identity to the existing local admin by
-`preferred_username` (`sseifried`). The app's password form stays
-break-glass (`DISABLE_LOCAL_AUTH` stays false). No `access_control` rule:
+`preferred_username` (`sseifried`). OIDC-only login (user decision 2026-11-19):
+`DISABLE_LOCAL_AUTH=true` in `compose.yaml` removes and rejects password
+sign-in (login form gone; registration, password changes and resets rejected).
+**Precondition (upstream-enforced):** BookOrbit refuses to start without an
+active **superuser** linked to an enabled provider — administrator-by-permission
+is not enough — so verify the linked superuser before enabling, else the
+container crash-loops. **Probes required after enabling:** OPDS feed fetch with
+credentials, KOReader sync, Kobo sync — upstream rejects password login
+server-side, so if any client authenticates with the account password it
+breaks (the app's dedicated KOReader/Kobo credentials are the expected path).
+Recovery: flip to `"false"` + force-recreate (returns for accounts that still
+have a local password). No `access_control` rule:
 rules apply only to walled (forward-auth) apps.
 
 Troubleshooting:
@@ -1276,7 +1322,13 @@ without it), scopes `openid profile email groups`, role mapping
 claims_policy hydrates `groups` into the **ID token** (4.39's minimal ID token
 has scope claims only on UserInfo; Grafana's JMESPath reads the ID token, so
 without the policy the login lands as org Viewer — observed 2026-11-15);
-**no wall**, password login stays break-glass. VictoriaMetrics (`metrics.sseifried.link`) and
+**no wall**, and OIDC-only login (user decision 2026-11-19):
+`GF_AUTH_DISABLE_LOGIN_FORM=true` + `GF_AUTH_DISABLE_SIGNUP_MENU=true` hide the
+password form and sign-up UI — Authelia is the only login. Break-glass: flip the
+flag to `"false"` + `podman-compose up -d --force-recreate grafana`, log in with
+the Bitwarden `grafana-admin-password` (stays in Bitwarden, the env value only
+creates the initial admin); last resort `podman exec monitoring_grafana_1
+grafana cli admin reset-admin-password <new>`. VictoriaMetrics (`metrics.sseifried.link`) and
 Alertmanager (`alerts.sseifried.link`) have **no OIDC** → `forward_auth` wall
 (`two_factor`, `group:homebase-admins`, the AdGuard pattern). `metrics.`,
 `grafana.`, `alerts.` are absent from `cloudflared/config.yml` — **never add
@@ -1903,16 +1955,16 @@ Authelia wall is stacked on a native OIDC app.
 | Service | Protection | Notes |
 | --- | --- | --- |
 | homepage | native OIDC | built-in gate → `homepage` client; no refresh grant (refresh forces the consent page) — silent re-auth at the 1h access-token lifespan, no 2FA prompt while the Authelia session lives |
-| homeassistant | native OIDC | hass-oidc-auth, roles → homebase-admins |
-| stirling | native OIDC | Spring Security SSO; REST API keys are per-request (no wall) |
-| bookorbit | native OIDC | in-app provider; OPDS/device creds per-request (no wall) |
-| grafana | native OIDC | generic_oauth → `grafana` client; groups→Admin role |
+| homeassistant | native OIDC | hass-oidc-auth, roles → homebase-admins; local form removed (OIDC-only), loopback picker break-glass |
+| stirling | native OIDC | Spring Security SSO; REST API keys are per-request (no wall); `/login?all` kept — no removal flag (documented exception) |
+| bookorbit | native OIDC | in-app provider; OPDS/device creds per-request (no wall); password sign-in rejected (`DISABLE_LOCAL_AUTH=true`) |
+| grafana | native OIDC | generic_oauth → `grafana` client; groups→Admin role; login form disabled (`GF_AUTH_DISABLE_LOGIN_FORM`) |
 | adguard | wall | two_factor + homebase-admins |
 | metrics (VictoriaMetrics) | wall | two_factor + homebase-admins |
 | alerts (Alertmanager) | wall | two_factor + homebase-admins |
 | navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
-| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.) |
-| wanderer (LAN/VPN) | native OIDC | no wall on `:443` |
+| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.); local form dead-ended (OIDC-only: SSO provider switch + CSS, Quick Connect off), CLI `--reset-password` break-glass |
+| wanderer (LAN/VPN) | native OIDC | no wall on `:443`; users-collection password method OFF (OIDC-only), PocketBase superuser break-glass |
 | wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
 | authelia | portal | self (ACL-exempt endpoints) |
 | cockpit | none — documented exception | PAM + TOTP, break-glass (explicit user decision) |
@@ -2158,10 +2210,16 @@ ha_oidc_client_secret` in gitignored `secrets.yaml`).
   the flag was **removed** afterwards — the username match bypasses MFA, so
   it stays enabled only for a one-time link. Re-enable it (restart the unit)
   if a future user needs the same one-time link, then remove it again.
-- **HA's own login stays enabled** as break-glass (Companion tokens, direct
-  host access, Authelia down). Backup form:
-  `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`; from the
-  host: `http://127.0.0.1:8123/?skip_oidc_redirect=true`.
+- **OIDC-only login (user decision 2026-11-19):** the local username/password form
+  is **removed** — `homeassistant: auth_providers:` in `configuration.yaml` lists
+  only `trusted_networks` (127.0.0.1/::1) + the OIDC provider (the `homeassistant`
+  provider is gone). Break-glass: direct `http://127.0.0.1:8123` from the host →
+  passwordless `trusted_networks` user picker (host shell = admin, the root of
+  trust). Browsing the **domain** from the host does NOT auto-login: Caddy's
+  `reverse_proxy host.containers.internal:8123` sets `X-Forwarded-For` to the
+  host's LAN IP, not loopback, so trusted_networks does not match. Companion
+  tokens, direct host access and Authelia-down recovery all run through the
+  loopback picker.
 - **Companion app / Bearer-token API clients:** talk to HA directly — HA
   validates its own long-lived access tokens. The old Caddyfile bypasses
   (`@companion` UA matcher, `@bearer` handle) existed only to dodge the
@@ -2173,9 +2231,9 @@ ha_oidc_client_secret` in gitignored `secrets.yaml`).
   via the domain now that nothing walls it.
 - **Exposure change:** HA's login page is reachable by anything that
   resolves the domain (LAN + VPN via split DNS — no change in *who*
-  resolves it). Brute force against the HA form is not covered by
-  Authelia's portal rate limiting; accepted for LAN-only (optional
-  follow-up: `trusted_networks` provider for loopback).
+  resolves it). With the local form removed (OIDC-only, 2026-11-19) there is
+  no HA password surface left to brute-force; the only local surface is the
+  loopback `trusted_networks` picker (host shell = admin, accepted).
 
 **Upgrade procedure (vendored component):** fetch the release zip from the
 upstream releases page → replace the contents of
@@ -2183,16 +2241,17 @@ upstream releases page → replace the contents of
 (the `.gitleaks.toml` allowlist covers this tree, so the diff review is the
 security gate) → commit → restart `podman-compose@homeassistant`. Check
 upstream releases/issues **before bumping the HA core image**: the
-integration injects frontend assets and can break on core updates; HA's
-own login is the fallback.
+integration injects frontend assets and can break on core updates; the loopback
+`trusted_networks` picker is the fallback (host shell = admin).
 
 ### Break-glass
 
 Authelia down = walled apps (AdGuard UI, Wanderer) unreachable (502).
 Home Assistant keeps serving (native OIDC client, not walled) — only its
 login redirect to Authelia fails; existing HA sessions keep working, and
-the break-glass form is `http://127.0.0.1:8123/?skip_oidc_redirect=true`
-from the host. Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
+the break-glass is the passwordless `trusted_networks` user picker at direct
+`http://127.0.0.1:8123` from the host (the local password form is removed —
+OIDC-only, 2026-11-19). Cockpit, Homepage, VPN and SSH are unaffected. Recovery: SSH in →
 `systemctl --user restart podman-compose@authelia`. Lockout guard: the
 passkey lives in the **Bitwarden vault** and the TOTP secret in a Bitwarden
 item (`authelia-totp-sseifried`), the factor records in the sqlite DB, users
@@ -2202,8 +2261,15 @@ in LDAP — the factors DB and users are covered by `backup-authelia.sh`, the
 `./provision-authelia-secrets.sh` (unlocked vault) to recreate
 `.env.secret`, see [operations.md](operations.md), "Authelia backups".
 Losing both factors → [operations.md](operations.md), "Authelia MFA
-recovery" (SSH CLI reset); SSH, Cockpit and the HA break-glass form stay
+recovery" (SSH CLI reset); SSH, Cockpit and the HA loopback picker stay
 outside Authelia, so lockout is never total.
+
+**OIDC-only doctrine (user decision 2026-11-19):** Authelia-down web-login
+recovery = SSH: env-flip (Grafana `GF_AUTH_DISABLE_LOGIN_FORM`, BookOrbit
+`DISABLE_LOCAL_AUTH`), PocketBase admin UI (Wanderer users-collection password
+method), loopback picker (HA), Jellyfin CLI `--reset-password` (also restores
+the default auth provider). Shell access is the root of trust. Stirling PDF
+keeps `/login?all` — the app has no flag to remove it.
 
 ### 4.39 schema notes
 

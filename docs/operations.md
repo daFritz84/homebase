@@ -253,7 +253,7 @@ every walled-app rule and all four OIDC clients. Recovery paths:
   `~/src/homebase/authelia/config/notifier/notification.txt` — `tail -f` it
   over SSH **before** starting the ceremony, the code TTL is ~2 minutes).
 - **Both factors lost** (e.g. Bitwarden + phone gone): SSH in (always
-  available; Cockpit and the HA break-glass form are unaffected), then from
+  available; Cockpit and the HA loopback picker are unaffected), then from
   `~/src/homebase/authelia`:
 
 ```bash
@@ -547,15 +547,25 @@ Notes:
   `podman logs --tail=50 authelia_authelia_1`; restart the unit. Cockpit,
   Homepage, VPN and SSH are unaffected (not walled). Grafana keeps
   serving (native OIDC client, not walled) — only its login redirect to
-  Authelia fails; break-glass: the admin password login (Bitwarden
-  `grafana-admin-password`). Home Assistant keeps
+  Authelia fails; the password form is disabled (OIDC-only, 2026-11-19), so
+  break-glass = flip `GF_AUTH_DISABLE_LOGIN_FORM` to `"false"` +
+  `podman-compose up -d --force-recreate grafana` in `monitoring/`, log in with
+  the Bitwarden `grafana-admin-password`; last resort `podman exec
+  monitoring_grafana_1 grafana cli admin reset-admin-password <new>`.
+  Home Assistant keeps
   serving (native OIDC client, not walled) — only its login redirect to
-  Authelia fails; existing HA sessions keep working, break-glass form:
-  `http://127.0.0.1:8123/?skip_oidc_redirect=true` from the host.
+  Authelia fails; existing HA sessions keep working, break-glass = the
+  passwordless `trusted_networks` user picker at direct
+  `http://127.0.0.1:8123` from the host (the local password form is removed;
+  the domain path from the host does NOT auto-login — Caddy's XFF carries the
+  host's LAN IP).
   Jellyfin is a native OIDC client (SSO-Auth plugin), not walled — it keeps
-  serving; only its SSO login redirect to Authelia fails. Break-glass: the
-  local admin login (a password account) still works — the plugin gates only
-  the browser SSO path.
+  serving; only its SSO login redirect to Authelia fails. The local form is
+  dead-ended (OIDC-only, 2026-11-19): break-glass = `podman exec
+  jellyfin_jellyfin_1 /usr/lib/jellyfin/bin/jellyfin --reset-password
+  --datadir /config/data --cachedir /config/cache` — resets the admin password
+  and restores the default auth provider (new password → Bitwarden
+  `jellyfin-admin-password`).
   Navidrome's Subsonic playback is unaffected (bypassed `/rest/*` path);
   only its web UI 502s. Wanderer's LAN path (native OIDC) keeps serving,
   only its login redirect fails.
@@ -602,8 +612,9 @@ Notes:
   the new core (it injects frontend assets). Check upstream releases/issues,
   bump the vendored zip per the upgrade procedure in
   [services.md](services.md), "HA SSO (hass-oidc-auth)". Fallback meanwhile:
-  HA's own login form — `http://127.0.0.1:8123/?skip_oidc_redirect=true`
-  from the host, or `https://homeassistant.sseifried.link/?skip_oidc_redirect=true`.
+  the passwordless `trusted_networks` user picker at direct
+  `http://127.0.0.1:8123` from the host (the local password form is removed —
+  OIDC-only, 2026-11-19).
 - **Portal login: 49 Invalid Credentials for every user** — the directory's
   `userPassword` hashes were rendered with the openldap image's
   `slappasswd`, whose `{SSHA}` payload slapd 2.4.57 rejects on simple bind
