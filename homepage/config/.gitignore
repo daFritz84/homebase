@@ -1,1 +1,5 @@
 logs/
+# Written by the homepage UI on first settings visit (stock all-comment
+# boilerplate). Homepage has no docker socket mount (compose.yaml) — the
+# docker provider is never configured, so this file carries no state.
+docker.yaml
