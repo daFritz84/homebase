@@ -679,22 +679,32 @@ is archived), so the local form is neutralized in layers, all stored under
 2. **Admin account switched:** log in once via the Authelia button as the admin
    (linked by canonical username) — the admin moves to the SSO provider, so the
    local password form authenticates **nobody**.
-3. **Quick Connect disabled** (Dashboard → Security) — the PIN-based local
-   login path is not covered by the CSS.
-4. **Custom CSS** (Dashboard → General → Branding → Custom CSS) hides the local
-   user list + password form; the Authelia button stays visible. Cosmetic only
-   — the form is a dead end, not removed.
+3. **Quick Connect disabled** — set `QuickConnectAvailable=false` in
+   `jellyfin/data/config/system.xml` with the server stopped (the server
+   rewrites the file on shutdown, so edit only while stopped). In 12.x this is
+   the **only** QuickConnect toggle: `QuickConnectEnabled` was removed
+   (`QuickConnectManager.IsEnabled => QuickConnectAvailable`), and the
+   Dashboard toggle no longer exists. The PIN-based local login path is not
+   covered by the CSS.
+4. **Custom CSS** (`jellyfin/data/config/branding.xml` → `CustomCss`, server
+   stopped) hides the local user list + manual-login form; the Authelia button
+   stays visible. 12.x DOM selectors: `.visualLoginForm`, `.btnManual`,
+   `.btnForgotPassword`, `.manualLoginForm` (the 10.x `#selectUserPage` /
+   `#manualLoginSection` IDs are gone). Cosmetic only — the form is a dead
+   end, not removed.
 
-**Break-glass (tested before enabling):**
-`podman exec jellyfin_jellyfin_1 /usr/lib/jellyfin/bin/jellyfin --reset-password
---datadir /config/data --cachedir /config/cache` — resets the admin password
-**and** restores the default auth provider, bringing the local form back. The
-provider-restore behavior must be re-probed on every major image bump (the
-upstream CLI implementation was refactored after 10.x; probe `--help` first).
+**Break-glass (test before relying on it):**
+`podman exec -it jellyfin_jellyfin_1 /jellyfin/jellyfin --mode SeedSystem
+-d /config/data -C /cache -c /config/config` **with the unit stopped** (SQLite
+lock). 12.x **removed `--reset-password`** (verified against the 12.4 image:
+binary `/jellyfin/jellyfin`, no such option in `StartupOptions.cs`);
+`--mode SeedSystem` runs the DB seed (first-user creation) regardless of
+`IsStartupWizardCompleted` and prompts interactively. Its exact effect on an
+existing admin (password reset vs. seed refusal) is **unverified — probe it**
+(new password → Bitwarden `jellyfin-admin-password`).
 The plugin `Unregister` endpoint (`POST /sso/Unregister/<username>` with body
 `"Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider"`, admin
-API key) is the second recovery path. The reset password lands in Bitwarden
-(`jellyfin-admin-password`).
+API key) is the second recovery path.
 
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
@@ -1963,7 +1973,7 @@ Authelia wall is stacked on a native OIDC app.
 | metrics (VictoriaMetrics) | wall | two_factor + homebase-admins |
 | alerts (Alertmanager) | wall | two_factor + homebase-admins |
 | navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
-| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.); local form dead-ended (OIDC-only: SSO provider switch + CSS, Quick Connect off), CLI `--reset-password` break-glass |
+| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.); local form dead-ended (OIDC-only: SSO provider switch + CSS, Quick Connect off), CLI `--mode SeedSystem` break-glass |
 | wanderer (LAN/VPN) | native OIDC | no wall on `:443`; users-collection password method OFF (OIDC-only), PocketBase superuser break-glass |
 | wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
 | authelia | portal | self (ACL-exempt endpoints) |
@@ -2267,8 +2277,8 @@ outside Authelia, so lockout is never total.
 **OIDC-only doctrine (user decision 2026-11-19):** Authelia-down web-login
 recovery = SSH: env-flip (Grafana `GF_AUTH_DISABLE_LOGIN_FORM`, BookOrbit
 `DISABLE_LOCAL_AUTH`), PocketBase admin UI (Wanderer users-collection password
-method), loopback picker (HA), Jellyfin CLI `--reset-password` (also restores
-the default auth provider). Shell access is the root of trust. Stirling PDF
+method), loopback picker (HA), Jellyfin CLI `--mode SeedSystem` (re-seeds the
+admin; 12.x removed `--reset-password`). Shell access is the root of trust. Stirling PDF
 keeps `/login?all` — the app has no flag to remove it.
 
 ### 4.39 schema notes
