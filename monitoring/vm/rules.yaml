@@ -27,7 +27,9 @@
 #
 # Each leg is wrapped in max() to strip labels (so `or` matches a single
 # series) and label_set adds the stable name="truenas" label that the alert
-# expressions match on. ipmi_up is per-collector and dcmi is failing, so the
+# expressions match on. ipmi_up is per-collector and dcmi is removed (the
+# exporter's freeipmi 1.6.15 lacks --get-power-reading, see docs/services.md),
+# so the
 # -1 leg uses max(ipmi_up{...}) (BMC reachable = any collector answers).
 #
 # `or` picks the first non-empty leg: probe up wins; probe down + chassis off

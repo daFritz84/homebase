@@ -1587,9 +1587,15 @@ Bitwarden `bmc-ipmi` (username + password fields) → rendered to
 the v2.8 widget list) reading `ipmi_up` / max temp / min fan from VM. The
 `chassis` collector's `ipmi_chassis_power_state` gauge (1=on/0=off, no labels)
 is consumed by the TrueNAS offline-state recording rule (see the TrueNAS
-subsection above); `ipmi_up` is per-collector (`{collector=...}`) and `dcmi`
-is failing on this BMC, so the rule uses `max(ipmi_up{...})` for BMC
-reachability.
+subsection above); `ipmi_up` is per-collector (`{collector=...}`), so the
+rule uses `max(ipmi_up{...})` for BMC reachability. The `dcmi` collector is
+**removed** from the module (2026-11-19): the freeipmi 1.6.15 bundled in the
+ipmi-exporter v1.10.1 image has no `--get-power-reading` option
+(`ipmi-dcmi --usage` lists no such flag), so it failed with a session
+timeout on every scrape since first deploy — the BMC itself answers fine
+(`ipmi-sensors` over LANplus returns readings; sensors/chassis/sel all
+`ipmi_up=1`). Power-draw wattage is therefore not collected; if ever
+wanted, it needs an exporter image with newer freeipmi.
 
 **Probes:** `blackbox_tcp` gained `192.168.178.1:49000`, `192.168.178.58:443`,
 `192.168.178.190:623` (no ICMP — rootless has no CAP_NET_RAW). caddy-proxy
