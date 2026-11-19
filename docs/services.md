@@ -693,18 +693,21 @@ is archived), so the local form is neutralized in layers, all stored under
    `#manualLoginSection` IDs are gone). Cosmetic only — the form is a dead
    end, not removed.
 
-**Break-glass (test before relying on it):**
-`podman exec -it jellyfin_jellyfin_1 /jellyfin/jellyfin --mode SeedSystem
--d /config/data -C /cache -c /config/config` **with the unit stopped** (SQLite
-lock). 12.x **removed `--reset-password`** (verified against the 12.4 image:
-binary `/jellyfin/jellyfin`, no such option in `StartupOptions.cs`);
-`--mode SeedSystem` runs the DB seed (first-user creation) regardless of
-`IsStartupWizardCompleted` and prompts interactively. Its exact effect on an
-existing admin (password reset vs. seed refusal) is **unverified — probe it**
-(new password → Bitwarden `jellyfin-admin-password`).
-The plugin `Unregister` endpoint (`POST /sso/Unregister/<username>` with body
-`"Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider"`, admin
-API key) is the second recovery path.
+**Break-glass (verified 2026-11-19 on 12.4.0):**
+12.x **removed `--reset-password`** (binary `/jellyfin/jellyfin`, no such
+option in `StartupOptions.cs`), and `--mode SeedSystem` is **not** a password
+reset — it runs the DB seed + EF migrations, loads plugins, and exits (no
+interactive prompt; it auto-backs the DB up to `data/data/SQLiteBackups/`
+first). The working recovery is a SQL edit **with the unit stopped**:
+`UPDATE Users SET AuthenticationProviderId='Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider',
+EnableLocalPassword=1 WHERE UserName='sseifried'` (python3 `sqlite3` on
+`data/data/jellyfin.db`; the password hash is untouched — the local form
+returns and authenticates with the Bitwarden `jellyfin-admin-password`).
+Fallback: drop `<IsStartupWizardCompleted>` from `system.xml` → the web
+wizard creates a fresh admin. The plugin `Unregister` endpoint
+(`POST /sso/Unregister/<username>` with body
+`"Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider"`,
+admin API key) is the second recovery path (needs an admin API key).
 
 **Runs as root, on purpose (no `user:` directive, unlike navidrome):** the
 official image has an empty `Config.User` (probe:
@@ -1973,7 +1976,7 @@ Authelia wall is stacked on a native OIDC app.
 | metrics (VictoriaMetrics) | wall | two_factor + homebase-admins |
 | alerts (Alertmanager) | wall | two_factor + homebase-admins |
 | navidrome | wall + ExtAuth header SSO | single login (Remote-User auto-login, trusted source = Caddy pinned IP); `/rest/*` bypassed — Subsonic per-request auth at the app |
-| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.); local form dead-ended (OIDC-only: SSO provider switch + CSS, Quick Connect off), CLI `--mode SeedSystem` break-glass |
+| jellyfin | native OIDC (SSO-Auth plugin) | plugin runs the OIDC flow in the browser, gates on groups→homebase-admins; no wall; API/mobile clients authenticate per request (X-Emby-Token etc.); local form dead-ended (OIDC-only: SSO provider switch + CSS, Quick Connect off), SQL provider-flip break-glass |
 | wanderer (LAN/VPN) | native OIDC | no wall on `:443`; users-collection password method OFF (OIDC-only), PocketBase superuser break-glass |
 | wanderer (internet) | wall + native OIDC | `:8443` tunnel listener — the one documented double layer: the wall is the only admins-only edge enforcement for the public path (OIDC clients cannot express group rules) |
 | authelia | portal | self (ACL-exempt endpoints) |
@@ -2278,7 +2281,8 @@ outside Authelia, so lockout is never total.
 recovery = SSH: env-flip (Grafana `GF_AUTH_DISABLE_LOGIN_FORM`, BookOrbit
 `DISABLE_LOCAL_AUTH`), PocketBase admin UI (Wanderer users-collection password
 method), loopback picker (HA), Jellyfin CLI `--mode SeedSystem` (re-seeds the
-admin; 12.x removed `--reset-password`). Shell access is the root of trust. Stirling PDF
+admin via SQL provider-flip; 12.x removed `--reset-password`, SeedSystem is a
+migration runner). Shell access is the root of trust. Stirling PDF
 keeps `/login?all` — the app has no flag to remove it.
 
 ### 4.39 schema notes

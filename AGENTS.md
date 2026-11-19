@@ -77,11 +77,12 @@ gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
   Wanderer via the tunnel `:8443` listener) 502; Navidrome Subsonic playback unaffected (bypassed
   `/rest/*`). OIDC-only login (user decision 2026-11-19): the native OIDC clients expose **no**
   local login form; Authelia-down web-login recovery = SSH (shell is the root of trust):
-  Jellyfin keeps serving, only its SSO login redirect fails (break-glass:
-  `podman exec -it jellyfin_jellyfin_1 /jellyfin/jellyfin --mode SeedSystem -d /config/data
-  -C /cache -c /config/config` with the unit stopped — 12.x removed `--reset-password`;
-  SeedSystem re-seeds the admin interactively; the local form is dead-ended by the
-  SSO provider switch + hidden via CSS, Quick Connect disabled).
+  Jellyfin keeps serving, only its SSO login redirect fails (break-glass: unit stopped,
+  SQL `UPDATE Users SET AuthenticationProviderId='Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider',
+  EnableLocalPassword=1` → local form returns with the Bitwarden password; 12.x removed
+  `--reset-password` and `--mode SeedSystem` is a migration runner, not a reset — verified
+  2026-11-19; the local form is dead-ended by the SSO provider switch + hidden via CSS,
+  Quick Connect disabled).
   Grafana keeps serving, only its login redirect fails (break-glass: flip
   `GF_AUTH_DISABLE_LOGIN_FORM` to `"false"` + `podman-compose up -d --force-recreate grafana`,
   log in with the Bitwarden `grafana-admin-password`; last resort `grafana cli admin
