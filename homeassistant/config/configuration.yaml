@@ -7,6 +7,18 @@ default_config:
 homeassistant:
   external_url: https://homeassistant.sseifried.link
   internal_url: http://192.168.178.249:8123
+  # OIDC-only login (user decision 2026-11-19): the local username/password form is
+  # being removed; trusted_networks loopback is the break-glass (host shell = admin,
+  # direct http://127.0.0.1:8123 -> passwordless user picker; browsing the domain
+  # from the host does NOT auto-login — Caddy's XFF carries the host's LAN IP, not
+  # loopback). Phase 1 keeps the homeassistant provider until the loopback picker is
+  # proven on the server; phase 2 removes it (see docs/services.md, "HA SSO").
+  auth_providers:
+    - type: trusted_networks
+      trusted_networks:
+        - 127.0.0.1
+        - ::1
+    - type: homeassistant
 
 # HTTP / reverse-proxy config (use_x_forwarded_for, trusted_proxies) is NOT in
 # this file: HA migrated it to .storage/http (UI-managed, gitignored) and now
