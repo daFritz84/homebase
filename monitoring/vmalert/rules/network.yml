@@ -91,20 +91,16 @@ groups:
           description: >-
             export-truenas-stats.sh has not produced fresh metrics for 5m —
             API key revoked by an upgrade? (docs/operations.md)
-      - alert: TrueNASUnexpectedPowerLoss
-        # chassis off + NAS unreachable (homebase:truenas_state == 0): the
-        # BMC saw the chassis go off. Expected during a planned shutdown;
-        # if unplanned this is a power cut / hard shutdown.
-        expr: homebase:truenas_state == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "TrueNAS chassis power off (NAS unreachable)"
-          description: >-
-            BMC reports chassis off while the NAS is unreachable — expected
-            for a planned shutdown; if unplanned, a power cut / hard
-            shutdown (IPMI chassis gauge, monitoring/vm/rules.yaml).
+      # NO chassis-off alert (TrueNASUnexpectedPowerLoss removed 2026-11-19):
+      # homebase:truenas_state == 0 (probe down + chassis off) is the
+      # planned-shutdown state, and a hard power cut leaves the BMC alive on
+      # standby power with the chassis off — state 0 cannot distinguish the
+      # two, so any chassis-off alert pages on every planned shutdown (the
+      # box is powered down regularly). Chassis-off is visible on the homepage
+      # card + Grafana "OFFLINE (intended)" stat; real problems still page:
+      # TrueNASDown (state -1) below, TrueNASPoolNotOnline (pool damage from a
+      # hard shutdown), and the stale alerts' suppression only applies while
+      # the chassis is off.
       - alert: TrueNASDown
         # NAS unreachable with the chassis ON (or BMC state unknown):
         # homebase:truenas_state < 0 (use < 0, not == -1 — MetricsQL negative
