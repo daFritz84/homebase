@@ -307,6 +307,20 @@ This should automatically resolve to a `CNAME` record.
 > Make rewrite changes in the UI **on the server**, then sync the file back to the workstation,
 > review, commit, push (see [operations.md](operations.md)).
 
+#### Per-client filtering exemptions
+
+Some LAN devices break under DNS filtering and must be exempted **entirely** (not via
+domain allowlists). The Roborock S8 is one: filtering its Roborock-cloud domains breaks
+the local handshake with Home Assistant and forces cloud fallback (core integration
+docs — "ensure the vacuum's IP address is entirely exempted from filtering"). Exemption
+pattern (UI, on the server): Clients → Add client → name `roborock-s8`, the Fritzbox
+static IP + MAC → **disable Filtering** for that client (writes a `clients.persistent`
+entry — drift ritual applies). The AdGuard **query log** is the test of the prerequisite
+assumption: the `roborock-s8` client must appear there at all — if it never appears, the
+vacuum's DNS is the Fritzbox, not AdGuard (see "Split DNS" above), and filtering was
+never the cause. See [services.md](services.md) "Roborock S8 (core `roborock`
+integration)".
+
 #### Verification
 
 Run from any LAN client:
@@ -1873,6 +1887,35 @@ commit, push (same ritual as `AdGuardHome.yaml`, see
 [operations.md](operations.md)). `.storage/` and `secrets.yaml` are data, not
 code: they are covered by `./backup-ha-config.sh` (see
 [operations.md](operations.md)).
+
+### Roborock S8 (core `roborock` integration)
+
+The Roborock S8 vacuum runs on the **built-in core `roborock` integration** (introduced
+2023.5, Silver quality, IoT class *Local Polling*) — configured **UI config-flow only**
+(Settings → Devices & Services → Roborock; email + emailed verification code, region
+EU/Auto). No custom_components, no HACS, no Nabu Casa, no `secrets.yaml` entry: the
+config entry + auth token live in `.storage/` (gitignored, covered by
+`./backup-ha-config.sh` — run it after integration changes). The community
+`hass-roborock` integration is **archived upstream** (2025-03) and its `python-roborock`
+library was absorbed into core — do not vendor it.
+
+- **Connectivity:** HA → vacuum TCP `58867` + UDP `58866` (HA is `network_mode: host` →
+  direct LAN unicast, no firewall change); vacuum → Roborock cloud outbound MQTT `8883`.
+  The vacuum needs internet — it blocks its local API when Roborock servers are
+  unreachable. Setup, map data and routines always go through the cloud; commands and
+  polling prefer local.
+- **Hard prerequisites:** Fritzbox static IP for the vacuum (integration docs + repo
+  convention, [host-setup.md](host-setup.md) "Static IP address"), and a persistent
+  AdGuard Home client `roborock-s8` with filtering disabled — DNS filtering breaks the
+  local handshake and forces cloud fallback (see the AdGuard section,
+  "Per-client filtering exemptions").
+- **Polling:** 30 s, no push from the vacuum. The cloud API is rate-limited (built-in
+  limiter; abuse surfaces as an HA repair issue) — never add auto-reload-on-unavailable
+  automations, avoid frequent `roborock.get_vacuum_current_position` calls.
+- **Entities:** vacuum + live map image + dock/consumable sensors; app routines become
+  button entities; zone/goto actions (`roborock.set_vacuum_zoned_cleaning`,
+  `roborock.set_vacuum_goto_position`). Map segments → HA areas via the vacuum entity's
+  gear menu ("Map vacuum segments to areas") to enable `vacuum.clean_area`.
 
 ### USB radios (future toggle)
 
