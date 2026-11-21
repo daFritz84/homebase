@@ -131,7 +131,7 @@
       "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192.168.178.(1:49000|58:443|190:623)\"} == 1)" } ]
     },
     {
-      "type": "statushistory",
+      "type": "status-history",
       "title": "TrueNAS probe (tcp :443)",
       "id": 17,
       "gridPos": { "h": 4, "w": 18, "x": 6, "y": 16 },
