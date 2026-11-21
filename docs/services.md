@@ -1880,8 +1880,11 @@ lives in `.storage/http` (gitignored, covered by `./backup-ha-config.sh`).
 
 - committed: `configuration.yaml`, `scripts.yaml` (the **UI script editor's
   store**, loaded via `script: !include scripts.yaml` — UI edits rewrite it on
-  the server, drift ritual applies); `automations.yaml` + `scenes.yaml` are
-  legacy empty placeholders
+  the server, drift ritual applies), `scenes.yaml` (the **UI scene editor's
+  store**, loaded via `scene: !include scenes.yaml` — same UI-managed pattern and
+  drift ritual as scripts); `automations.yaml` is an empty `[]` placeholder loaded
+  via `automation: !include automations.yaml` for parity with the stock HA default
+  config (UI automations live in `.storage/`, not this file — see below)
 - gitignored: `.storage/` (UI-managed state: integrations, dashboards, users,
   long-lived access tokens, **and the `http:`/trusted_proxies config**) and
   `secrets.yaml` (credentials, referenced via `!secret`)
@@ -1889,10 +1892,15 @@ lives in `.storage/http` (gitignored, covered by `./backup-ha-config.sh`).
 > **YAML domains in 2026.11:** empty `automation:`/`scene:`/`script:` blocks in
 > `configuration.yaml` are silently ignored (verified 2026-11-21 on 2026.11.1:
 > zero log activity, no entities) — the domain config must come from
-> configuration.yaml, e.g. `script: !include scripts.yaml`. The UI script
-> editor stores scripts in `scripts.yaml` (mapping format; **quote the `y`
-> key** — bare `y` is a YAML 1.1 boolean and the UI serializer mangles `y:`
-> into `'true':`, silently breaking the script). Scripts are NOT in `.storage/`.
+> configuration.yaml, e.g. `script: !include scripts.yaml`. The UI **script** and
+> **scene** editors store their entities in `scripts.yaml` / `scenes.yaml`
+> (NOT in `.storage/`), so both files MUST be `!include`d or UI-created entities
+> are silently dropped — scripts use the mapping format (**quote the `y` key** —
+> bare `y` is a YAML 1.1 boolean and the UI serializer mangles `y:` into
+> `'true':`, silently breaking the script). The UI **automation** editor stores
+> automations in `.storage/` (config entries with an `id`), so `automations.yaml`
+> is only for hand-written YAML automations; its `!include` is parity, not a
+> requirement.
 
 UI changes to the committed YAML files rewrite them on the server — sync the
 server files back to the workstation, review, commit, push (same ritual as
