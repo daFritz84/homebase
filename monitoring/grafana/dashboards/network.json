@@ -128,7 +128,7 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 3 } ] } }, "overrides": [] },
-      "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192\\.168\\.178\\.(1:49000|58:443|190:623)\"} == 1)" } ]
+      "targets": [ { "refId": "A", "expr": "count(probe_success{instance=~\"192.168.178.(1:49000|58:443|190:623)\"} == 1)" } ]
     },
     {
       "type": "statushistory",
