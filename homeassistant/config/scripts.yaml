@@ -1,0 +1,18 @@
+# UI script editor store (Einstellungen → Automatisierungen & Szenen → Skripte),
+# loaded via `script: !include scripts.yaml` in configuration.yaml. Mapping
+# format (the UI writes it this way); QUOTE the `y` key — bare y is a YAML 1.1
+# boolean and the UI serializer mangles `y:` into `'true':`, silently breaking
+# the script. UI edits rewrite this file on the server → drift ritual applies.
+roborock_wartungs_position:
+  alias: Roborock Wartungs-Position
+  description: >-
+    Fährt den S8 aus der Dock-Nische hinter dem Sofa hervor in die Raummitte
+    (Pin&Go-Punkt x=24241, y=28511; Dock-Position ist 25500/25500).
+  mode: single
+  sequence:
+    - action: roborock.set_vacuum_goto_position
+      target:
+        entity_id: vacuum.wohnzimmer_roborock_s8
+      data:
+        x: 24241
+        "y": 28511
