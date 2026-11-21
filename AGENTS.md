@@ -58,6 +58,9 @@ ssh chef@192.168.178.249 'cd ~/src/homebase/caddy && podman run --rm --env-file 
 
 gitleaks, compose, shellcheck, yamllint, hadolint and caddy checks run in CI
 (`.github/workflows/ci.yml`) — a red CI is a stop signal.
+yamllint lints only `homepage/config/` and `monitoring/` against the root `.yamllint`
+(line-length max 100 — PromQL/compose lines do not wrap at the default 80); pre-check with
+`yamllint homepage/config/ monitoring/` (auto-discovers `.yamllint`).
 
 ## Hard rules
 
