@@ -1,5 +1,5 @@
 [Unit]
-Description=Run TrueNAS REST exporter every 60s (feeds node_exporter textfile)
+Description=Run TrueNAS JSON-RPC exporter every 60s (feeds node_exporter textfile)
 
 [Timer]
 OnBootSec=60s

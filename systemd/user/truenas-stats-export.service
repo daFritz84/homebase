@@ -1,9 +1,10 @@
 [Unit]
-Description=Export TrueNAS pool state + disk temps (REST) to the node_exporter textfile collector
+Description=Export TrueNAS pool state + disk temps (JSON-RPC WS) to the node_exporter textfile collector
 Documentation=file:///home/chef/src/homebase/docs/services.md
-# GETs /pool + POSTs /disk/temperatures on the middleware API (READONLY key
-# from monitoring/vm/secrets/truenas-api-key) and writes truenas.prom to the
-# node_exporter textfile dir. The graphite stream carries neither signal.
+# Calls pool.query + disk.temperatures over the JSON-RPC 2.0 WebSocket API
+# (READONLY key from monitoring/vm/secrets/truenas-api-key) and writes
+# truenas.prom to the node_exporter textfile dir. The graphite stream carries
+# neither signal. The deprecated REST API is gone in TrueNAS 26.04.
 
 [Service]
 Type=oneshot

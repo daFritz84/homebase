@@ -77,9 +77,9 @@ groups:
             Ultrastar operating spec tops out at 60C; check airflow/fans
             (BMC fan metrics on the BMC row).
       - alert: TrueNASStatsStale
-        # suppressed while the NAS is intentionally off (state == 0): the REST
-        # scrape legitimately stops on a planned shutdown. Fires when the NAS
-        # is supposed to be running (state != 0) and the scrape is stale.
+        # suppressed while the NAS is intentionally off (state == 0): the
+        # JSON-RPC scrape legitimately stops on a planned shutdown. Fires when
+        # the NAS is supposed to be running (state != 0) and the scrape is stale.
         expr: >-
           (time() - truenas_exporter_last_scrape_timestamp > 300)
           and on(name) (homebase:truenas_state != 0)
@@ -87,7 +87,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "TrueNAS REST scrape stale"
+          summary: "TrueNAS JSON-RPC scrape stale"
           description: >-
             export-truenas-stats.sh has not produced fresh metrics for 5m —
             API key revoked by an upgrade? (docs/operations.md)

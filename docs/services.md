@@ -1332,9 +1332,9 @@ textfile collector) every minute. `fritzbox-stats-export.{service,timer}` runs
 uses, verified 2026-11-15; no TR-064 user, no credentials → `fritzbox_*`
 metrics to the same textfile dir) every 60s (the Fritzbox web server throttles
 rapid SOAP). `truenas-stats-export.{service,timer}` runs
-`monitoring/export-truenas-stats.sh` (REST v2.0 compat with the READONLY key:
-`GET /pool` + `POST /disk/temperatures` — the 25.x graphite stream carries
-neither pool state nor disk temps — → `truenas_pool_status` +
+`monitoring/export-truenas-stats.sh` (JSON-RPC 2.0 over WebSocket —
+`pool.query` + `disk.temperatures` with the READONLY key; the 25.x graphite
+stream carries neither pool state nor disk temps — → `truenas_pool_status` +
 `truenas_disk_temperature_celsius` to the same textfile dir) every 60s.
 **Container stats via podman-exporter are NOT
 used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
@@ -1543,12 +1543,20 @@ namespace, probed on the live stream 2026-11-15). The stream carries
 CPU/RAM/net/load/uptime/ARC/disk-ops (`cputemp`, `system_*`, `net_*`,
 `truenas_arcstats_*`, `truenas_disk_stats_*`) but **no pool state and no disk
 temps** (no zfs-pool/smart plugins in the 25.x graphite export) — those two
-safety-critical signals come from the REST v2.0 compat API via
-`export-truenas-stats.sh` (textfile, see "Host processes" above):
-`GET /api/v2.0/pool` (status ONLINE) + `POST /api/v2.0/disk/temperatures`
-(GET is 405; returns `{dev: celsius}`; Ultrastar operating spec tops at 60C —
-the hot-disk alert threshold). The REST API key (Bitwarden `truenas-api-key`,
-READONLY role, Settings → Access → API & Scanning Keys) is now used ONLY by
+safety-critical signals come from the **JSON-RPC 2.0 over WebSocket API** via
+`export-truenas-stats.sh` (textfile, see "Host processes" above): one `wss://
+<host>/api/current` session per run — `auth.login_with_api_key [key]`,
+`pool.query [[]]` (status ONLINE), `disk.temperatures [[], false]` →
+`{dev: celsius}` (Ultrastar operating spec tops at 60C — the hot-disk alert
+threshold). Params are positional **arrays** (named params → `-32600`); the
+WS client is python-stdlib-only (the server has no `websockets` module).
+**Migrated off the REST v2.0 compat API 2026-11-21:** TrueNAS 25.10 warns per
+authentication about the deprecated REST API and **removes it in 26.04** (the
+exporter's 2 calls/run produced ~2700 "deprecated REST API" authentications
+per day from `192.168.178.249`). JSON-RPC is **WebSocket-only** on 25.10.8 —
+HTTP POST to `/api/current` is 405, GET 400 (probed 2026-11-21) — so there is
+no HTTP fallback. The API key (Bitwarden `truenas-api-key`, READONLY role,
+Settings → Access → API & Scanning Keys) is now used ONLY by
 `export-truenas-stats.sh` (rendered to `vm/secrets/truenas-api-key`); the
 homepage card no longer needs it (see the offline-state model below).
 
