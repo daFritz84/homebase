@@ -4,6 +4,15 @@
 # hass-oidc-auth integration — see docs/services.md, "HA SSO (hass-oidc-auth)").
 default_config:
 
+# Scripts domain: 2026.11 does NOT auto-load scripts.yaml from an empty `script:`
+# block (verified 2026-11-21 on 2026.11.1: zero log activity, no entities) — the
+# domain config must come from configuration.yaml. The UI script editor
+# (Einstellungen → Automatisierungen & Szenen → Skripte) writes scripts.yaml
+# (mapping format; quote the `y` key — bare y is a YAML 1.1 boolean and the UI
+# serializer mangles `y:` into `'true':`), so the file is UI-managed: the drift
+# ritual applies (server → workstation → review → commit).
+script: !include scripts.yaml
+
 homeassistant:
   external_url: https://homeassistant.sseifried.link
   internal_url: http://192.168.178.249:8123
