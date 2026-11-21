@@ -1878,17 +1878,28 @@ lives in `.storage/http` (gitignored, covered by `./backup-ha-config.sh`).
 
 `config/` is committed to git (AdGuard drift pattern) — **YAML files only**:
 
-- committed: `configuration.yaml`, `automations.yaml`, `scripts.yaml`, `scenes.yaml`
+- committed: `configuration.yaml`; `automations.yaml` + `scenes.yaml` are **legacy
+  empty files, NOT loaded** (see the 2026.11 note below)
 - gitignored: `.storage/` (UI-managed state: integrations, dashboards, users,
-  long-lived access tokens, **and the `http:`/trusted_proxies config**) and
-  `secrets.yaml` (credentials, referenced via `!secret`)
+  long-lived access tokens, **the `http:`/trusted_proxies config, and — since
+  2026.11 — automations, scenes and scripts**) and `secrets.yaml` (credentials,
+  referenced via `!secret`)
 
-UI changes to the YAML files (YAML-mode automations, YAML dashboards) rewrite
-them on the server — sync the server files back to the workstation, review,
-commit, push (same ritual as `AdGuardHome.yaml`, see
-[operations.md](operations.md)). `.storage/` and `secrets.yaml` are data, not
-code: they are covered by `./backup-ha-config.sh` (see
-[operations.md](operations.md)).
+> **YAML domains removed (2026.11):** HA no longer processes the
+> `automation:`/`scene:`/`script:` blocks in `configuration.yaml` — verified
+> 2026-11-21 on 2026.11.1: the empty blocks produce zero log activity and no
+> entities (the PR #127 block was reverted for this). Automations, scenes and
+> scripts are **UI-managed**, live in `.storage/` (backup-covered), and are
+> edited under Einstellungen → Automatisierungen & Szenen. `scripts.yaml` was
+> deleted 2026-11-21 after the Roborock Wartungs-Position script proved the
+> YAML path dead; the legacy `automations.yaml`/`scenes.yaml` remain only as
+> empty placeholders.
+
+UI changes to the committed YAML files rewrite them on the server — sync the
+server files back to the workstation, review, commit, push (same ritual as
+`AdGuardHome.yaml`, see [operations.md](operations.md)). `.storage/` and
+`secrets.yaml` are data, not code: they are covered by `./backup-ha-config.sh`
+(see [operations.md](operations.md)).
 
 ### Roborock S8 (core `roborock` integration)
 
@@ -1918,6 +1929,12 @@ library was absorbed into core — do not vendor it.
   button entities; zone/goto actions (`roborock.set_vacuum_zoned_cleaning`,
   `roborock.set_vacuum_goto_position`). Map segments → HA areas via the vacuum entity's
   gear menu ("Map vacuum segments to areas") to enable `vacuum.clean_area`.
+- **Wartungs-Position script (UI-managed):** the dock sits in a niche behind the couch;
+  a UI script `script.roborock_maintenance_position` ("Roborock Wartungs-Position")
+  Pin&Goes the S8 out to the room center (`set_vacuum_goto_position` x=24241, y=28511;
+  dock = 25500/25500, captured 2026-11-21 via `get_vacuum_current_position`). Scripts
+  are UI-managed in `.storage/` (see "Config drift" — YAML `script:` is dead in
+  2026.11); dashboard button card runs it.
 
 ### USB radios (future toggle)
 
