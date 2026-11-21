@@ -13,6 +13,20 @@ default_config:
 # ritual applies (server → workstation → review → commit).
 script: !include scripts.yaml
 
+# Scenes domain: the SAME UI-managed store as scripts — the scene editor
+# (Einstellungen → Automatisierungen & Szenen → Szenen) writes scenes.yaml, so an
+# empty `scene:` block is silently ignored and UI-created scenes never load (same
+# bug class as scripts, verified 2026-11-21). The include is required; the drift
+# ritual applies (server → workstation → review → commit).
+scene: !include scenes.yaml
+
+# Automations domain: the UI automation editor stores automations in .storage/
+# (config entries with an `id`), NOT in automations.yaml, so UI automations load
+# via default_config WITHOUT this line. The include is parity with the stock HA
+# default config and only enables hand-written YAML automations; automations.yaml
+# stays an empty `[]` placeholder (no drift ritual — UI edits land in .storage/).
+automation: !include automations.yaml
+
 homeassistant:
   external_url: https://homeassistant.sseifried.link
   internal_url: http://192.168.178.249:8123
