@@ -617,6 +617,23 @@ Notes:
   the passwordless `trusted_networks` user picker at direct
   `http://127.0.0.1:8123` from the host (the local password form is removed —
   OIDC-only, 2026-11-19).
+- **Roborock integration reports cloud fallback / device goes unavailable randomly** —
+  the local handshake (HA → vacuum TCP `58867` + UDP `58866`) is broken. Check in the
+  integration docs' order: (1) the AdGuard Home `roborock-vacuum-a51` exemption — the query log
+  must show the client; if the vacuum never appears there, its DNS is the Fritzbox, not
+  AdGuard (services.md "Split DNS"), so filtering is not the cause; (2) the Fritzbox
+  static IP (a DHCP lease renewal moves the vacuum off the pinned IP); (3) Wi-Fi
+  quality. The vacuum blocks its local API without internet (outbound MQTT `8883`) —
+  cloud fallback during WAN outages is expected, not a bug.
+- **HA repair issue about Roborock cloud rate limiting** — the cloud API is polled too
+  much: frequent integration reloads (auto-reload-on-unavailable automations) and
+  frequent `roborock.get_vacuum_current_position`/map fetches. Remove the reload
+  automation; the built-in limiter self-heals once polling settles. Ignoring it risks
+  an IP ban by Roborock.
+- **Roborock config flow: "invalid or no user agreement"** — the Roborock servers
+  require an accepted user agreement: Roborock app → Profile → About Us → User
+  Agreement & Privacy Policy → **Revoke authorization** → log back in and accept →
+  reload the integration.
 - **Portal login: 49 Invalid Credentials for every user** — the directory's
   `userPassword` hashes were rendered with the openldap image's
   `slappasswd`, whose `{SSHA}` payload slapd 2.4.57 rejects on simple bind
