@@ -619,7 +619,7 @@ Notes:
   OIDC-only, 2026-11-19).
 - **Roborock integration reports cloud fallback / device goes unavailable randomly** —
   the local handshake (HA → vacuum TCP `58867` + UDP `58866`) is broken. Check in the
-  integration docs' order: (1) the AdGuard Home `roborock-s8` exemption — the query log
+  integration docs' order: (1) the AdGuard Home `roborock-vacuum-a51` exemption — the query log
   must show the client; if the vacuum never appears there, its DNS is the Fritzbox, not
   AdGuard (services.md "Split DNS"), so filtering is not the cause; (2) the Fritzbox
   static IP (a DHCP lease renewal moves the vacuum off the pinned IP); (3) Wi-Fi
