@@ -135,7 +135,7 @@
         # against the v2.8.0 source). homebase:truenas_state (recording rule,
         # monitoring/vm/rules.yaml) = 1 UP / 0 OFFLINE (intended, chassis off
         # via IPMI) / -1 OFFLINE (network). Pool + disk-temp numbers come from
-        # the REST textfile exporter (truenas_*), 0 when the NAS is off.
+        # the JSON-RPC textfile exporter (truenas_*), 0 when the NAS is off.
         widgets:
           - type: customapi
             url: >-

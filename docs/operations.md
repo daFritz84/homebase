@@ -763,18 +763,23 @@ Notes:
     `192.168.178.58`, port 2003 tcp+udp — commands in
     [services.md](services.md) "Monitoring → Network devices"; a firewalld
     upgrade/reinstall drops permanent rules? `--list-rich-rules` needs sudo).
-    The homepage TrueNAS card no longer uses the REST API key (the native
+    The homepage TrueNAS card no longer uses the API key (the native
     `truenas` widget was removed — it rendered a raw error when the NAS is
     off; the card now reads VictoriaMetrics, no key). A TrueNAS upgrade
     revoking the key therefore no longer breaks the dashboard; it only
-    affects the REST textfile exporter (see the next bullet).
-  - **TrueNAS REST scrape stale** (`TrueNASStatsStale`, pool/disk alerts stop
-    firing): a TrueNAS upgrade can revoke API keys. Create a new READONLY key,
-    update Bitwarden `truenas-api-key`, re-run
+    affects the JSON-RPC textfile exporter (see the next bullet).
+  - **TrueNAS JSON-RPC scrape stale** (`TrueNASStatsStale`, pool/disk alerts
+    stop firing): a TrueNAS upgrade can revoke API keys. Create a new READONLY
+    key, update Bitwarden `truenas-api-key`, re-run
     `monitoring/provision-monitoring-secrets.sh` (renders
     `vm/secrets/truenas-api-key`, read by `export-truenas-stats.sh` at each
     run — no restart). The homepage card is unaffected (it reads
-    VictoriaMetrics, no key).
+    VictoriaMetrics, no key). The exporter speaks the supported JSON-RPC 2.0
+    over WebSocket API (migrated 2026-11-21 off the deprecated REST API, which
+    TrueNAS **removes in 26.04** — a 26.04 upgrade breaks any REST client,
+    including an old copy of this script). JSON-RPC is WebSocket-only on
+    25.10.8 (HTTP POST `/api/current` → 405, probed 2026-11-21), so a
+    "connection refused/timeout" here is the WS handshake, not an HTTP call.
   - **BMC scrape fails** (`BmcUnreachable`): a BMC firmware update can reset
     users and disable IPMI-over-LAN. Recreate the "monitoring" user
     (Administrator privilege), enable IPMI-over-LAN, update Bitwarden
@@ -787,8 +792,8 @@ Notes:
     -s http://graphite-exporter:9102/metrics | grep '^scale_truenas_'` — VM
     is distroless, caddy has curl) and adjust
     `grafana/dashboards/network.json`; the textfile names
-    (`truenas_pool_status`, `truenas_disk_temperature_celsius`) are ours —
-    adjust `export-truenas-stats.sh` if the REST endpoints move.
+     (`truenas_pool_status`, `truenas_disk_temperature_celsius`) are ours —
+     adjust `export-truenas-stats.sh` if the JSON-RPC methods move.
   - **TrueNAS chassis power-state changes break offline discrimination**
     (`homebase:truenas_state`, homepage OFFLINE display, the suppression +
     `TrueNASDown` alert): the rule keys off

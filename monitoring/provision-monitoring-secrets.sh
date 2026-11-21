@@ -24,12 +24,13 @@ set -euo pipefail
 ##   vm/secrets/truenas-api-key  <- Bitwarden `truenas-api-key` (password
 ##                                  field) — READONLY key read by
 ##                                  export-truenas-stats.sh (pool state + disk
-##                                  temps via the REST v2.0 compat API; the
-##                                  25.x graphite stream carries neither)
+##                                  temps via the JSON-RPC 2.0 WebSocket API;
+##                                  the 25.x graphite stream carries neither.
+##                                  The deprecated REST API is removed in
+##                                  TrueNAS 26.04 — do not go back to it)
 ##
-## The same Bitwarden key also feeds the homepage widget
-## (HOMEPAGE_VAR_TRUENAS_KEY in homepage/.env, provisioned manually per
-## docs/services.md).
+## The homepage TrueNAS card no longer uses this key (the native REST widget
+## was removed; the card reads VictoriaMetrics — see docs/services.md).
 ##
 ## Inputs (Bitwarden password fields; env overrides for testing):
 ##   grafana-admin-password        -> GF_SECURITY_ADMIN_PASSWORD (env override GF_SECURITY_ADMIN_PASSWORD)

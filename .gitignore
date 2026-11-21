@@ -63,7 +63,7 @@ monitoring/data/
 
 # Rendered network-device scrape secrets (Bitwarden -> files, 0600, by
 # provision-monitoring-secrets.sh): the BMC auth (ipmi-exporter config) and
-# the TrueNAS API-key bearer token (VM authorization.credentials_file).
+# the TrueNAS API key (JSON-RPC WebSocket auth.login_with_api_key).
 # Templates/docs are tracked (monitoring/ipmi/ipmi.yml.example).
 monitoring/ipmi/ipmi.yml
 monitoring/vm/secrets/
