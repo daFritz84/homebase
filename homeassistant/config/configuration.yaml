@@ -4,6 +4,15 @@
 # hass-oidc-auth integration — see docs/services.md, "HA SSO (hass-oidc-auth)").
 default_config:
 
+# YAML domains for the committed files (automations.yaml, scenes.yaml, scripts.yaml):
+# default_config does not create config entries for automation/scene/script in this
+# Container install (verified 2026-11-21: absent from .storage/core.config_entries),
+# so the files were ignored. The empty blocks set the domains up and load the YAML
+# files; the UI pages (Automatisierungen & Szenen, Skripte) then list the YAML entities.
+automation:
+scene:
+script:
+
 homeassistant:
   external_url: https://homeassistant.sseifried.link
   internal_url: http://192.168.178.249:8123
