@@ -1,0 +1,9 @@
+# CI yamllint (reviewdog/action-yamllint auto-detects this file).
+# Default preset caps lines at 80; PromQL alerting/recording expressions
+# (monitoring/vmalert, monitoring/vm) and compose command lines do not wrap
+# cleanly, so the cap is raised to 100 (longest current line: 94).
+extends: default
+
+rules:
+  line-length:
+    max: 100
