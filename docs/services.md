@@ -313,10 +313,12 @@ Some LAN devices break under DNS filtering and must be exempted **entirely** (no
 domain allowlists). The Roborock S8 is one: filtering its Roborock-cloud domains breaks
 the local handshake with Home Assistant and forces cloud fallback (core integration
 docs — "ensure the vacuum's IP address is entirely exempted from filtering"). Exemption
-pattern (UI, on the server): Clients → Add client → name `roborock-s8`, the Fritzbox
-static IP + MAC → **disable Filtering** for that client (writes a `clients.persistent`
-entry — drift ritual applies). The AdGuard **query log** is the test of the prerequisite
-assumption: the `roborock-s8` client must appear there at all — if it never appears, the
+pattern (UI, on the server): Clients → Add client → name `roborock-vacuum-a51` (the
+vacuum's hostname; the S8's model ID is `roborock.vacuum.a51`), the Fritzbox static IP
+`192.168.178.59` + MAC `b0:4a:39:6f:5f:72` → **disable Filtering** for that client
+(writes a `clients.persistent` entry with `filtering_enabled: false` — drift ritual
+applies). The AdGuard **query log** is the test of the prerequisite assumption: the
+`roborock-vacuum-a51` client must appear there at all — if it never appears, the
 vacuum's DNS is the Fritzbox, not AdGuard (see "Split DNS" above), and filtering was
 never the cause. See [services.md](services.md) "Roborock S8 (core `roborock`
 integration)".
@@ -1904,10 +1906,10 @@ library was absorbed into core — do not vendor it.
   The vacuum needs internet — it blocks its local API when Roborock servers are
   unreachable. Setup, map data and routines always go through the cloud; commands and
   polling prefer local.
-- **Hard prerequisites:** Fritzbox static IP for the vacuum (integration docs + repo
-  convention, [host-setup.md](host-setup.md) "Static IP address"), and a persistent
-  AdGuard Home client `roborock-s8` with filtering disabled — DNS filtering breaks the
-  local handshake and forces cloud fallback (see the AdGuard section,
+- **Hard prerequisites:** Fritzbox static IP for the vacuum (`192.168.178.59`, integration
+  docs + repo convention, [host-setup.md](host-setup.md) "Static IP address"), and a
+  persistent AdGuard Home client `roborock-vacuum-a51` with filtering disabled — DNS
+  filtering breaks the local handshake and forces cloud fallback (see the AdGuard section,
   "Per-client filtering exemptions").
 - **Polling:** 30 s, no push from the vacuum. The cloud API is rate-limited (built-in
   limiter; abuse surfaces as an HA repair issue) — never add auto-reload-on-unavailable

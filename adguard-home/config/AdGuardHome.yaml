@@ -210,7 +210,36 @@ clients:
     rdns: true
     dhcp: true
     hosts: true
-  persistent: []
+  persistent:
+    - safe_search:
+        enabled: false
+        bing: true
+        duckduckgo: true
+        ecosia: true
+        google: true
+        pixabay: true
+        yandex: true
+        youtube: true
+      blocked_services:
+        schedule:
+          time_zone: UTC
+        ids: []
+      name: roborock-vacuum-a51
+      ids:
+        - 192.168.178.59
+        - b0:4a:39:6f:5f:72
+      tags: []
+      upstreams: []
+      uid: 01a1fd98-8b70-7e92-a926-5b3e4e6a1847
+      upstreams_cache_size: 0
+      upstreams_cache_enabled: false
+      use_global_settings: false
+      filtering_enabled: false
+      parental_enabled: false
+      safebrowsing_enabled: false
+      use_global_blocked_services: true
+      ignore_querylog: false
+      ignore_statistics: false
 log:
   enabled: true
   file: ""
