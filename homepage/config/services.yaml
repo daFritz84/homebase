@@ -145,11 +145,11 @@
                 label: Status
                 format: text
                 remap:
-                  - value: 1
+                  - value: "1"
                     to: UP
-                  - value: 0
+                  - value: "0"
                     to: OFFLINE (intended)
-                  - value: -1
+                  - value: "-1"
                     to: OFFLINE (network)
                   - any: true
                     to: OFFLINE (network)
