@@ -138,7 +138,7 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "legend": { "displayMode": "hidden", "showLegend": false }, "alignValue": "left", "mergeValues": true, "showLastValue": true, "rowHeight": 0.9 },
       "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
-      "targets": [ { "refId": "A", "expr": "probe_success{instance=\"192.168.178.58:443\"}", "legendFormat": "tcp :443" } ]
+      "targets": [ { "refId": "A", "expr": "probe_success{instance=\"192.168.178.58:443\"}", "legendFormat": "tcp :443", "interval": "5m" } ]
     },
     {
       "type": "timeseries",
