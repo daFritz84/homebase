@@ -45,6 +45,7 @@ groups:
       - alert: NextcloudQuotaLow
         expr: >-
           nextcloud_quota_info == 1
+          and nextcloud_quota_available_bytes > 0
           and nextcloud_quota_available_bytes < 20*1024*1024*1024
         for: 1h
         labels:
@@ -56,6 +57,7 @@ groups:
       - alert: NextcloudQuotaCritical
         expr: >-
           nextcloud_quota_info == 1
+          and nextcloud_quota_available_bytes > 0
           and nextcloud_quota_available_bytes < 5*1024*1024*1024
         for: 1h
         labels:
@@ -70,8 +72,10 @@ groups:
           severity: warning
         annotations:
           summary: "Storage Share quota probe failed on {{ $labels.instance }}"
-          description: "PROPFIND not answering (token expired? WAN down?) —
-            the quota alerts are blind until it recovers"
+          description: "OCS /ocs/v2.php/cloud/user not answering (token
+            expired? WAN down?) — the quota alerts are blind until it
+            recovers. Storage Share reports unlimited quota (-3 sentinel):
+            available 0 keeps the quota rules silent by design"
       - alert: ResticRepoBudgetExceeded
         expr: restic_repo_size_bytes > 5*1024*1024*1024
         for: 24h
