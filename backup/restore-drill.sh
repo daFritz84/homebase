@@ -7,7 +7,7 @@ set -euo pipefail
 ##
 ## What it proves, end to end, against the LIVE offsite repo:
 ##   1. the app token + repo key decrypt the repo (restic restore latest);
-##   2. every archive in the snapshot is a readable tar.gz (tar -tzf);
+##   2. every archive in the snapshot is a readable tar (tar -tf);
 ##   3. the navidrome SQLite DB passes PRAGMA integrity_check;
 ##   4. the authelia LDIF dump parses (non-empty, has dn: entries).
 ##
@@ -40,7 +40,7 @@ fails=0
 
 echo "[*] tar integrity of every archive in the snapshot"
 while IFS= read -r -d '' archive; do
-  if tar -tzf "${archive}" >/dev/null 2>&1; then
+  if tar -tf "${archive}" >/dev/null 2>&1; then
     echo "    [ok] $(basename "${archive}")"
   else
     echo "    [FAIL] $(basename "${archive}")" >&2
@@ -52,7 +52,7 @@ echo "[*] navidrome SQLite integrity_check"
 navidrome_archive="$(find "${target}" -name 'navidrome-data-*.tar' -print -quit)"
 if [ -n "${navidrome_archive}" ]; then
   stage="$(mktemp -d "${target}/nd.XXXXXX")"
-  if tar -xzf "${navidrome_archive}" -C "${stage}" 2>/dev/null; then
+  if tar -xf "${navidrome_archive}" -C "${stage}" 2>/dev/null; then
     db="$(find "${stage}" -name 'navidrome.db' -print -quit)"
     if [ -n "${db}" ]; then
       result="$(python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(c.execute(\"PRAGMA integrity_check\").fetchone()[0])' "${db}" 2>/dev/null || echo error)"
@@ -79,7 +79,7 @@ echo "[*] authelia LDIF dump parses"
 authelia_archive="$(find "${target}" -name 'authelia-*.tar' -print -quit)"
 if [ -n "${authelia_archive}" ]; then
   stage="$(mktemp -d "${target}/au.XXXXXX")"
-  if tar -xzf "${authelia_archive}" -C "${stage}" 2>/dev/null; then
+  if tar -xf "${authelia_archive}" -C "${stage}" 2>/dev/null; then
     ldif="$(find "${stage}" -name 'ldap.ldif' -print -quit)"
     if [ -n "${ldif}" ] && [ -s "${ldif}" ] && grep -q '^dn: ' "${ldif}"; then
       echo "    [ok] ldap.ldif: $(grep -c '^dn: ' "${ldif}") entries"
