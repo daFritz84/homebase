@@ -37,7 +37,7 @@ Three layers, each owned by exactly one mechanism:
 | --- | --- | --- |
 | Immutable config | **git** (this repo; server→workstation drift flow) | Caddyfile, AdGuardHome.yaml, monitoring/, compose.yaml |
 | Secrets (regenerable) | **Bitwarden** `provision-*-secrets.sh` | `.env*`, cloudflared credentials |
-| Irreplaceable data | **restic → WebDAV** (Hetzner Storage Share) | the 9 `backup-*.sh` archives below |
+| Irreplaceable data | **restic → rclone (WebDAV)** (Hetzner Storage Share) | the 9 `backup-*.sh` archives below |
 
 Komodo (and its built-in scheduled backups) is gone — its database held only rebuildable
 state. The scripts below cover everything that cannot be rebuilt; the weekly timer runs
@@ -68,7 +68,10 @@ Growth drivers (wanderer GPX uploads, bookorbit `data/app/` covers, stirling
   20 GB/5 GB, ResticRepoBudgetExceeded 5 GB); panels in the Grafana "Backups" row.
 - Secrets: `backup/provision-backup-secrets.sh` (Bitwarden `restic-backup-password` +
   `nextcloud-backup-app-token`) → `backup/.env.secret` (0600). **Losing the restic
-  password makes the offsite repo permanently unreadable.**
+  password makes the offsite repo permanently unreadable.** restic removed its native
+  webdav backend in 0.18.0, so the repo spec is `rclone:homebase:homebase` and the
+  webdav remote is configured entirely via `RCLONE_CONFIG_HOMEBASE_*` env vars in the
+  same 0600 file (no rclone.conf; the app token never leaves `.env.secret`).
 
 **Cleanup — quota has four consumers, each with an owner:**
 
@@ -85,6 +88,7 @@ the DAV user + set "Deleted files" retention to 7 days):
 ```bash
 cd ~/src/homebase/backup
 ./install-restic.sh                       # pinned binary, sha256-verified
+./install-rclone.sh                       # restic's webdav backend died in 0.18.0
 NEXTCLOUD_HOST=cloud-XXXXXXXX.hbts.net NEXTCLOUD_USER=<dav-user> \
   ./provision-backup-secrets.sh           # Bitwarden unlocked
 set -a; . ./.env.secret; set +a
