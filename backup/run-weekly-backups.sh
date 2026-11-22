@@ -9,7 +9,12 @@ set -euo pipefail
 ##   1. run every service's backup-*.sh (each stops its service, archives,
 ##      restarts); a failure is recorded, the rest continue, exit non-zero;
 ##   2. restic backup of the local archive dirs (encrypted, deduplicated,
-##      incremental -> Hetzner Storage Share over WebDAV);
+##      incremental -> Hetzner Storage Share over WebDAV); the archives are
+##      UNCOMPRESSED tar on purpose: gzip streams defeat restic's chunk
+##      dedup, so every gzipped archive would add ~its full size to the repo
+##      (observed 2026-11-22: first snapshot 9.79 GiB of gzip archives);
+##      uncompressed tars dedup across weeks (sqlite pages, append-only
+##      GPX/cover dirs) and the repo stays ~baseline + small deltas;
 ##   3. restic check (metadata + cache);
 ##   4. local prune ONLY if 2+3 succeeded (the local safety net must never
 ##      shrink exactly when the offsite upload failed);
@@ -114,7 +119,7 @@ if [ "${UPLOAD_OK}" = 1 ] && [ "${CHECK_OK}" = 1 ]; then
     prefix="${entry##*:}"
     d="${HOME}/.local/share/${svc}/backups"
     [ -d "${d}" ] || continue
-    mapfile -t archives < <(find "${d}" -maxdepth 1 -name "${prefix}-*.tar.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
+    mapfile -t archives < <(find "${d}" -maxdepth 1 -name "${prefix}-*.tar" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
     if [ "${#archives[@]}" -le "${LOCAL_KEEP}" ]; then
       continue
     fi
@@ -136,7 +141,7 @@ fi
 
 # --- 6. repo size cache (exporter reads it; never run restic per scrape) ------
 if [ "${CHECK_OK}" = 1 ]; then
-  restic stats --mode raw-index --json 2>/dev/null \
+  restic stats --mode raw-data --json 2>/dev/null \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["total_size"])' \
     > "${STATE_DIR}/repo-size" || echo "[!] repo-size cache refresh FAILED" >&2
 fi
@@ -146,7 +151,7 @@ if [ -z "${FAILED}" ] && [ "${UPLOAD_OK}" = 1 ] && [ "${CHECK_OK}" = 1 ]; then
   RUN_OK=1
   echo
   echo "[✓] Weekly backup run complete $(date -Is)"
-  restic snapshots --last 3 || true
+  restic snapshots --latest 3 || true
   exit 0
 fi
 

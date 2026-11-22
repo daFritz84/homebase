@@ -46,10 +46,10 @@ while IFS= read -r -d '' archive; do
     echo "    [FAIL] $(basename "${archive}")" >&2
     fails=$((fails + 1))
   fi
-done < <(find "${target}" -name '*.tar.gz' -print0)
+done < <(find "${target}" -name '*.tar' -print0)
 
 echo "[*] navidrome SQLite integrity_check"
-navidrome_archive="$(find "${target}" -name 'navidrome-data-*.tar.gz' -print -quit)"
+navidrome_archive="$(find "${target}" -name 'navidrome-data-*.tar' -print -quit)"
 if [ -n "${navidrome_archive}" ]; then
   stage="$(mktemp -d "${target}/nd.XXXXXX")"
   if tar -xzf "${navidrome_archive}" -C "${stage}" 2>/dev/null; then
@@ -76,7 +76,7 @@ else
 fi
 
 echo "[*] authelia LDIF dump parses"
-authelia_archive="$(find "${target}" -name 'authelia-*.tar.gz' -print -quit)"
+authelia_archive="$(find "${target}" -name 'authelia-*.tar' -print -quit)"
 if [ -n "${authelia_archive}" ]; then
   stage="$(mktemp -d "${target}/au.XXXXXX")"
   if tar -xzf "${authelia_archive}" -C "${stage}" 2>/dev/null; then

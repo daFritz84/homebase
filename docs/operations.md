@@ -50,7 +50,12 @@ plaintext).
 newest 4 archives per service (~1 month on-host); repo budget 5 GB on the 100 GB share.
 Growth drivers (wanderer GPX uploads, bookorbit `data/app/` covers, stirling
 `data/storage/`, HA `.storage/`) are monotonic; dedup + prune bound the repo at
-~baseline + ~26 weeks of deltas.
+~baseline + ~26 weeks of deltas. **The archives are uncompressed tar on
+purpose** — gzip streams defeat restic's chunk dedup (the first gzipped
+snapshot 2026-11-22 added 9.79 GiB, ~100% new data); uncompressed tars dedup
+across weeks (sqlite pages, append-only GPX/cover dirs). The jellyfin archive
+excludes `data/metadata` (2.5 GB of nfo/artwork — a library scan rebuilds it)
+and `data/log`.
 
 **Automation** (systemd user units, `systemd/install-user-units.sh`):
 
@@ -110,7 +115,7 @@ quota-available (PROPFIND) after the first run; re-check after the first prune c
 Initial repo size: TBD. Quota-available after init: TBD.
 
 **Restore drill (quarterly, manual):** `backup/restore-drill.sh` restores the latest
-snapshot to a temp dir, verifies every archive is a readable tar.gz, runs SQLite
+snapshot to a temp dir, verifies every archive is a readable tar, runs SQLite
 `PRAGMA integrity_check` on navidrome.db and parses the authelia LDIF — PASS/FAIL.
 A backup you never restored is a hope, not a plan.
 
@@ -129,10 +134,10 @@ cd wanderer && ./backup-wanderer-data.sh
 
 The script stops the service, archives `data/` (excluding the rebuildable Meili
 index `data/data.ms`) to
-`~/.local/share/wanderer/backups/wanderer-data-<date>.tar.gz`, and restarts it.
+`~/.local/share/wanderer/backups/wanderer-data-<date>.tar`, and restarts it.
 Cadence: the weekly timer (`backup-all.timer`) runs this automatically; take one
 manually after every significant trail import. Restore: stop the service,
-`rm -rf data && tar xzf <archive>`, start.
+`rm -rf data && tar xf <archive>`, start.
 
 ### Navidrome data backups
 
@@ -147,9 +152,9 @@ cd navidrome && ./backup-navidrome-data.sh
 
 The script stops the service, archives `data/` (excluding the rebuildable
 `data/cache`) to
-`~/.local/share/navidrome/backups/navidrome-data-<date>.tar.gz`, and restarts
+`~/.local/share/navidrome/backups/navidrome-data-<date>.tar`, and restarts
 it. Cadence: the weekly timer runs this automatically — and run it manually
-**before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+**before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf <archive>`,
 `podman unshare chown 1000:1000 data`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards —
 `systemctl --user start podman-compose@navidrome` to re-adopt the pod.
@@ -168,13 +173,13 @@ cd jellyfin && ./backup-jellyfin-data.sh
 The script stops the service, archives `data/` (owner-only, mode `0600`;
 the sibling `cache/` is rebuildable and the media dirs `/srv/media/{filme,serien}`
 are CIFS automounts — both excluded by construction) to
-`~/.local/share/jellyfin/backups/jellyfin-data-<date>.tar.gz`, and restarts
+`~/.local/share/jellyfin/backups/jellyfin-data-<date>.tar`, and restarts
 it. No `podman unshare` needed — the image runs as root and rootless Podman
 maps container root to the host user, so `data/` is host-user-owned
 (services.md, "Jellyfin (Media Server)"). Cadence: the weekly timer runs this automatically; take one manually right
 after admin creation and after library/user/plugin changes, and **before every
 image bump** (DB migrations are forward-only). Restore: stop
-the service, `rm -rf data && tar xzf <archive>`, start. The script
+the service, `rm -rf data && tar xf <archive>`, start. The script
 (re)starts the containers directly, so the unit shows `inactive` afterwards
 — `systemctl --user start podman-compose@jellyfin` to re-adopt the pod.
 With the NAS offline the restart cannot start the container (the `/srv/media`
@@ -194,13 +199,13 @@ cd stirling-pdf && ./backup-stirling-pdf-data.sh
 
 The script stops the service, archives `data/` (owner-only, mode `0600`;
 the rebuildable `data/logs` is excluded) to
-`~/.local/share/stirling-pdf/backups/stirling-pdf-data-<date>.tar.gz`, and
-restarts it. It archives via `podman unshare tar czf … data/` (navidrome
+`~/.local/share/stirling-pdf/backups/stirling-pdf-data-<date>.tar`, and
+restarts it. It archives via `podman unshare tar cf … data/` (navidrome
 pattern): the app writes uid-1000-owned mode-700 dirs that the host user
 cannot read — a plain `tar` fails on them; namespace uid 0 has DAC override
 over the mapped range. Cadence: the weekly timer runs this automatically; take
 one manually right after admin/account setup (configs/ then holds keys + user
-DB) and **before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xzf
+DB) and **before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf
 <archive>`, `podman unshare chown -R 1000:1000 data`, start. The script
 (re)starts the containers directly, so the unit shows `inactive` afterwards
 — `systemctl --user start podman-compose@stirling-pdf` to re-adopt the pod.
@@ -219,15 +224,15 @@ cd bookorbit && ./backup-bookorbit-data.sh
 ```
 
 The script stops the service, archives `data/` (owner-only, mode `0600`)
-to `~/.local/share/bookorbit/backups/bookorbit-data-<date>.tar.gz`, and
-restarts it. It archives via `podman unshare tar czf … data/`
+to `~/.local/share/bookorbit/backups/bookorbit-data-<date>.tar`, and
+restarts it. It archives via `podman unshare tar cf … data/`
 (navidrome/stirling pattern): the app writes uid-1000-owned mode-700 dirs
 that the host user cannot read — a plain `tar` fails on them; namespace
 uid 0 has DAC override over the mapped range. Cadence: the weekly timer runs
 this automatically; take one manually right after setup (the DB then holds
 users + OIDC links) and **before every image bump** (DB migrations are
 forward-only). Restore: stop the service, `rm -rf data
-&& tar xzf <archive>`, start. The script (re)starts the containers
+&& tar xf <archive>`, start. The script (re)starts the containers
 directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@bookorbit` to re-adopt the pod.
 
@@ -240,7 +245,7 @@ Dashboards, datasources, scrape targets, alert rules and routing are **git**
 (`monitoring/`) — not data — so this archive is the small irreplaceable part.
 VictoriaMetrics' `monitoring/data/victoriametrics/` (the TSDB) is the metric
 history: rebuildable only from future scrapes, so back it up if history matters
-(a plain `tar czf` of `data/victoriametrics/` with the service stopped; VM's
+(a plain `tar cf` of `data/victoriametrics/` with the service stopped; VM's
 enterprise snapshot API is not in the OSS image). Alertmanager's
 `data/alertmanager/` (silences) is ephemeral — not backed up. Run from the
 service checkout on the server:
@@ -250,14 +255,14 @@ cd monitoring && ./backup-grafana-data.sh
 ```
 
 The script stops the service, archives `data/grafana/` (owner-only, mode `0600`)
-to `~/.local/share/monitoring/backups/grafana-data-<date>.tar.gz`, and restarts
-it. It archives via `podman unshare tar czf … data/grafana/`
+to `~/.local/share/monitoring/backups/grafana-data-<date>.tar`, and restarts
+it. It archives via `podman unshare tar cf … data/grafana/`
 (navidrome/stirling pattern): the image runs as the grafana user (uid 472)
 and the runtime dirs `data/grafana/{csv,png,pdf}` are mapped-subuid-owned
 mode-restricted — a plain `tar` fails on them (observed 2026-11-22).
 Cadence: the weekly timer runs this automatically; take one manually right
 after setup (the API key + admin prefs) and **before every image bump**. Restore: stop the service,
-`rm -rf data/grafana && tar xzf <archive>`, start. The script (re)starts the
+`rm -rf data/grafana && tar xf <archive>`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@monitoring` to re-adopt the pod.
 
@@ -276,12 +281,12 @@ cd rustdesk && ./backup-rustdesk-data.sh
 
 The script stops the service, archives `data/` (owner-only, mode `0600` — the
 archive contains private keys) to
-`~/.local/share/rustdesk/backups/rustdesk-data-<date>.tar.gz`, and restarts
+`~/.local/share/rustdesk/backups/rustdesk-data-<date>.tar`, and restarts
 it. No `podman unshare` needed — both images run as root and rootless Podman
 maps container root to the host user, so `data/` is host-user-owned
 (services.md, "RustDesk"). Cadence: the weekly timer runs this automatically; take one manually right
 after first start (the keypair is born there) and **before every image bump**
-(sqlite migrations are forward-only). Restore: stop the service, `rm -rf data && tar xzf <archive>`,
+(sqlite migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf <archive>`,
 start. The script (re)starts the containers directly, so the unit shows
 `inactive` afterwards — `systemctl --user start podman-compose@rustdesk` to
 re-adopt the pod.
@@ -298,10 +303,10 @@ cd homeassistant && ./backup-ha-config.sh
 ```
 
 The script stops the service, archives `config/` (owner-only, mode `0600`) to
-`~/.local/share/homeassistant/backups/ha-config-<date>.tar.gz`, and restarts
+`~/.local/share/homeassistant/backups/ha-config-<date>.tar`, and restarts
 it. Cadence: the weekly timer runs this automatically; take one manually after
 significant automation/integration changes and right after onboarding. Restore: stop the service,
-`rm -rf config && tar xzf <archive>`, start.
+`rm -rf config && tar xf <archive>`, start.
 
 ### Authelia backups
 
@@ -316,7 +321,7 @@ cd authelia && ./backup-authelia.sh
 
 The script stops the service, dumps the directory with offline `slapcat`,
 copies the sqlite volume and `config/keys/`, and archives everything
-(owner-only, mode `0600`) to `~/.local/share/authelia/backups/authelia-<date>.tar.gz`,
+(owner-only, mode `0600`) to `~/.local/share/authelia/backups/authelia-<date>.tar`,
 then restarts. Cadence: the weekly timer runs this automatically + after every
 user/group change. Restore
 (order matters — authelia opens the sqlite DB and reads the keys at startup,
