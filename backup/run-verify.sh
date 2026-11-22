@@ -19,6 +19,10 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
 
+# restic lives in ~/.local/bin (install-restic.sh); systemd user units have
+# that PATH, a bare `ssh host 'cmd'` shell does not — add it.
+PATH="${HOME}/.local/bin:${PATH}"
+
 # shellcheck disable=SC1091
 . ./backup.conf
 [ -f .env.secret ] || { echo "[ERR] .env.secret missing — run ./provision-backup-secrets.sh"; exit 1; }
