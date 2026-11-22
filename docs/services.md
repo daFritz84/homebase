@@ -303,6 +303,14 @@ Target: homebase.fritz.box
 
 This should automatically resolve to a `CNAME` record.
 
+More specific rewrites win over the wildcard. One exception exists — the Hetzner Storage Share
+host behind the backup pipeline resolves under the lab domain:
+
+```
+Domain: storage.sseifried.link
+Target: nx32834.your-storageshare.de
+```
+
 > **Live config drift:** AdGuard Home rewrites `config/AdGuardHome.yaml` on every UI change.
 > Make rewrite changes in the UI **on the server**, then sync the file back to the workstation,
 > review, commit, push (see [operations.md](operations.md)).

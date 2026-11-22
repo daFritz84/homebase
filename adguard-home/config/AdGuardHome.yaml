@@ -189,6 +189,9 @@ filtering:
     - domain: '*.sseifried.link'
       answer: homebase.fritz.box
       enabled: true
+    - domain: storage.sseifried.link
+      answer: nx32834.your-storageshare.de
+      enabled: true
   safe_fs_patterns:
     - /opt/adguardhome/work/data/userfilters/*
   max_http_size: 256MB
