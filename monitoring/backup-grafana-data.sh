@@ -11,7 +11,7 @@ set -euo pipefail
 ## The service is stopped while archiving for a consistent sqlite snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
-## Archives via `podman unshare tar czf` (navidrome/stirling pattern): the
+## Archives via `podman unshare tar cf` (navidrome/stirling pattern): the
 ## image runs as the grafana user (uid 472) and creates the runtime dirs
 ## data/grafana/{csv,png,pdf} owned by the mapped subuid, mode-restricted
 ## against the host user — a plain tar fails on them (observed 2026-11-22:
@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 BACKUP_DIR="${HOME}/.local/share/monitoring/backups"
-ARCHIVE="${BACKUP_DIR}/grafana-data-$(date +%F-%H%M).tar.gz"
+ARCHIVE="${BACKUP_DIR}/grafana-data-$(date +%F-%H%M).tar"
 
 [ -d data/grafana ] || { echo "[ERR] No data/grafana directory next to compose.yaml — run from the service checkout"; exit 1; }
 
@@ -42,7 +42,7 @@ echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving data/grafana -> ${ARCHIVE}"
-podman unshare tar czf "${ARCHIVE}" data/grafana/
+podman unshare tar cf "${ARCHIVE}" data/grafana/
 
 trap - EXIT
 restore_service
