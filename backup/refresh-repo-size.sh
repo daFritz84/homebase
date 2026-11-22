@@ -7,10 +7,18 @@ set -euo pipefail
 ## HERE only (restic 0.20 renamed raw-index -> raw-data and the fix had to
 ## be applied in both callers once; keep it single-sourced).
 ##
-## Requires RESTIC_REPOSITORY/RESTIC_PASSWORD in the environment (callers
-## source .env.secret) and restic on PATH (~/.local/bin).
+## Self-sufficient (works from the callers AND from a bare SSH shell):
+## restic lives in ~/.local/bin and the repo env comes from .env.secret.
 
 cd "$(dirname "$(readlink -f "$0")")"
+
+PATH="${HOME}/.local/bin:${PATH}"
+if [ -f .env.secret ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env.secret
+  set +a
+fi
 
 STATE_DIR="${HOME}/.local/share/backup"
 mkdir -p "${STATE_DIR}"
