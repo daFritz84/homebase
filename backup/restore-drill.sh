@@ -55,7 +55,7 @@ if [ -n "${navidrome_archive}" ]; then
   if tar -xf "${navidrome_archive}" -C "${stage}" 2>/dev/null; then
     db="$(find "${stage}" -name 'navidrome.db' -print -quit)"
     if [ -n "${db}" ]; then
-      result="$(python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(c.execute(\"PRAGMA integrity_check\").fetchone()[0])' "${db}" 2>/dev/null || echo error)"
+      result="$(python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); print(c.execute(sys.argv[2]).fetchone()[0])' "${db}" "PRAGMA integrity_check" 2>/dev/null || echo error)"
       if [ "${result}" = "ok" ]; then
         echo "    [ok] navidrome.db integrity_check: ok"
       else
