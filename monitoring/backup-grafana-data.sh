@@ -11,9 +11,12 @@ set -euo pipefail
 ## The service is stopped while archiving for a consistent sqlite snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
-## The image runs as root and rootless Podman maps container root to the host
-## user, so ./data is host-user-owned — a plain tar reads it (no `podman
-## unshare` needed, jellyfin/beszel pattern).
+## Archives via `podman unshare tar czf` (navidrome/stirling pattern): the
+## image runs as the grafana user (uid 472) and creates the runtime dirs
+## data/grafana/{csv,png,pdf} owned by the mapped subuid, mode-restricted
+## against the host user — a plain tar fails on them (observed 2026-11-22:
+## "open failed: Keine Berechtigung"); namespace uid 0 has DAC override over
+## the mapped range.
 ##
 ## Run from the service checkout (the directory containing compose.yaml and
 ## data/) — on the server that is the ~/src/homebase checkout of this repo.
@@ -39,7 +42,7 @@ echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving data/grafana -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" data/grafana/
+podman unshare tar czf "${ARCHIVE}" data/grafana/
 
 trap - EXIT
 restore_service

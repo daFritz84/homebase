@@ -247,11 +247,12 @@ cd monitoring && ./backup-grafana-data.sh
 
 The script stops the service, archives `data/grafana/` (owner-only, mode `0600`)
 to `~/.local/share/monitoring/backups/grafana-data-<date>.tar.gz`, and restarts
-it. No `podman unshare` needed — the image runs as root and rootless Podman maps
-container root to the host user, so `data/` is host-user-owned (services.md,
-"Monitoring"). Cadence: the weekly timer runs this automatically; take one
-manually right after setup (the API key + admin prefs) and **before every
-image bump**. Restore: stop the service,
+it. It archives via `podman unshare tar czf … data/grafana/`
+(navidrome/stirling pattern): the image runs as the grafana user (uid 472)
+and the runtime dirs `data/grafana/{csv,png,pdf}` are mapped-subuid-owned
+mode-restricted — a plain `tar` fails on them (observed 2026-11-22).
+Cadence: the weekly timer runs this automatically; take one manually right
+after setup (the API key + admin prefs) and **before every image bump**. Restore: stop the service,
 `rm -rf data/grafana && tar xzf <archive>`, start. The script (re)starts the
 containers directly, so the unit shows `inactive` afterwards — `systemctl --user
 start podman-compose@monitoring` to re-adopt the pod.

@@ -1382,6 +1382,11 @@ is empty → rootless Podman maps container root to host `chef`
 (jellyfin/uptime-kuma mapping) → `data/` is host-user-owned, **no
 `podman unshare chown` ritual**. Probe at first start:
 `podman image inspect <image> --format '{{.Config.User}}'`.
+**Exception: grafana** — the image's own `Config.User` is `472:472`, so the
+runtime dirs it creates (`data/grafana/{csv,png,pdf}`) are mapped-subuid-owned
+and mode-restricted against `chef`; a plain `tar` cannot read them (observed
+2026-11-22) — `backup-grafana-data.sh` archives via `podman unshare tar`
+(navidrome/stirling pattern).
 
 **Secrets** (`monitoring/.env.secret`, gitignored, 0600 —
 `provision-monitoring-secrets.sh` from Bitwarden): `GF_SECURITY_ADMIN_PASSWORD`
