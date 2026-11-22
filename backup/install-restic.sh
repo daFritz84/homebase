@@ -14,6 +14,10 @@ set -euo pipefail
 ## fetches the pinned release and verifies the sha256 against the release's
 ## SHA256SUMS (fail closed) — the install-node-exporter.sh pattern.
 ##
+## restic REMOVED its native webdav backend in 0.18.0, so the Storage Share
+## target is reached via restic's `rclone:` backend — ./install-rclone.sh must
+## also be run (the RCLONE_CONFIG_HOMEBASE_* remote comes from .env.secret).
+##
 ## Run on the SERVER as the service user (chef), no sudo:
 ##   ./install-restic.sh
 ## Then: ./provision-backup-secrets.sh + restic init (docs/operations.md,
