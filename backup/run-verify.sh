@@ -42,7 +42,7 @@ restic prune
 echo "[*] restic check --read-data (full repo read)"
 restic check --read-data
 
-restic stats --mode raw-index --json 2>/dev/null \
+restic stats --mode raw-data --json 2>/dev/null \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["total_size"])' \
   > "${STATE_DIR}/repo-size" || echo "[!] repo-size cache refresh FAILED" >&2
 printf '%s\n' "$(date +%s)" > "${STATE_DIR}/verify-last-success-timestamp"
