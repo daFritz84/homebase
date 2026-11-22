@@ -13,8 +13,12 @@ sessions have no container tooling.
 
 ```bash
 git status -sb && git log --oneline origin/main..HEAD
-ssh chef@192.168.178.249 'cd ~/src/homebase && git status -sb && git log --oneline -1 && systemctl --user is-system-running'
+ssh chef@192.168.178.249 'cd ~/src/homebase && git status -sb && git stash list && git log --oneline -1 && systemctl --user is-system-running'
 ```
+
+A non-empty `git stash list` on the server is a hazard for §"Validate local changes" — see the
+stash hygiene note there. Resolve stale stashes BEFORE starting (drop them once their content
+is proven in `main` via `git diff stash@{N} HEAD -- <file>` per touched file).
 
 A dirty server tree is normal (AdGuard drift) — never clean it. Ask the user before touching
 `authelia/`, `homeassistant/config/`, `wanderer/data/`, `caddy/Caddyfile`, `caddy-proxy`
@@ -51,6 +55,15 @@ ssh chef@192.168.178.249 'cd ~/src/homebase && \
 The stash isolates the AdGuard drift so `checkout` cannot clobber it; `git stash pop` restores it
 after returning to `main`. If the branch touches that file, or `checkout` refuses (other dirty
 tracked files), **stop** — never force it. Pass → merge/PR to `main`, deploy main (§2–§4).
+
+**Stash hygiene (observed 2026-11-22):** if `git stash push` reports "No local changes to save"
+(tree clean), the final `git stash pop` pops the OLDEST **pre-existing** stash, not yours — an old
+`WIP on authelia-sso` stash popped into `main` left conflict markers in `authelia/config/`
+(restore the conflicted files with `git checkout HEAD -- <file>`; the stash entry is kept by a
+failed pop, so nothing is lost). A stash is **task trash**: drop it once the task is complete and
+its content is proven in `main` (`git diff stash@{N} HEAD -- <file>` empty for every file it
+touches). Never leave a stash behind a completed task, and never start the cycle with a dirty
+stash list.
 
 ## 2. Server: pull
 
