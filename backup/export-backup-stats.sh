@@ -85,6 +85,9 @@ fi
 printf 'restic_repo_size_bytes %s\n' "${repo_size}" >> "${out}"
 
 # --- quota via PROPFIND (oc:quota-available-bytes / oc:quota-used-bytes) ------
+# Nextcloud exposes the quota properties ONLY on the DAV home root — a
+# PROPFIND of the repo subfolder returns them as 404 in propstat (observed
+# 2026-11-22), so probe the home: strip the trailing /homebase repo path.
 quota_avail=0
 quota_used=0
 quota_info=0
@@ -92,7 +95,7 @@ if [ -n "${NEXTCLOUD_WEBDAV_URL:-}" ] && [ -n "${NEXTCLOUD_APP_TOKEN:-}" ] && co
   xml="$(curl -fsS --max-time 30 -u "${NEXTCLOUD_USER}:${NEXTCLOUD_APP_TOKEN}" \
     -X PROPFIND -H 'Depth: 0' -H 'Content-Type: application/xml' \
     --data '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:quota-available-bytes/><oc:quota-used-bytes/></d:prop></d:propfind>' \
-    "${NEXTCLOUD_WEBDAV_URL}" 2>/dev/null || true)"
+    "${NEXTCLOUD_WEBDAV_URL%/homebase}" 2>/dev/null || true)"
   if [ -n "${xml}" ]; then
     parsed="$(printf '%s' "${xml}" | python3 -c '
 import sys, xml.etree.ElementTree as ET
