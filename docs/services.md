@@ -1339,9 +1339,10 @@ stream carries neither pool state nor disk temps — → `truenas_pool_status` +
 `backup/export-backup-stats.sh` writes `backup.prom` to the same textfile dir
 (per-service `backup_last_success_timestamp_seconds`, `backup_last_run_success`,
 `backup_verify_last_success_timestamp_seconds`, `restic_repo_size_bytes` from
-the cached `restic stats`, `nextcloud_quota_*` via WebDAV PROPFIND) — NOT on a
+the cached `restic stats`, `nextcloud_quota_*` via the OCS `cloud/user`
+endpoint — WebDAV PROPFIND has no quota properties on Storage Share) — NOT on a
 timer: it is written by `backup-all.service` / `backup-verify.service` (the
-quota PROPFIND crosses the WAN and restic must never run per scrape); alerts
+quota probe crosses the WAN and restic must never run per scrape); alerts
 `monitoring/vmalert/rules/backup.yml`.
 **Container stats via podman-exporter are NOT
 used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
