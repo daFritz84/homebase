@@ -22,7 +22,7 @@
 
 services:
   cloudflared:
-    image: docker.io/cloudflare/cloudflared:2026.11.0
+    image: docker.io/cloudflare/cloudflared:2026.11.1
     restart: unless-stopped
     security_opt:
       - no-new-privileges=true
