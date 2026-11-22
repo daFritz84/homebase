@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the weekly offsite backup run (Sun ~03:15, feeds backup.prom)
+
+[Timer]
+OnCalendar=Sun *-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target
