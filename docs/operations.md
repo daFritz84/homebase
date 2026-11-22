@@ -47,7 +47,8 @@ plaintext).
 
 **Retention contract** (knobs in `backup/backup.conf`): RPO 7 d; point-in-time recovery
 ~6 months (~11 snapshots: `--keep-weekly 5 --keep-monthly 6 --keep-last 2`); local
-newest 4 archives per service (~1 month on-host); repo budget 5 GB on the 100 GB share.
+newest 4 archives per service (~1 month on-host); repo budget 5 GB (Storage Share
+quota is unlimited — the repo budget alert is the capacity tripwire).
 Growth drivers (wanderer GPX uploads, bookorbit `data/app/` covers, stirling
 `data/storage/`, HA `.storage/`) are monotonic; dedup + prune bound the repo at
 ~baseline + ~26 weeks of deltas. **The archives are uncompressed tar on
@@ -103,16 +104,26 @@ restic init                               # repo path homebase/ in the DAV home
 systemctl --user enable --now backup-all.timer backup-verify.timer
 ```
 
-**Baseline (fill at rollout — evidence, not assumptions):** record `du -sh
-~/.local/share/*/backups` per service, `restic stats --mode raw-index` total_size, and
-quota-available (PROPFIND) after the first run; re-check after the first prune cycle
-(versions/trashbin bound check):
+**Baseline (recorded at rollout 2026-11-22):** single archive per service,
+`ls -la ~/.local/share/*/backups` after the first slim run; repo size from
+`restic stats --mode raw-data` total_size; quota from the OCS endpoint:
 
 | Service | Archive size |
 | --- | --- |
-| authelia / wanderer / navidrome / jellyfin / stirling-pdf / bookorbit / homeassistant / rustdesk / grafana | TBD at rollout |
+| authelia | 732 K |
+| wanderer | 168 M |
+| navidrome | 712 K |
+| jellyfin | 83 M (metadata excluded) |
+| stirling-pdf | 532 K |
+| bookorbit | 77 M |
+| homeassistant | 13 M |
+| rustdesk | 180 K |
+| grafana | 30 M |
 
-Initial repo size: TBD. Quota-available after init: TBD.
+Initial repo size: **181 MiB** (443 MiB content, zstd via repo format v2) — well
+under the 5 GB budget. Storage Share quota is **unlimited** (OCS `free/total =
+-3`); account-wide `used` = 435 GiB at rollout. Re-check after the first prune
+cycle (versions/trashbin bound check).
 
 **Restore drill (quarterly, manual):** `backup/restore-drill.sh` restores the latest
 snapshot to a temp dir, verifies every archive is a readable tar, runs SQLite
