@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 BACKUP_DIR="${HOME}/.local/share/homeassistant/backups"
-ARCHIVE="${BACKUP_DIR}/ha-config-$(date +%F-%H%M).tar.gz"
+ARCHIVE="${BACKUP_DIR}/ha-config-$(date +%F-%H%M).tar"
 
 [ -d config ] || { echo "[ERR] No config/ directory next to compose.yaml — run from the service checkout"; exit 1; }
 
@@ -34,7 +34,7 @@ echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving config/ -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" config/
+tar cf "${ARCHIVE}" config/
 
 trap - EXIT
 restore_service

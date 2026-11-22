@@ -17,7 +17,7 @@ set -euo pipefail
 ##       BackupStale fires per service, not just per job.
 ##   backup_last_run_success 0|1 + backup_last_run_timestamp_seconds
 ##   backup_verify_last_success_timestamp_seconds (monthly prune + full check)
-##   restic_repo_size_bytes  from the cached `restic stats --mode raw-index`
+##   restic_repo_size_bytes  from the cached `restic stats --mode raw-data`
 ##       (PROPFIND folder size UNDERCOUNTS: Nextcloud file versions and the
 ##       trashbin are invisible to it — quota-used is the true signal)
 ##   nextcloud_quota_available_bytes / nextcloud_quota_used_bytes via PROPFIND
@@ -56,7 +56,7 @@ trap 'rm -f "${out}"' EXIT
 for entry in "${SERVICES[@]}"; do
   svc="${entry%%:*}"
   prefix="${entry##*:}"
-  newest="$(find "${HOME}/.local/share/${svc}/backups" -maxdepth 1 -name "${prefix}-*.tar.gz" -printf '%T@\n' 2>/dev/null | sort -rn | head -1 | cut -d. -f1)"
+  newest="$(find "${HOME}/.local/share/${svc}/backups" -maxdepth 1 -name "${prefix}-*.tar" -printf '%T@\n' 2>/dev/null | sort -rn | head -1 | cut -d. -f1)"
   printf 'backup_last_success_timestamp_seconds{service="%s"} %s\n' "${svc}" "${newest:-0}" >> "${out}"
 done
 
