@@ -34,11 +34,17 @@ set -euo pipefail
 ##   NEXTCLOUD_USER  the DAV user of the backup share
 ##
 ## Rendered keys:
-##   RESTIC_REPOSITORY   webdav:https://<host>/remote.php/dav/files/<user>/homebase
-##                       (the app token is passed via WEBDAV_USERNAME/
-##                       WEBDAV_PASSWORD — NOT embedded in the URL, so it never
-##                       lands in restic's process cmdline args/logs)
-##   WEBDAV_USERNAME / WEBDAV_PASSWORD   WebDAV auth (the app token)
+##   RESTIC_REPOSITORY   rclone:homebase:homebase   (restic REMOVED its native
+##                       webdav backend in 0.18.0 — 0.19/0.20 have none — so
+##                       the target is reached via restic's supported rclone
+##                       backend; remote `homebase`, repo path `homebase` in
+##                       the DAV home)
+##   RCLONE_CONFIG_HOMEBASE_TYPE / _VENDOR / _URL / _USER / _PASS
+##                       the webdav remote configured ENTIRELY via env vars
+##                       (rclone's env-var remote config — no rclone.conf
+##                       file; restic spawns rclone with this environment,
+##                       so the app token never lands in process cmdline
+##                       args/logs and never lives outside this 0600 file)
 ##   RESTIC_PASSWORD     repo encryption key (client-side encryption)
 ##   NEXTCLOUD_WEBDAV_URL / NEXTCLOUD_USER / NEXTCLOUD_APP_TOKEN
 ##                       quota PROPFIND for export-backup-stats.sh
@@ -94,9 +100,12 @@ NEXTCLOUD_APP_TOKEN_VALUE="$(resolve_required nextcloud-backup-app-token passwor
 [ -n "${NEXTCLOUD_APP_TOKEN_VALUE}" ] || { echo "[ERR] Empty nextcloud-backup-app-token"; exit 1; }
 
 {
-  printf 'RESTIC_REPOSITORY=webdav:https://%s/remote.php/dav/files/%s/homebase\n' "${NEXTCLOUD_HOST}" "${NEXTCLOUD_USER}"
-  printf 'WEBDAV_USERNAME=%s\n' "${NEXTCLOUD_USER}"
-  printf 'WEBDAV_PASSWORD=%s\n' "${NEXTCLOUD_APP_TOKEN_VALUE}"
+  printf 'RESTIC_REPOSITORY=rclone:homebase:homebase\n'
+  printf 'RCLONE_CONFIG_HOMEBASE_TYPE=webdav\n'
+  printf 'RCLONE_CONFIG_HOMEBASE_VENDOR=nextcloud\n'
+  printf 'RCLONE_CONFIG_HOMEBASE_URL=https://%s/remote.php/dav/files/%s\n' "${NEXTCLOUD_HOST}" "${NEXTCLOUD_USER}"
+  printf 'RCLONE_CONFIG_HOMEBASE_USER=%s\n' "${NEXTCLOUD_USER}"
+  printf 'RCLONE_CONFIG_HOMEBASE_PASS=%s\n' "${NEXTCLOUD_APP_TOKEN_VALUE}"
   printf 'RESTIC_PASSWORD=%s\n' "${RESTIC_PASSWORD_VALUE}"
   printf 'NEXTCLOUD_WEBDAV_URL=https://%s/remote.php/dav/files/%s/homebase\n' "${NEXTCLOUD_HOST}" "${NEXTCLOUD_USER}"
   printf 'NEXTCLOUD_USER=%s\n' "${NEXTCLOUD_USER}"
