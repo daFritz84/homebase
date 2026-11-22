@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up BookOrbit data (data/postgres/ + data/app/) to a timestamped
-## tar.gz. data/postgres is the irreplaceable artifact: the pgvector DB holds
+## tar. data/postgres is the irreplaceable artifact: the pgvector DB holds
 ## users, libraries, reading progress, highlights and the OIDC account links —
 ## losing it means a fresh instance (see docs/operations.md, "BookOrbit data
 ## backups"). data/app (covers, Book Dock staging, derived data) is partially

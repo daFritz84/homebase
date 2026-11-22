@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-## Back up the Grafana data (the sqlite DB) to a timestamped tar.gz. ./data/grafana
+## Back up the Grafana data (the sqlite DB) to a timestamped tar. ./data/grafana
 ## holds the admin prefs, service-account API keys (the Homepage grafana widget's
 ## key), folders and non-provisioned dashboards. Dashboards under
 ## monitoring/grafana/dashboards/ are in git (provisioned), so this archive is

@@ -53,7 +53,7 @@ set -euo pipefail
 ##                       plaintext token stays in NEXTCLOUD_APP_TOKEN below
 ##   RESTIC_PASSWORD     repo encryption key (client-side encryption)
 ##   NEXTCLOUD_WEBDAV_URL / NEXTCLOUD_USER / NEXTCLOUD_APP_TOKEN
-##                       quota PROPFIND for export-backup-stats.sh
+##                       quota OCS probe for export-backup-stats.sh
 
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -110,7 +110,9 @@ NEXTCLOUD_APP_TOKEN_VALUE="$(resolve_required nextcloud-backup-app-token passwor
 
 # rclone's env-var config decrypts the pass parameter — render the obscured
 # form (reversible obfuscation, fixed key; plaintext fails the decrypt).
-RCLONE_PASS_OBSCURED="$(rclone obscure "${NEXTCLOUD_APP_TOKEN_VALUE}")"
+# The token goes in on STDIN (`-`): as an argv it would be world-readable in
+# /proc/<pid>/cmdline for the process lifetime.
+RCLONE_PASS_OBSCURED="$(printf '%s' "${NEXTCLOUD_APP_TOKEN_VALUE}" | rclone obscure -)"
 
 {
   printf 'RESTIC_REPOSITORY=rclone:homebase:homebase\n'
