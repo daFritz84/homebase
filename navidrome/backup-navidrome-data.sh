@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-## Back up Navidrome data (navidrome.db + covers) to a timestamped tar.gz.
+## Back up Navidrome data (navidrome.db + covers) to a timestamped tar.
 ## navidrome.db is the irreplaceable, secret-bearing artifact: users,
 ## playlists, share tokens and the auto-generated session/password secrets
 ## live in it — losing it means a fresh instance (see docs/operations.md,

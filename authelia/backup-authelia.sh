@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up the authelia stack (OpenLDAP LDIF dump + sqlite DB + OIDC signing
-## keys) to a timestamped tar.gz. The sqlite DB holds the TOTP/WebAuthn
+## keys) to a timestamped tar. The sqlite DB holds the TOTP/WebAuthn
 ## factors and the LDAP directory holds the users — both are irreplaceable
 ## (see docs/operations.md, "Authelia backups").
 ##

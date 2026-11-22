@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up wanderer data (PocketBase db, GPX uploads) to a timestamped
-## tar.gz. The trails are irreplaceable user data — run this regularly (see
+## tar. The trails are irreplaceable user data — run this regularly (see
 ## docs/operations.md, "Wanderer data backups").
 ##
 ## data/data.ms is excluded: the Meili index is rebuildable from PocketBase

@@ -1,7 +1,8 @@
 ---
 # vmalert rules — offsite backup freshness + quota (backup.prom textfile,
 # docs/operations.md "Backups"). Thresholds mirror backup/backup.conf
-# (LOCAL_KEEP/RPO 7 d, repo budget 5 GB, quota 20/5 GB on the 100 GB share).
+# (LOCAL_KEEP/RPO 7 d, repo budget 5 GB, quota 20/5 GB — the share is
+# unlimited, the >= 0 gate below keeps the quota rules silent on it).
 groups:
   - name: backup
     rules:
@@ -45,7 +46,7 @@ groups:
       - alert: NextcloudQuotaLow
         expr: >-
           nextcloud_quota_info == 1
-          and nextcloud_quota_available_bytes > 0
+          and nextcloud_quota_available_bytes >= 0
           and nextcloud_quota_available_bytes < 20*1024*1024*1024
         for: 1h
         labels:
@@ -57,7 +58,7 @@ groups:
       - alert: NextcloudQuotaCritical
         expr: >-
           nextcloud_quota_info == 1
-          and nextcloud_quota_available_bytes > 0
+          and nextcloud_quota_available_bytes >= 0
           and nextcloud_quota_available_bytes < 5*1024*1024*1024
         for: 1h
         labels:
@@ -75,7 +76,8 @@ groups:
           description: "OCS /ocs/v2.php/cloud/user not answering (token
             expired? WAN down?) — the quota alerts are blind until it
             recovers. Storage Share reports unlimited quota (-3 sentinel):
-            available 0 keeps the quota rules silent by design"
+            available -1 keeps the quota rules silent by design (>= 0
+            gate); a finite exhausted quota fires Critical"
       - alert: ResticRepoBudgetExceeded
         expr: restic_repo_size_bytes > 5*1024*1024*1024
         for: 24h

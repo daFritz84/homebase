@@ -7,7 +7,7 @@ set -euo pipefail
 ## no new exporter, no new image, fully gitops).
 ##
 ## Written by run-weekly-backups.sh (both paths, via trap) and run-verify.sh —
-## NOT on a fast timer: the quota PROPFIND hits the Storage Share over the
+## NOT on a fast timer: the quota OCS probe hits the Storage Share over the
 ## WAN, and restic must never run per scrape (the repo size comes from the
 ## cache file the orchestrators refresh).
 ##
@@ -23,8 +23,10 @@ set -euo pipefail
 ##   nextcloud_quota_available_bytes / nextcloud_quota_used_bytes via the
 ##       OCS endpoint /ocs/v2.php/cloud/user (WebDAV PROPFIND has NO quota
 ##       properties on Storage Share — 404 in propstat; unlimited quota
-##       (-3 sentinel) => available 0, the quota rules require > 0) +
-##       nextcloud_quota_info 1|0 (probe health; the quota rules require it).
+##       (-3 sentinel) => available -1, the quota rules require >= 0, so a
+##       FINITE exhausted quota (free <= 0) fires Critical while unlimited
+##       stays silent) + nextcloud_quota_info 1|0 (probe health; the quota
+##       rules require it).
 
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -32,25 +34,17 @@ STATE_DIR="${HOME}/.local/share/backup"
 TEXTFILE_DIR="${TEXTFILE_DIR:-${HOME}/.local/share/node-exporter/textfile}"
 mkdir -p "${TEXTFILE_DIR}" "${STATE_DIR}"
 
+# SERVICES (service dir : archive prefix) — single source of truth, shared
+# with run-weekly-backups.sh.
+# shellcheck disable=SC1091
+. ./backup.conf
+
 if [ -f .env.secret ]; then
   set -a
   # shellcheck disable=SC1091
   . ./.env.secret
   set +a
 fi
-
-# service dir : archive prefix (keep in sync with run-weekly-backups.sh)
-SERVICES=(
-  "authelia:authelia"
-  "wanderer:wanderer-data"
-  "navidrome:navidrome-data"
-  "jellyfin:jellyfin-data"
-  "stirling-pdf:stirling-pdf-data"
-  "bookorbit:bookorbit-data"
-  "homeassistant:ha-config"
-  "rustdesk:rustdesk-data"
-  "monitoring:grafana-data"
-)
 
 out="$(mktemp)"
 trap 'rm -f "${out}"' EXIT
@@ -91,25 +85,31 @@ printf 'restic_repo_size_bytes %s\n' "${repo_size}" >> "${out}"
 # home returns oc:/nc:quota-* as 404 in propstat (observed 2026-11-22). The
 # quota source is GET /ocs/v2.php/cloud/user (data.quota). Storage Share
 # reports an UNLIMITED quota: free/total = -3 sentinel, used = account-wide
-# bytes. Unlimited => quota_available_bytes 0; the quota rules require
-# available > 0, so they stay silent and the repo budget alert is the
-# capacity tripwire.
-quota_avail=0
+# bytes. Unlimited => quota_available_bytes -1 (the rules' >= 0 gate keeps
+# them silent); a FINITE quota exhausted to free <= 0 emits the real value
+# and fires NextcloudQuotaCritical — 0 would conflate the two.
+quota_avail=-1
 quota_used=0
 quota_info=0
 if [ -n "${NEXTCLOUD_WEBDAV_URL:-}" ] && [ -n "${NEXTCLOUD_APP_TOKEN:-}" ] && command -v curl >/dev/null; then
   ocs_host="${NEXTCLOUD_WEBDAV_URL%%/remote.php*}"
-  json="$(curl -fsS --max-time 30 -u "${NEXTCLOUD_USER}:${NEXTCLOUD_APP_TOKEN}" \
+  # The credential goes in via curl's --config on STDIN: `-u user:token`
+  # would be world-readable in /proc/<pid>/cmdline for the process lifetime.
+  json="$(curl -fsS --max-time 30 --config - \
     -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
-    "${ocs_host}/ocs/v2.php/cloud/user?format=json" 2>/dev/null || true)"
+    "${ocs_host}/ocs/v2.php/cloud/user?format=json" <<CURLCFG 2>/dev/null || true
+user = "${NEXTCLOUD_USER}:${NEXTCLOUD_APP_TOKEN}"
+CURLCFG
+)"
   if [ -n "${json}" ]; then
     parsed="$(printf '%s' "${json}" | python3 -c '
 import sys, json
 d = json.load(sys.stdin)["ocs"]["data"]["quota"]
 free = int(d.get("free", -1))
 used = int(d.get("used", -1))
-# -3 = unlimited/unknown (Storage Share sentinel)
-avail = free if free >= 0 else 0
+# -3/-1 = unlimited/unknown (Storage Share sentinel) -> -1; a finite quota
+# keeps its real free (<= 0 when exhausted, so the Critical rule fires).
+avail = free if free >= 0 else -1
 print("%d %d 1" % (avail, used))
 ' 2>/dev/null || true)"
     if [ -n "${parsed}" ]; then
