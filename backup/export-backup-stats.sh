@@ -61,19 +61,27 @@ for entry in "${SERVICES[@]}"; do
 done
 
 status=0
-[ -f "${STATE_DIR}/last-run-status" ] && status="$(cat "${STATE_DIR}/last-run-status")"
+if [ -f "${STATE_DIR}/last-run-status" ]; then
+  status="$(cat "${STATE_DIR}/last-run-status")"
+fi
 printf 'backup_last_run_success %s\n' "${status}" >> "${out}"
 
 run_ts=0
-[ -f "${STATE_DIR}/last-run-timestamp" ] && run_ts="$(cat "${STATE_DIR}/last-run-timestamp")"
+if [ -f "${STATE_DIR}/last-run-timestamp" ]; then
+  run_ts="$(cat "${STATE_DIR}/last-run-timestamp")"
+fi
 printf 'backup_last_run_timestamp_seconds %s\n' "${run_ts}" >> "${out}"
 
 verify_ts=0
-[ -f "${STATE_DIR}/verify-last-success-timestamp" ] && verify_ts="$(cat "${STATE_DIR}/verify-last-success-timestamp")"
+if [ -f "${STATE_DIR}/verify-last-success-timestamp" ]; then
+  verify_ts="$(cat "${STATE_DIR}/verify-last-success-timestamp")"
+fi
 printf 'backup_verify_last_success_timestamp_seconds %s\n' "${verify_ts}" >> "${out}"
 
 repo_size=0
-[ -f "${STATE_DIR}/repo-size" ] && repo_size="$(cat "${STATE_DIR}/repo-size")"
+if [ -f "${STATE_DIR}/repo-size" ]; then
+  repo_size="$(cat "${STATE_DIR}/repo-size")"
+fi
 printf 'restic_repo_size_bytes %s\n' "${repo_size}" >> "${out}"
 
 # --- quota via PROPFIND (oc:quota-available-bytes / oc:quota-used-bytes) ------

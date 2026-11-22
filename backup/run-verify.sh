@@ -19,6 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
 
+# shellcheck disable=SC1091
 . ./backup.conf
 [ -f .env.secret ] || { echo "[ERR] .env.secret missing — run ./provision-backup-secrets.sh"; exit 1; }
 set -a
