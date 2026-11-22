@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the monthly offsite repo maintenance (1st ~04:15)
+
+[Timer]
+OnCalendar=*-*-01 04:15:00
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

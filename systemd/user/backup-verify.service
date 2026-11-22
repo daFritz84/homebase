@@ -1,0 +1,13 @@
+[Unit]
+Description=Monthly offsite repo maintenance (restic prune + full check --read-data)
+Documentation=file:///home/chef/src/homebase/docs/operations.md
+# Runs backup/run-verify.sh: restic prune (the ONLY destructive remote op —
+# monthly, not weekly: every prune creates file versions + trashbin entries
+# on Nextcloud) immediately followed by restic check --read-data (integrity
+# proof after the destructive op), then refreshes the repo-size cache.
+
+[Service]
+Type=oneshot
+ExecStart=%h/src/homebase/backup/run-verify.sh
+# prune rewrites the index + compacts packs on the WAN + full repo read
+TimeoutStartSec=4h

@@ -19,13 +19,21 @@ ln -sfn "${src}/fritzbox-stats-export.service" "${dest}/fritzbox-stats-export.se
 ln -sfn "${src}/fritzbox-stats-export.timer" "${dest}/fritzbox-stats-export.timer"
 ln -sfn "${src}/truenas-stats-export.service" "${dest}/truenas-stats-export.service"
 ln -sfn "${src}/truenas-stats-export.timer" "${dest}/truenas-stats-export.timer"
+ln -sfn "${src}/backup-all.service" "${dest}/backup-all.service"
+ln -sfn "${src}/backup-all.timer" "${dest}/backup-all.timer"
+ln -sfn "${src}/backup-verify.service" "${dest}/backup-verify.service"
+ln -sfn "${src}/backup-verify.timer" "${dest}/backup-verify.timer"
 
 systemctl --user daemon-reload
 systemctl --user enable podman-network-online.service
 
 # The node-exporter + podman-stats-export + fritzbox-stats-export +
-# truenas-stats-export units are symlinked but NOT auto-enabled: node-exporter
-# needs the binary (monitoring/install-node-exporter.sh) in place first, or it
-# crash-loops. Enable them after that setup:
+# truenas-stats-export + backup-all + backup-verify units are symlinked but
+# NOT auto-enabled: node-exporter needs the binary
+# (monitoring/install-node-exporter.sh) in place first, or it crash-loops, and
+# the backup timers need restic + provisioned secrets + `restic init`
+# (backup/install-restic.sh, docs/operations.md "Backups"). Enable them after
+# that setup:
 #   systemctl --user enable --now node-exporter podman-stats-export.timer \
-#     fritzbox-stats-export.timer truenas-stats-export.timer
+#     fritzbox-stats-export.timer truenas-stats-export.timer \
+#     backup-all.timer backup-verify.timer
