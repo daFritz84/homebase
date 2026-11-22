@@ -24,6 +24,7 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
 
+# shellcheck disable=SC1091
 . ./backup.conf
 [ -f .env.secret ] || { echo "[ERR] .env.secret missing — run ./provision-backup-secrets.sh"; exit 1; }
 set -a
@@ -77,7 +78,9 @@ done
 BACKUP_DIRS=()
 for entry in "${SERVICES[@]}"; do
   d="${HOME}/.local/share/${entry%%:*}/backups"
-  [ -d "${d}" ] && BACKUP_DIRS+=("${d}")
+  if [ -d "${d}" ]; then
+    BACKUP_DIRS+=("${d}")
+  fi
 done
 [ "${#BACKUP_DIRS[@]}" -gt 0 ] || { echo "[ERR] no local backup dirs to upload"; exit 1; }
 
@@ -108,7 +111,9 @@ if [ "${UPLOAD_OK}" = 1 ] && [ "${CHECK_OK}" = 1 ]; then
     d="${HOME}/.local/share/${svc}/backups"
     [ -d "${d}" ] || continue
     mapfile -t archives < <(find "${d}" -maxdepth 1 -name "${prefix}-*.tar.gz" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
-    [ "${#archives[@]}" -le "${LOCAL_KEEP}" ] && continue
+    if [ "${#archives[@]}" -le "${LOCAL_KEEP}" ]; then
+      continue
+    fi
     for a in "${archives[@]:${LOCAL_KEEP}}"; do
       echo "[*] local prune: ${a}"
       rm -f -- "${a}"
