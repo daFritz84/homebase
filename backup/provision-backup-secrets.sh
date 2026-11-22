@@ -44,7 +44,13 @@ set -euo pipefail
 ##                       (rclone's env-var remote config — no rclone.conf
 ##                       file; restic spawns rclone with this environment,
 ##                       so the app token never lands in process cmdline
-##                       args/logs and never lives outside this 0600 file)
+##                       args/logs and never lives outside this 0600 file).
+##                       _PASS is the rclone-OBSCURED form of the token:
+##                       rclone decrypts the pass parameter (plaintext fails
+##                       "couldn't decrypt password: base64 decode failed",
+##                       observed 2026-11-22) — rclone obscure is reversible
+##                       obfuscation (fixed key), NOT encryption; the
+##                       plaintext token stays in NEXTCLOUD_APP_TOKEN below
 ##   RESTIC_PASSWORD     repo encryption key (client-side encryption)
 ##   NEXTCLOUD_WEBDAV_URL / NEXTCLOUD_USER / NEXTCLOUD_APP_TOKEN
 ##                       quota PROPFIND for export-backup-stats.sh
@@ -59,6 +65,9 @@ NEXTCLOUD_USER="${NEXTCLOUD_USER:-}"
 
 command -v bw >/dev/null || { echo "[ERR] bw (Bitwarden CLI) not found — see docs/host-setup.md"; exit 1; }
 bw status | grep -q '"unlocked"' || { echo "[ERR] Bitwarden not unlocked — export BW_SESSION=\"\$(bw unlock --raw)\""; exit 1; }
+# rclone renders the webdav remote's pass from the OBSCURED token form —
+# install-rclone.sh must have run first.
+command -v rclone >/dev/null || { echo "[ERR] rclone not found — run ./install-rclone.sh first (the RCLONE_CONFIG_HOMEBASE_PASS value must be rclone-obscured)"; exit 1; }
 
 [ -n "${NEXTCLOUD_HOST}" ] || { echo "[ERR] NEXTCLOUD_HOST not set (e.g. NEXTCLOUD_HOST=cloud-XXXXXXXX.hbts.net" >&2; echo "      ./provision-backup-secrets.sh) — the Storage Share host from the web UI." >&2; exit 1; }
 [ -n "${NEXTCLOUD_USER}" ] || { echo "[ERR] NEXTCLOUD_USER not set (the DAV user of the backup share)" >&2; exit 1; }
@@ -99,13 +108,17 @@ NEXTCLOUD_APP_TOKEN_VALUE="$(resolve_required nextcloud-backup-app-token passwor
 [ -n "${RESTIC_PASSWORD_VALUE}" ] || { echo "[ERR] Empty restic-backup-password"; exit 1; }
 [ -n "${NEXTCLOUD_APP_TOKEN_VALUE}" ] || { echo "[ERR] Empty nextcloud-backup-app-token"; exit 1; }
 
+# rclone's env-var config decrypts the pass parameter — render the obscured
+# form (reversible obfuscation, fixed key; plaintext fails the decrypt).
+RCLONE_PASS_OBSCURED="$(rclone obscure "${NEXTCLOUD_APP_TOKEN_VALUE}")"
+
 {
   printf 'RESTIC_REPOSITORY=rclone:homebase:homebase\n'
   printf 'RCLONE_CONFIG_HOMEBASE_TYPE=webdav\n'
   printf 'RCLONE_CONFIG_HOMEBASE_VENDOR=nextcloud\n'
   printf 'RCLONE_CONFIG_HOMEBASE_URL=https://%s/remote.php/dav/files/%s\n' "${NEXTCLOUD_HOST}" "${NEXTCLOUD_USER}"
   printf 'RCLONE_CONFIG_HOMEBASE_USER=%s\n' "${NEXTCLOUD_USER}"
-  printf 'RCLONE_CONFIG_HOMEBASE_PASS=%s\n' "${NEXTCLOUD_APP_TOKEN_VALUE}"
+  printf 'RCLONE_CONFIG_HOMEBASE_PASS=%s\n' "${RCLONE_PASS_OBSCURED}"
   printf 'RESTIC_PASSWORD=%s\n' "${RESTIC_PASSWORD_VALUE}"
   printf 'NEXTCLOUD_WEBDAV_URL=https://%s/remote.php/dav/files/%s/homebase\n' "${NEXTCLOUD_HOST}" "${NEXTCLOUD_USER}"
   printf 'NEXTCLOUD_USER=%s\n' "${NEXTCLOUD_USER}"
