@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up Stirling PDF data (configs/ + storage/ + customFiles/ + pipeline/)
-## to a timestamped tar.gz. data/configs is the irreplaceable,
+## to a timestamped tar. data/configs is the irreplaceable,
 ## secret-bearing artifact: settings.yml, the built-in user DB, nightly DB
 ## backups and the generated keys live in it — losing it means a fresh
 ## instance (see docs/operations.md, "Stirling PDF data backups"). Run it

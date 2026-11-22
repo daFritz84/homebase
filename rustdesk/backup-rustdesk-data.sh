@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-## Back up rustdesk data to a timestamped tar.gz. ./data is the irreplaceable,
+## Back up rustdesk data to a timestamped tar. ./data is the irreplaceable,
 ## secret-bearing artifact: id_ed25519 (PRIVATE key) + id_ed25519.pub (the
 ## client-config key), db_v2.sqlite3 (client ID registry) and tailscale/
 ## (node-key state) — losing it means reconfiguring every client (keypair
