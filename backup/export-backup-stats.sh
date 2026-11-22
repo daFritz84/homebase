@@ -20,8 +20,10 @@ set -euo pipefail
 ##   restic_repo_size_bytes  from the cached `restic stats --mode raw-data`
 ##       (PROPFIND folder size UNDERCOUNTS: Nextcloud file versions and the
 ##       trashbin are invisible to it — quota-used is the true signal)
-##   nextcloud_quota_available_bytes / nextcloud_quota_used_bytes via PROPFIND
-##       oc:quota-available-bytes (the only true quota signal) +
+##   nextcloud_quota_available_bytes / nextcloud_quota_used_bytes via the
+##       OCS endpoint /ocs/v2.php/cloud/user (WebDAV PROPFIND has NO quota
+##       properties on Storage Share — 404 in propstat; unlimited quota
+##       (-3 sentinel) => available 0, the quota rules require > 0) +
 ##       nextcloud_quota_info 1|0 (probe health; the quota rules require it).
 
 cd "$(dirname "$(readlink -f "$0")")"
@@ -84,34 +86,31 @@ if [ -f "${STATE_DIR}/repo-size" ]; then
 fi
 printf 'restic_repo_size_bytes %s\n' "${repo_size}" >> "${out}"
 
-# --- quota via PROPFIND (oc:quota-available-bytes / oc:quota-used-bytes) ------
-# Nextcloud exposes the quota properties ONLY on the DAV home root — a
-# PROPFIND of the repo subfolder returns them as 404 in propstat (observed
-# 2026-11-22), so probe the home: strip the trailing /homebase repo path.
+# --- quota via the Nextcloud OCS endpoint ------------------------------------
+# Storage Share exposes NO quota properties over WebDAV: PROPFIND of the DAV
+# home returns oc:/nc:quota-* as 404 in propstat (observed 2026-11-22). The
+# quota source is GET /ocs/v2.php/cloud/user (data.quota). Storage Share
+# reports an UNLIMITED quota: free/total = -3 sentinel, used = account-wide
+# bytes. Unlimited => quota_available_bytes 0; the quota rules require
+# available > 0, so they stay silent and the repo budget alert is the
+# capacity tripwire.
 quota_avail=0
 quota_used=0
 quota_info=0
 if [ -n "${NEXTCLOUD_WEBDAV_URL:-}" ] && [ -n "${NEXTCLOUD_APP_TOKEN:-}" ] && command -v curl >/dev/null; then
-  xml="$(curl -fsS --max-time 30 -u "${NEXTCLOUD_USER}:${NEXTCLOUD_APP_TOKEN}" \
-    -X PROPFIND -H 'Depth: 0' -H 'Content-Type: application/xml' \
-    --data '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:quota-available-bytes/><oc:quota-used-bytes/></d:prop></d:propfind>' \
-    "${NEXTCLOUD_WEBDAV_URL%/homebase}" 2>/dev/null || true)"
-  if [ -n "${xml}" ]; then
-    parsed="$(printf '%s' "${xml}" | python3 -c '
-import sys, xml.etree.ElementTree as ET
-root = ET.fromstring(sys.stdin.read())
-vals = {}
-for el in root.iter():
-    tag = el.tag.split("}")[-1]
-    if tag in ("quota-available-bytes", "quota-used-bytes") and (el.text or "").strip().lstrip("-").isdigit():
-        vals[tag] = int(el.text.strip())
-avail = vals.get("quota-available-bytes", -1)
-used = vals.get("quota-used-bytes", -1)
-# negative = unlimited/unknown quota (Storage Share reports a real number)
-if avail >= 0 and used >= 0:
-    print("%d %d 1" % (avail, used))
-else:
-    print("0 0 0")
+  ocs_host="${NEXTCLOUD_WEBDAV_URL%%/remote.php*}"
+  json="$(curl -fsS --max-time 30 -u "${NEXTCLOUD_USER}:${NEXTCLOUD_APP_TOKEN}" \
+    -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+    "${ocs_host}/ocs/v2.php/cloud/user?format=json" 2>/dev/null || true)"
+  if [ -n "${json}" ]; then
+    parsed="$(printf '%s' "${json}" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["ocs"]["data"]["quota"]
+free = int(d.get("free", -1))
+used = int(d.get("used", -1))
+# -3 = unlimited/unknown (Storage Share sentinel)
+avail = free if free >= 0 else 0
+print("%d %d 1" % (avail, used))
 ' 2>/dev/null || true)"
     if [ -n "${parsed}" ]; then
       quota_avail="$(printf '%s' "${parsed}" | cut -d' ' -f1)"
