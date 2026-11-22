@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up the Home Assistant config/ (including .storage/ and secrets.yaml —
-## the UI-managed state that is gitignored) to a timestamped tar.gz.
+## the UI-managed state that is gitignored) to a timestamped tar.
 ## .storage/ holds integrations, dashboards, users and tokens — it is
 ## irreplaceable, run this after significant changes (see docs/operations.md,
 ## "Home Assistant config backups").

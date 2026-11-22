@@ -45,18 +45,8 @@ REPO_ROOT="$(cd .. && pwd)"
 STATE_DIR="${HOME}/.local/share/backup"
 mkdir -p "${STATE_DIR}"
 
-# service dir : archive prefix (the prefix is what the local prune matches)
-SERVICES=(
-  "authelia:authelia"
-  "wanderer:wanderer-data"
-  "navidrome:navidrome-data"
-  "jellyfin:jellyfin-data"
-  "stirling-pdf:stirling-pdf-data"
-  "bookorbit:bookorbit-data"
-  "homeassistant:ha-config"
-  "rustdesk:rustdesk-data"
-  "monitoring:grafana-data"
-)
+# SERVICES (service dir : archive prefix — the prefix is what the local prune
+# matches) comes from backup.conf, shared with export-backup-stats.sh.
 
 # The exporter reads these state files; the trap writes backup.prom on both
 # the success and the failure path.
@@ -119,7 +109,9 @@ if [ "${UPLOAD_OK}" = 1 ] && [ "${CHECK_OK}" = 1 ]; then
     prefix="${entry##*:}"
     d="${HOME}/.local/share/${svc}/backups"
     [ -d "${d}" ] || continue
-    mapfile -t archives < <(find "${d}" -maxdepth 1 -name "${prefix}-*.tar" -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
+    # *.tar.gz: legacy gzipped archives (pre-dedup baseline, PR #144) — the
+    # plain-tar glob alone would keep them on the host forever.
+    mapfile -t archives < <(find "${d}" -maxdepth 1 \( -name "${prefix}-*.tar" -o -name "${prefix}-*.tar.gz" \) -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
     if [ "${#archives[@]}" -le "${LOCAL_KEEP}" ]; then
       continue
     fi
@@ -141,9 +133,7 @@ fi
 
 # --- 6. repo size cache (exporter reads it; never run restic per scrape) ------
 if [ "${CHECK_OK}" = 1 ]; then
-  restic stats --mode raw-data --json 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["total_size"])' \
-    > "${STATE_DIR}/repo-size" || echo "[!] repo-size cache refresh FAILED" >&2
+  ./refresh-repo-size.sh || true
 fi
 
 # --- result -------------------------------------------------------------------

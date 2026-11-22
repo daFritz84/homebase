@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ## Back up Jellyfin data (jellyfin.xml, users, password hashes, API keys,
-## plugin DB) to a timestamped tar.gz. data/ is the irreplaceable,
+## plugin DB) to a timestamped tar. data/ is the irreplaceable,
 ## secret-bearing artifact: the admin user, password hashes, API keys and
 ## the VAAPI/transcoding settings live in it — losing it means a fresh
 ## instance (see docs/operations.md, "Jellyfin data backups"). Run it
