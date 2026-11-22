@@ -1336,6 +1336,13 @@ rapid SOAP). `truenas-stats-export.{service,timer}` runs
 `pool.query` + `disk.temperatures` with the READONLY key; the 25.x graphite
 stream carries neither pool state nor disk temps — → `truenas_pool_status` +
 `truenas_disk_temperature_celsius` to the same textfile dir) every 60s.
+`backup/export-backup-stats.sh` writes `backup.prom` to the same textfile dir
+(per-service `backup_last_success_timestamp_seconds`, `backup_last_run_success`,
+`backup_verify_last_success_timestamp_seconds`, `restic_repo_size_bytes` from
+the cached `restic stats`, `nextcloud_quota_*` via WebDAV PROPFIND) — NOT on a
+timer: it is written by `backup-all.service` / `backup-verify.service` (the
+quota PROPFIND crosses the WAN and restic must never run per scrape); alerts
+`monitoring/vmalert/rules/backup.yml`.
 **Container stats via podman-exporter are NOT
 used:** the server's egress to the ghcr.io token endpoint is 403-blocked (probed
 2026-11-15) and podman's built-in metrics endpoint does not initialize on podman

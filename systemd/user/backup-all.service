@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly offsite backup run (service archives + restic backup/check/forget to Storage Share)
+Documentation=file:///home/chef/src/homebase/docs/operations.md
+# Runs backup/run-weekly-backups.sh: every service's backup-*.sh (each stops
+# its service briefly), then restic backup + check + local prune (gated on a
+# verified upload) + forget. NO prune here — prune is monthly in
+# backup-verify.service.
+
+[Service]
+Type=oneshot
+ExecStart=%h/src/homebase/backup/run-weekly-backups.sh
+# 9 service stop/archive/restart cycles + upload + check on the WAN
+TimeoutStartSec=2h

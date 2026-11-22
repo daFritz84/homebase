@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-## Back up wanderer data (PocketBase db, GPX uploads, Meili index) to a
-## timestamped tar.gz. The trails are irreplaceable user data — run this
-## regularly (see docs/operations.md, "Wanderer data backups").
+## Back up wanderer data (PocketBase db, GPX uploads) to a timestamped
+## tar.gz. The trails are irreplaceable user data — run this regularly (see
+## docs/operations.md, "Wanderer data backups").
+##
+## data/data.ms is excluded: the Meili index is rebuildable from PocketBase
+## (compose.yaml) and grows with the library — the offsite repo stays slim.
 ##
 ## The service is stopped while archiving for a consistent snapshot and is
 ## restarted afterwards, even if the archive fails.
@@ -29,8 +32,8 @@ trap restore_service EXIT
 echo "[*] Stopping the service"
 podman-compose down
 
-echo "[*] Archiving data/ -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" data/
+echo "[*] Archiving data/ (excluding data/data.ms) -> ${ARCHIVE}"
+tar czf "${ARCHIVE}" --exclude='data/data.ms' data/
 
 trap - EXIT
 restore_service
