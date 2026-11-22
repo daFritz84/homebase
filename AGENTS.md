@@ -29,7 +29,11 @@ podman-compose@<project>`**. Runbook: `deploy` skill.
 `rustdesk`→`@rustdesk` (`rustdesk/data/` server keypair + ID registry + tailscale state) ·
 `monitoring`→`@monitoring` (`monitoring/data/` VictoriaMetrics TSDB + grafana sqlite +
 alertmanager state; the declarative config in `monitoring/` is the gitops source of truth) +
-the `node-exporter` and `podman-stats-export.timer` user units.
+the `node-exporter`, `podman-stats-export.timer`, `backup-all.timer` and `backup-verify.timer`
+user units.
+`backup/` (no compose unit — the `backup-all`/`backup-verify` timers run the restic offsite
+pipeline to the Hetzner Storage Share; retention knobs in `backup/backup.conf`, concept +
+restore runbook in `docs/operations.md` "Backups").
 Images, tags, ports: read each `compose.yaml`.
 
 `caddy-proxy` (pinned `10.89.0.0/24` by `caddy/ensure_proxy_network.sh`) must exist before any
