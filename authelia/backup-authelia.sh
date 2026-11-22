@@ -15,7 +15,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 BACKUP_DIR="${HOME}/.local/share/authelia/backups"
-ARCHIVE="${BACKUP_DIR}/authelia-$(date +%F-%H%M).tar.gz"
+ARCHIVE="${BACKUP_DIR}/authelia-$(date +%F-%H%M).tar"
 LDAP_BASE_DN="dc=sseifried,dc=link"
 # Single source of truth for the image pin: compose.yaml (Dependabot bumps
 # compose only — a hardcoded pin here would dump newer volumes with stale
@@ -74,7 +74,7 @@ if [ -d config/keys ]; then
 fi
 
 echo "[*] Archiving -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" -C "${STAGE}" .
+tar cf "${ARCHIVE}" -C "${STAGE}" .
 
 trap - EXIT
 restore_service

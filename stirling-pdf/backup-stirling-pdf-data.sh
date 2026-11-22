@@ -20,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 BACKUP_DIR="${HOME}/.local/share/stirling-pdf/backups"
-ARCHIVE="${BACKUP_DIR}/stirling-pdf-data-$(date +%F-%H%M).tar.gz"
+ARCHIVE="${BACKUP_DIR}/stirling-pdf-data-$(date +%F-%H%M).tar"
 
 [ -d data ] || { echo "[ERR] No data/ directory next to compose.yaml — run from the service checkout"; exit 1; }
 
@@ -42,7 +42,7 @@ echo "[*] Archiving data/ (excluding data/logs) -> ${ARCHIVE}"
 # container uid 1000 (= subuid 100999) — the host user cannot read them;
 # namespace uid 0 has DAC override over the whole mapped range (navidrome
 # pattern).
-podman unshare tar czf "${ARCHIVE}" --exclude='data/logs' data/
+podman unshare tar cf "${ARCHIVE}" --exclude='data/logs' data/
 
 trap - EXIT
 restore_service

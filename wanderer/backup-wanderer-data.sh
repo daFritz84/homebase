@@ -17,7 +17,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
 BACKUP_DIR="${HOME}/.local/share/wanderer/backups"
-ARCHIVE="${BACKUP_DIR}/wanderer-data-$(date +%F-%H%M).tar.gz"
+ARCHIVE="${BACKUP_DIR}/wanderer-data-$(date +%F-%H%M).tar"
 
 [ -d data ] || { echo "[ERR] No data/ directory next to compose.yaml — run from the service checkout"; exit 1; }
 
@@ -33,7 +33,7 @@ echo "[*] Stopping the service"
 podman-compose down
 
 echo "[*] Archiving data/ (excluding data/data.ms) -> ${ARCHIVE}"
-tar czf "${ARCHIVE}" --exclude='data/data.ms' data/
+tar cf "${ARCHIVE}" --exclude='data/data.ms' data/
 
 trap - EXIT
 restore_service
