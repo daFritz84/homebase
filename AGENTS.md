@@ -92,9 +92,7 @@ yamllint lints only `homepage/config/` and `monitoring/` against the root `.yaml
   Quick Connect disabled).
   Grafana keeps serving, only its login redirect fails (break-glass: flip
   `GF_AUTH_DISABLE_LOGIN_FORM` to `"false"` + `podman-compose up -d --force-recreate grafana`,
-  log in as `admin` with `GF_SECURITY_ADMIN_PASSWORD` from `monitoring/.env.secret`
-  (the Bitwarden `grafana-admin-password` item is unprovisioned — provision falls
-  back to the env value); last resort `grafana cli admin
+  log in with the Bitwarden `grafana-admin-password`; last resort `grafana cli admin
   reset-admin-password`).
   HA keeps serving, only its login redirect fails (break-glass: direct
   `http://127.0.0.1:8123` from the host → passwordless `trusted_networks` user picker; the

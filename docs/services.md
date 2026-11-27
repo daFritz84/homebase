@@ -1370,10 +1370,9 @@ without the policy the login lands as org Viewer — observed 2026-11-15);
 **no wall**, and OIDC-only login (user decision 2026-11-19):
 `GF_AUTH_DISABLE_LOGIN_FORM=true` + `GF_AUTH_DISABLE_SIGNUP_MENU=true` hide the
 password form and sign-up UI — Authelia is the only login. Break-glass: flip the
-flag to `"false"` + `podman-compose up -d --force-recreate grafana`, log in as
-`admin` with `GF_SECURITY_ADMIN_PASSWORD` from `monitoring/.env.secret` (the
-Bitwarden `grafana-admin-password` item is unprovisioned, so the env value IS the
-live credential — provision falls back to it); last resort `podman exec monitoring_grafana_1
+flag to `"false"` + `podman-compose up -d --force-recreate grafana`, log in with
+the Bitwarden `grafana-admin-password` (stays in Bitwarden, the env value only
+creates the initial admin); last resort `podman exec monitoring_grafana_1
 grafana cli admin reset-admin-password <new>`. VictoriaMetrics (`metrics.sseifried.link`) and
 Alertmanager (`alerts.sseifried.link`) have **no OIDC** → `forward_auth` wall
 (`two_factor`, `group:homebase-admins`, the AdGuard pattern). `metrics.`,
@@ -1400,9 +1399,7 @@ and mode-restricted against `chef`; a plain `tar` cannot read them (observed
 
 **Secrets** (`monitoring/.env.secret`, gitignored, 0600 —
 `provision-monitoring-secrets.sh` from Bitwarden): `GF_SECURITY_ADMIN_PASSWORD`
-(resolved from Bitwarden `grafana-admin-password` if present, else the generated
-env value — the Bitwarden item is unprovisioned, so the env value is the live
-credential; break-glass),
+(Bitwarden `grafana-admin-password`, break-glass),
 `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` (RAW hex from Bitwarden
 `authelia-oidc-grafana-secret` — the Authelia client digest
 `GRAFANA_OIDC_CLIENT_SECRET_HASH` is provisioned by
@@ -1490,8 +1487,8 @@ curl -k https://grafana.sseifried.link   # 200 (login page, no wall)
 6. Browser: `https://grafana.sseifried.link` → sign in via Authelia (the
    `homebase-admins` group lands as Grafana Admin) → the provisioned
    `homebase-overview` dashboard shows panels once scrapes land (allow ~2
-    scrape intervals). Break-glass: admin password
-    (`GF_SECURITY_ADMIN_PASSWORD` in `monitoring/.env.secret`).
+    scrape intervals). Break-glass: admin password (Bitwarden
+    `grafana-admin-password`).
 
 7. Deploy with the shared pattern (unit: `podman-compose@monitoring`):
 
