@@ -19,7 +19,10 @@ set -euo pipefail
 ## podman-compose@bookorbit`) so the unit keeps owning the pod: a bare
 ## `podman-compose down` removes the containers the unit's `podman-compose
 ## wait` tracks and races it into a `failed` exit (observed 2026-11-22:
-## rustdesk's 3-container pod -> exit 125 -> system degraded).
+## rustdesk's 3-container pod -> exit 125 -> system degraded). `systemctl
+## stop` is a no-op on a failed/inactive unit, so the script also
+## `podman pod stop`s the pod (idempotent) and refuses to archive if any
+## container is still up — guaranteeing a quiesced snapshot.
 ##
 ## Run from the service checkout (the directory containing compose.yaml and
 ## data/) — on the server that is the ~/src/homebase checkout of this repo.
@@ -44,6 +47,14 @@ trap restore_service EXIT
 
 echo "[*] Stopping the service"
 systemctl --user stop podman-compose@bookorbit
+# `systemctl stop` is a no-op on a failed/inactive unit (systemd skips
+# ExecStop), leaving containers running -> a hot tar of a live DB. Stop the
+# pod directly (idempotent) and refuse to archive if any container is up.
+podman pod stop pod_bookorbit >/dev/null 2>&1 || true
+if [ -n "$(podman ps --filter name=^bookorbit_ --format '{{.Names}}')" ]; then
+  echo "[ERR] bookorbit containers still running after stop — refusing to archive a live DB"
+  exit 1
+fi
 
 echo "[*] Archiving data/ -> ${ARCHIVE}"
 # podman unshare: the app (uid 1000) creates dirs mode 700 owned by
