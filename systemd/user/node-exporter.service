@@ -8,9 +8,19 @@ Wants=podman-network-online.service
 After=podman-network-online.service
 
 [Service]
+# --collector.systemd: exports node_systemd_unit_state / node_systemd_system_running.
+# The collector dials the SYSTEM bus (godbus ConnectSystemBus), which a rootless
+# user cannot read — so point DBUS_SYSTEM_BUS_ADDRESS at the USER bus (%t =
+# XDG_RUNTIME_DIR = /run/user/1000/bus). The collector then reads the USER
+# manager's units (podman-compose@*, node-exporter, backup-*.timer) and feeds
+# the SystemdUnitFailed / SystemdUserManagerDegraded vmalert rules
+# (vmalert/rules/system.yml) — the rustdesk 2026-11-22 incident sat `failed`
+# for 5 days with no alert.
+Environment=DBUS_SYSTEM_BUS_ADDRESS=unix:path=%t/bus
 ExecStart=%h/.local/bin/node_exporter \
   --web.listen-address=:9100 \
-  --collector.textfile.directory=%h/.local/share/node-exporter/textfile
+  --collector.textfile.directory=%h/.local/share/node-exporter/textfile \
+  --collector.systemd
 Restart=on-failure
 RestartSec=5
 

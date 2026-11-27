@@ -1332,7 +1332,13 @@ mount it; installed by `monitoring/install-node-exporter.sh`, unit
 `systemd/user/node-exporter.service`, scraped by VM as
 `host.containers.internal:9100` — caddy-proxy cannot resolve `homebase` and the
 LAN IP lands in the firewalld public zone, so the gateway address is the working
-target). `podman-stats-export.{service,timer}` runs
+target). The unit runs `--collector.systemd` →
+`node_systemd_unit_state` / `node_systemd_system_running`; the collector dials
+the **system** bus, so the unit sets `DBUS_SYSTEM_BUS_ADDRESS=unix:path=%t/bus`
+to point it at the **user** bus (rootless) and read the user manager's units →
+alerts `monitoring/vmalert/rules/system.yml` (SystemdUnitFailed,
+SystemdUserManagerDegraded — the rustdesk 2026-11-22 incident sat `failed`
+for 5 days with no alert). `podman-stats-export.{service,timer}` runs
 `monitoring/export-podman-stats.sh` (`podman stats --no-stream` → node_exporter's
 textfile collector) every minute. `fritzbox-stats-export.{service,timer}` runs
 `monitoring/export-fritzbox-stats.sh` (UPnP/IGD SOAP to the FRITZ!Box
