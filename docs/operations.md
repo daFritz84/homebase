@@ -653,9 +653,11 @@ Notes:
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; the password form is disabled (OIDC-only, 2026-11-19), so
   break-glass = flip `GF_AUTH_DISABLE_LOGIN_FORM` to `"false"` +
-  `podman-compose up -d --force-recreate grafana` in `monitoring/`, log in with
-  the Bitwarden `grafana-admin-password`; last resort `podman exec
-  monitoring_grafana_1 grafana cli admin reset-admin-password <new>`.
+   `podman-compose up -d --force-recreate grafana` in `monitoring/`, log in as
+   `admin` with `GF_SECURITY_ADMIN_PASSWORD` from `monitoring/.env.secret` (the
+   Bitwarden `grafana-admin-password` item is unprovisioned — provision falls back
+   to the env value); last resort `podman exec
+   monitoring_grafana_1 grafana cli admin reset-admin-password <new>`.
   Home Assistant keeps
   serving (native OIDC client, not walled) — only its login redirect to
   Authelia fails; existing HA sessions keep working, break-glass = the
