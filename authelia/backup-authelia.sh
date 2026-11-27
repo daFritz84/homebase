@@ -9,6 +9,12 @@ set -euo pipefail
 ## The service is stopped while archiving for a consistent snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
+## Stop/start go through the systemd unit (`systemctl --user stop/start
+## podman-compose@authelia`) so the unit keeps owning the pod: a bare
+## `podman-compose down` removes the containers the unit's `podman-compose
+## wait` tracks and races it into a `failed` exit (observed 2026-11-22:
+## rustdesk's 3-container pod -> exit 125 -> system degraded).
+##
 ## Run from the service checkout (the directory containing compose.yaml and
 ## config/) — on the server that is the ~/src/homebase checkout of this repo.
 
@@ -36,17 +42,18 @@ STAGE="$(mktemp -d)"
 
 restore_service() {
   echo "[*] Starting the service"
-  podman-compose up -d
+  systemctl --user start podman-compose@authelia
 }
 cleanup() { rm -rf "${STAGE}"; }
 trap 'restore_service; cleanup' EXIT
 
 echo "[*] Stopping the service"
-podman-compose down
+systemctl --user stop podman-compose@authelia
 
 echo "[*] LDIF dump (offline slapcat from the openldap volumes)"
-# The named volumes survive `podman-compose down`; the container does not, so
-# --volumes-from authelia_openldap_1 would fail here ("no such container").
+# slapcat mounts the openldap volumes directly (-v), NOT --volumes-from: the
+# container is stopped (systemctl stop), not removed, and slapd must be down so
+# it is not holding the BDB/HDB env while we read the volumes offline.
 # Guard: a missing volume would make podman create an empty one and slapcat
 # would silently emit an empty LDIF.
 for volume in "${OPENLDAP_DATA_VOLUME}" "${OPENLDAP_CONFIG_VOLUME}"; do

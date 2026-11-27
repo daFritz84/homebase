@@ -118,8 +118,9 @@ Review the diff; never blind-copy, never commit on the server.
 ## 6. Backups
 
 `authelia/backup-authelia.sh`, `homeassistant/backup-ha-config.sh`,
-`wanderer/backup-wanderer-data.sh` (run from the service dir on the server) — stops the service,
-archives, restarts; confirm the unit is `active` afterwards.
+`wanderer/backup-wanderer-data.sh` (run from the service dir on the server) — stops/starts the
+service through the systemd unit (`systemctl --user stop/start podman-compose@<project>`), archives;
+confirm the unit is `active` afterwards (the unit keeps owning the pod — no manual re-adopt).
 Cadence + restore order (Authelia: LDIF, sqlite and `config/keys/` in place **before** start,
 after `provision-authelia-secrets.sh`) in `docs/operations.md`.
 

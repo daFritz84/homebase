@@ -6,8 +6,9 @@ set -euo pipefail
 ##
 ## Pipeline (docs/operations.md, "Backups" — retention contract + cleanup
 ## strategy live there):
-##   1. run every service's backup-*.sh (each stops its service, archives,
-##      restarts); a failure is recorded, the rest continue, exit non-zero;
+##   1. run every service's backup-*.sh (each stops its service via the
+##      systemd unit, archives, restarts via the unit); a failure is recorded,
+##      the rest continue, exit non-zero;
 ##   2. restic backup of the local archive dirs (encrypted, deduplicated,
 ##      incremental -> Hetzner Storage Share over WebDAV); the archives are
 ##      UNCOMPRESSED tar on purpose: gzip streams defeat restic's chunk
