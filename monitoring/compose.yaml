@@ -166,10 +166,8 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       # OIDC-only login (user decision 2026-11-19): hide the email/password form,
       # Authelia is the only login. Break-glass: flip to "false" +
-      # `podman-compose up -d --force-recreate grafana`, log in as admin with
-      # GF_SECURITY_ADMIN_PASSWORD from .env.secret (the Bitwarden
-      # grafana-admin-password item is unprovisioned — provision falls back to the
-      # env value); last resort `grafana cli admin reset-admin-password`
+      # `podman-compose up -d --force-recreate grafana`, log in with the Bitwarden
+      # grafana-admin-password; last resort `grafana cli admin reset-admin-password`
       # (docs/operations.md, "Authelia down"). ALLOW_SIGN_UP stays true: required
       # for OIDC auto-provisioning; DISABLE_SIGNUP_MENU only hides the sign-up UI.
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
