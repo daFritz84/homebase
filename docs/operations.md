@@ -54,6 +54,11 @@ the reap races into a `failed` exit (observed 2026-11-22: rustdesk's
 unit runs `podman pod stop` (containers stop, never removed), so the unit
 keeps owning the pod and ends `active` after the run; the quiesced containers
 give a consistent snapshot and the bind-mounted `data/` is untouched.
+`systemctl stop` is a no-op on a failed/inactive unit (systemd skips
+`ExecStop`), so each script also runs `podman pod stop pod_<project>`
+(idempotent) and **refuses to archive if any container is still up** —
+guaranteeing a quiesced snapshot even when a unit is in a failed state at
+backup time (a hot tar of a live SQLite/PostgreSQL DB is the failure mode).
 
 **Retention contract** (knobs in `backup/backup.conf`): RPO 7 d; point-in-time recovery
 ~6 months (~11 snapshots: `--keep-weekly 5 --keep-monthly 6 --keep-last 2`); local

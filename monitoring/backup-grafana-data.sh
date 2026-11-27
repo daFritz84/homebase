@@ -15,7 +15,10 @@ set -euo pipefail
 ## podman-compose@monitoring`) so the unit keeps owning the pod: a bare
 ## `podman-compose down` removes the containers the unit's `podman-compose
 ## wait` tracks and races it into a `failed` exit (observed 2026-11-22:
-## rustdesk's 3-container pod -> exit 125 -> system degraded).
+## rustdesk's 3-container pod -> exit 125 -> system degraded). `systemctl
+## stop` is a no-op on a failed/inactive unit, so the script also
+## `podman pod stop`s the pod (idempotent) and refuses to archive if any
+## container is still up — guaranteeing a quiesced snapshot.
 ##
 ## Archives via `podman unshare tar cf` (navidrome/stirling pattern): the
 ## image runs as the grafana user (uid 472) and creates the runtime dirs
@@ -46,6 +49,14 @@ trap restore_service EXIT
 
 echo "[*] Stopping the service"
 systemctl --user stop podman-compose@monitoring
+# `systemctl stop` is a no-op on a failed/inactive unit (systemd skips
+# ExecStop), leaving containers running -> a hot tar of a live DB. Stop the
+# pod directly (idempotent) and refuse to archive if any container is up.
+podman pod stop pod_monitoring >/dev/null 2>&1 || true
+if [ -n "$(podman ps --filter name=^monitoring_ --format '{{.Names}}')" ]; then
+  echo "[ERR] monitoring containers still running after stop — refusing to archive a live DB"
+  exit 1
+fi
 
 echo "[*] Archiving data/grafana -> ${ARCHIVE}"
 podman unshare tar cf "${ARCHIVE}" data/grafana/
