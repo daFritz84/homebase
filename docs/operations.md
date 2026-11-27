@@ -45,6 +45,16 @@ all of them automatically and ships the archives offsite, encrypted client-side 
 archives contain private keys, 2FA factors, signing keys — the share never sees
 plaintext).
 
+**Each `backup-*.sh` stops and starts its service through the systemd unit**
+(`systemctl --user stop/start podman-compose@<project>`, not a bare
+`podman-compose down`/`up -d`): the unit's `ExecStart=podman-compose wait`
+tracks the running containers, and `down` removes them out from under it —
+the reap races into a `failed` exit (observed 2026-11-22: rustdesk's
+3-container pod → exit 125 → `is-system-running` degraded). Stopping via the
+unit runs `podman pod stop` (containers stop, never removed), so the unit
+keeps owning the pod and ends `active` after the run; the quiesced containers
+give a consistent snapshot and the bind-mounted `data/` is untouched.
+
 **Retention contract** (knobs in `backup/backup.conf`): RPO 7 d; point-in-time recovery
 ~6 months (~11 snapshots: `--keep-weekly 5 --keep-monthly 6 --keep-last 2`); local
 newest 4 archives per service (~1 month on-host); repo budget 5 GB (Storage Share
@@ -166,9 +176,10 @@ The script stops the service, archives `data/` (excluding the rebuildable
 `~/.local/share/navidrome/backups/navidrome-data-<date>.tar`, and restarts
 it. Cadence: the weekly timer runs this automatically — and run it manually
 **before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf <archive>`,
-`podman unshare chown 1000:1000 data`, start. The script (re)starts the
-containers directly, so the unit shows `inactive` afterwards —
-`systemctl --user start podman-compose@navidrome` to re-adopt the pod.
+`podman unshare chown 1000:1000 data`, start. The script stops/starts the
+service through the systemd unit (`systemctl --user stop/start
+podman-compose@navidrome`), so the unit keeps owning the pod and ends `active`
+after the run — no manual re-adopt needed.
 
 ### Jellyfin data backups
 
@@ -191,8 +202,9 @@ maps container root to the host user, so `data/` is host-user-owned
 after admin creation and after library/user/plugin changes, and **before every
 image bump** (DB migrations are forward-only). Restore: stop
 the service, `rm -rf data && tar xf <archive>`, start. The script
-(re)starts the containers directly, so the unit shows `inactive` afterwards
-— `systemctl --user start podman-compose@jellyfin` to re-adopt the pod.
+stops/starts the service through the systemd unit (`systemctl --user
+stop/start podman-compose@jellyfin`), so the unit keeps owning the pod and
+ends `active` after the run — no manual re-adopt needed.
 With the NAS offline the restart cannot start the container (the `/srv/media`
 binds are required): the script reports it as a warning, not a failure — the
 `data/` archive is already written; start the service once the NAS is online.
@@ -218,8 +230,9 @@ over the mapped range. Cadence: the weekly timer runs this automatically; take
 one manually right after admin/account setup (configs/ then holds keys + user
 DB) and **before every image bump** (DB migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf
 <archive>`, `podman unshare chown -R 1000:1000 data`, start. The script
-(re)starts the containers directly, so the unit shows `inactive` afterwards
-— `systemctl --user start podman-compose@stirling-pdf` to re-adopt the pod.
+stops/starts the service through the systemd unit (`systemctl --user
+stop/start podman-compose@stirling-pdf`), so the unit keeps owning the pod
+and ends `active` after the run — no manual re-adopt needed.
 
 ### BookOrbit data backups
 
@@ -243,9 +256,10 @@ uid 0 has DAC override over the mapped range. Cadence: the weekly timer runs
 this automatically; take one manually right after setup (the DB then holds
 users + OIDC links) and **before every image bump** (DB migrations are
 forward-only). Restore: stop the service, `rm -rf data
-&& tar xf <archive>`, start. The script (re)starts the containers
-directly, so the unit shows `inactive` afterwards — `systemctl --user
-start podman-compose@bookorbit` to re-adopt the pod.
+&& tar xf <archive>`, start. The script stops/starts the service through
+the systemd unit (`systemctl --user stop/start podman-compose@bookorbit`),
+so the unit keeps owning the pod and ends `active` after the run — no manual
+re-adopt needed.
 
 ### Grafana data backups
 
@@ -273,9 +287,10 @@ and the runtime dirs `data/grafana/{csv,png,pdf}` are mapped-subuid-owned
 mode-restricted — a plain `tar` fails on them (observed 2026-11-22).
 Cadence: the weekly timer runs this automatically; take one manually right
 after setup (the API key + admin prefs) and **before every image bump**. Restore: stop the service,
-`rm -rf data/grafana && tar xf <archive>`, start. The script (re)starts the
-containers directly, so the unit shows `inactive` afterwards — `systemctl --user
-start podman-compose@monitoring` to re-adopt the pod.
+`rm -rf data/grafana && tar xf <archive>`, start. The script stops/starts
+the service through the systemd unit (`systemctl --user stop/start
+podman-compose@monitoring`), so the unit keeps owning the pod and ends
+`active` after the run — no manual re-adopt needed.
 
 ### RustDesk data backups
 
@@ -298,9 +313,9 @@ maps container root to the host user, so `data/` is host-user-owned
 (services.md, "RustDesk"). Cadence: the weekly timer runs this automatically; take one manually right
 after first start (the keypair is born there) and **before every image bump**
 (sqlite migrations are forward-only). Restore: stop the service, `rm -rf data && tar xf <archive>`,
-start. The script (re)starts the containers directly, so the unit shows
-`inactive` afterwards — `systemctl --user start podman-compose@rustdesk` to
-re-adopt the pod.
+start. The script stops/starts the service through the systemd unit
+(`systemctl --user stop/start podman-compose@rustdesk`), so the unit keeps
+owning the pod and ends `active` after the run — no manual re-adopt needed.
 
 ### Home Assistant config backups
 

@@ -12,6 +12,12 @@ set -euo pipefail
 ## The service is stopped while archiving for a consistent SQLite snapshot and
 ## is restarted afterwards, even if the archive fails.
 ##
+## Stop/start go through the systemd unit (`systemctl --user stop/start
+## podman-compose@rustdesk`) so the unit keeps owning the pod: a bare
+## `podman-compose down` removes the containers the unit's `podman-compose
+## wait` tracks and races it into a `failed` exit (observed 2026-11-22:
+## rustdesk's 3-container pod -> exit 125 -> system degraded).
+##
 ## The images run as root and rootless Podman maps container root to the host
 ## user, so ./data is host-user-owned — a plain tar reads it (no `podman
 ## unshare` needed, uptime-kuma/beszel pattern; ownership probed 2026-11-15,
@@ -33,12 +39,12 @@ mkdir -p "${BACKUP_DIR}"
 
 restore_service() {
   echo "[*] Starting the service"
-  podman-compose up -d
+  systemctl --user start podman-compose@rustdesk
 }
 trap restore_service EXIT
 
 echo "[*] Stopping the service"
-podman-compose down
+systemctl --user stop podman-compose@rustdesk
 
 echo "[*] Archiving data/ -> ${ARCHIVE}"
 tar cf "${ARCHIVE}" data/

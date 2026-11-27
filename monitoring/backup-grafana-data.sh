@@ -11,6 +11,12 @@ set -euo pipefail
 ## The service is stopped while archiving for a consistent sqlite snapshot and is
 ## restarted afterwards, even if the archive fails.
 ##
+## Stop/start go through the systemd unit (`systemctl --user stop/start
+## podman-compose@monitoring`) so the unit keeps owning the pod: a bare
+## `podman-compose down` removes the containers the unit's `podman-compose
+## wait` tracks and races it into a `failed` exit (observed 2026-11-22:
+## rustdesk's 3-container pod -> exit 125 -> system degraded).
+##
 ## Archives via `podman unshare tar cf` (navidrome/stirling pattern): the
 ## image runs as the grafana user (uid 472) and creates the runtime dirs
 ## data/grafana/{csv,png,pdf} owned by the mapped subuid, mode-restricted
@@ -34,12 +40,12 @@ mkdir -p "${BACKUP_DIR}"
 
 restore_service() {
   echo "[*] Starting the service"
-  podman-compose up -d
+  systemctl --user start podman-compose@monitoring
 }
 trap restore_service EXIT
 
 echo "[*] Stopping the service"
-podman-compose down
+systemctl --user stop podman-compose@monitoring
 
 echo "[*] Archiving data/grafana -> ${ARCHIVE}"
 podman unshare tar cf "${ARCHIVE}" data/grafana/
