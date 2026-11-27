@@ -1,0 +1,29 @@
+---
+# vmalert rules — host systemd unit state. Source: node-exporter
+# --collector.systemd (user manager via the user D-Bus; the unit runs as a
+# systemd user unit). Closes the gap where the rustdesk 2026-11-22 incident
+# sat `failed` for 5 days with no alert (only a Grafana panel existed).
+groups:
+  - name: system
+    rules:
+      - alert: SystemdUnitFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "systemd unit failed: {{ $labels.name }}"
+          description: >-
+            {{ $labels.name }} is in failed state on {{ $labels.instance }} —
+            `systemctl --user status {{ $labels.name }}` (podman-compose@*
+            units, node-exporter, backup-*.timer)
+      - alert: SystemdUserManagerDegraded
+        expr: node_systemd_system_running{name="user"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "systemd user manager degraded on {{ $labels.instance }}"
+          description: >-
+            is-system-running == degraded (a user unit failed) —
+            `systemctl --user --failed`
