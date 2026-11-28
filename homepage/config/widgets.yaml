@@ -6,16 +6,10 @@
 # Grafana overview dashboard (the monitoring stack's node_exporter is the real
 # source) — the widget read the homepage container's cgroup, not the host.
 
-# Static text is the no-JS fallback; custom.js swaps it to a time-of-day
-# greeting (contract: .information-widget-greeting span, v2.8.0 DOM).
-- greeting:
-    text_size: xl
-    text: "Good day"
-
-- search:
-    provider: duckduckgo
-    target: _blank
-
+# Header = weather right corner: openmeteo (current) + customapi (3-day
+# forecast from open-meteo, key-free). customapi renders left-aligned by
+# default; custom.js moves it next to the weather (contract:
+# .information-widget-customapi -> #information-widgets-right).
 - openmeteo:
     label: Vienna
     latitude: 48.1680783
@@ -25,3 +19,35 @@
     cache: 5
     format:
       maximumFractionDigits: 1
+
+- customapi:
+    label: Wien
+    icon: mdi-weather-partly-cloudy
+    refreshInterval: 3600000
+    # yamllint disable-line rule:line-length
+    url: "https://api.open-meteo.com/v1/forecast?latitude=48.1680783&longitude=16.3197505&daily=temperature_2m_max,precipitation_probability_max&temperature_unit=celsius&timezone=Europe%2FVienna&forecast_days=3"
+    mappings:
+      - label: Heute
+        field: daily.temperature_2m_max.0
+        format: number
+        options:
+          maximumFractionDigits: 0
+        suffix: °
+      - label: Morgen
+        field: daily.temperature_2m_max.1
+        format: number
+        options:
+          maximumFractionDigits: 0
+        suffix: °
+      - label: Übermorgen
+        field: daily.temperature_2m_max.2
+        format: number
+        options:
+          maximumFractionDigits: 0
+        suffix: °
+      - label: Regen
+        field: daily.precipitation_probability_max.0
+        format: number
+        options:
+          maximumFractionDigits: 0
+        suffix: "%"

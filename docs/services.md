@@ -273,11 +273,13 @@ re-verify after any version bump):
   inset-ring, no CSS border — hover feedback is the tint lift);
   `blockStyle: refined`, `font: plexData` (tabular numerals for widget
   values).
-- Greeting: the `widgets.yaml` greeting widget is static text (the no-JS
-  fallback); `custom.js` swaps it to a time-of-day greeting. Contract:
-  `.information-widget-greeting span` (v2.8.0
-  `src/components/widgets/greeting/greeting.jsx`); custom.css/custom.js
-  selectors are pinned to the v2.8.0 DOM.
+- Header widgets: openmeteo (current weather, right corner) + a `customapi`
+  3-day forecast from open-meteo (key-free, Vienna coords, hourly refresh).
+  Homepage right-aligns only its built-in widget types, so `custom.js` moves
+  the forecast card into the right corner. Contract:
+  `.information-widget-customapi` → `#information-widgets-right` (v2.8.0
+  `src/components/widgets/customapi/customapi.jsx` / `index.jsx`);
+  custom.css/custom.js selectors are pinned to the v2.8.0 DOM.
 
 Auth: unchanged — the native OIDC gate (`HOMEPAGE_AUTH_*`/`HOMEPAGE_OIDC_*`,
 see `.env.example` + the Authelia section); no auth/env changes — the compose

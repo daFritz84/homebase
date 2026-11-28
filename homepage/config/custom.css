@@ -35,13 +35,11 @@ html.dark .service-card:hover {
   transform: translateY(-2px);
 }
 
-/* Header info widgets: greeting/weather render through container.jsx
- * (.widget-container); the search widget renders through container_form.jsx,
- * which adds .information-widget-search/.information-widget-form but NOT
- * .widget-container — both selectors needed. The clean header has no card
- * background and cardBlur only applies to the boxed header — glass lives here. */
-html.dark #information-widgets .widget-container,
-html.dark #information-widgets .information-widget-search {
+/* Header info widgets (weather + forecast): the clean header has no card
+ * background and cardBlur only applies to the boxed header — glass lives
+ * here. The forecast (customapi) is moved into the right corner by
+ * custom.js; both widgets render through container.jsx (.widget-container). */
+html.dark #information-widgets .widget-container {
   background-color: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(12px);
   border: 0;
