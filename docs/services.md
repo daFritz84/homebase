@@ -265,8 +265,9 @@ re-verify after any version bump):
   rgba tint in `custom.css` — the stock dark card is `bg-white/5`
   (near-transparent), which kills text contrast over a wallpaper. **Gotcha:**
   `cardBlur` is incompatible with the background `blur`/`saturate`/`brightness`
-  filters (v2.8 docs) — wallpaper dimming lives in `custom.css`
-  (`#background { filter: brightness(.55) saturate(.75) }`), NOT in settings.
+  filters (v2.8 docs) — wallpaper styling lives in `custom.css`
+  (`#background { filter: saturate(.75) }`, no brightness dimming — the card
+  tint carries text contrast), NOT in settings.
 - Layout: `headerStyle: clean` + `fullWidth: true`; services as app-grid rows
   (`layout:` Homebase `style: row, columns: 5` / Network `columns: 3`);
   `useEqualHeights: true`; borderless cards (no `cardStyle: hairline`

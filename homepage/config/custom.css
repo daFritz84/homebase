@@ -12,10 +12,12 @@
  * Re-verify all selectors after any Homepage version bump.
  */
 
-/* Wallpaper: dim + desaturate so cards/text keep contrast. The settings-level
- * brightness filter is unusable — cardBlur forbids background filters. */
+/* Wallpaper: mild desaturation for a muted canvas. No brightness dimming
+ * (user preference 2026-11-28): the card tint (rgba .65) carries text
+ * contrast on its own, so the photo can stay bright. The settings-level
+ * brightness filter is unusable anyway — cardBlur forbids it. */
 html.dark #background {
-  filter: brightness(0.55) saturate(0.75);
+  filter: saturate(0.75);
 }
 
 /* Service/bookmark cards: dark translucent tint, borderless; backdrop-blur-md
