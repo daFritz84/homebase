@@ -1,38 +1,30 @@
-// Time-of-day greeting for the greeting info widget (widgets.yaml).
-// Served at /api/config/custom.js (index.jsx <Script>).
-// DOM contract verified against gethomepage/homepage v2.8.0
-// src/components/widgets/greeting/greeting.jsx:
-//   .information-widget-greeting > span  (the greeting is the only widget
-//   with that class). Re-verify after any Homepage version bump.
+// Header widget placement: Homepage right-aligns only its built-in widget
+// types (index.jsx rightAlignedWidgets) — the customapi forecast widget is
+// left-aligned, so move it into the right corner, left of the weather.
+// DOM contract verified against gethomepage/homepage v2.8.0:
+//   .information-widget-customapi  src/components/widgets/customapi/customapi.jsx
+//   #information-widgets-right     src/pages/index.jsx (Home)
+// Re-verify after any Homepage version bump.
 (function () {
   "use strict";
 
-  var PLACEHOLDER = "Good day";
-  var GREETINGS = /^Good (morning|afternoon|evening|night)$/;
+  var FORECAST = ".information-widget-customapi";
+  var TARGET = "#information-widgets-right";
 
-  function greeting() {
-    var h = new Date().getHours();
-    if (h < 5) return "Good night";
-    if (h < 12) return "Good morning";
-    if (h < 18) return "Good afternoon";
-    return "Good evening";
-  }
-
-  function swap() {
-    var span = document.querySelector(".information-widget-greeting span");
-    if (!span) return;
-    var current = span.textContent.trim();
-    // Only touch the placeholder or a greeting we set — never user text.
-    if (current !== PLACEHOLDER && !GREETINGS.test(current)) return;
-    var next = greeting();
-    if (current !== next) span.textContent = next;
+  function move() {
+    var w = document.querySelector(FORECAST);
+    var t = document.querySelector(TARGET);
+    if (!w || !t) return;
+    // Idempotent: already first in the right corner -> nothing to do.
+    if (w.parentElement === t && t.firstElementChild === w) return;
+    t.insertBefore(w, t.firstChild);
   }
 
   function start() {
-    swap();
+    move();
     // Survive Homepage's client-side re-renders (SWR refetches remount the
-    // widget); the guard above makes repeat runs idempotent.
-    new MutationObserver(swap).observe(document.body, {
+    // widgets); the guard above makes repeat runs idempotent.
+    new MutationObserver(move).observe(document.body, {
       childList: true,
       subtree: true,
     });
