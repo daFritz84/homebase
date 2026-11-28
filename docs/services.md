@@ -1978,6 +1978,51 @@ library was absorbed into core — do not vendor it.
   Lives in `scripts.yaml` (committed, loaded via `script: !include scripts.yaml`,
   editable in the UI editor — drift ritual); dashboard button card runs it.
 
+### Wiener Netze Smartmeter (official API)
+
+Smartmeter readings via the **official** Wiener Netze Smart Meter API
+(`WN_SMART_METER_API`, Wiener Stadtwerke developer portal) — deliberately NOT the
+wnsm scraper (DarwinsBuddy/WienerNetzeSmartmeter): wnsm re-creates the portal
+Keycloak login and scrapes the private B2C gateway, broke during the June 2026
+portal outage, and stores the portal **password** in HA (user decision 2026-11-19:
+official-API route; fallback below).
+
+- **Integration:** `homeassistant/config/custom_components/wiener_netze_smart_meter/`
+  — KrOnAsK/Wiener-Netze-Smart-Meter-Integration **v0.3.5**, vendored **in git,
+  pinned** (same ritual as auth_oidc, see "HA SSO": review the diff on every
+  version bump → commit → restart `podman-compose@homeassistant`). Thin HA layer
+  over tschoerk's `wiener-netze-smart-meter-api` PyPI package (manifest
+  `requirements` — HA pip-installs it into `config/deps/` at first setup,
+  gitignored; needs outbound HTTPS to pypi.org + the WSTW API gateway).
+- **Config:** UI config flow (Settings → Devices & Services → Add Integration →
+  "Wiener Netze Smart Meter"): client ID, client secret, API key. The entry lives
+  in `.storage/core.config_entries.json` (gitignored, covered by
+  `./backup-ha-config.sh`). **Reload is supported** (`async_unload_entry` present
+  in v0.3.5) — credential changes need no unit restart.
+- **Secrets:** Bitwarden item `wienernetze-smartmeter-api` (Login:
+  username/password = developer-portal login; custom fields `client_id`,
+  `client_secret`, `api_key` — `bw get <field> wienernetze-smartmeter-api`). The
+  smartmeter-portal account login (client ID/secret are only viewable there) is
+  the separate item `wienernetze-smartmeter-portal`.
+- **API onboarding (one-time, 1–2 weeks lead):** developer-portal account at
+  api-portal.wienerstadtwerke.at → create a `WN_SMART_METER_API` application →
+  approval e-mail → API key in the application details → e-mail
+  support.sm-portal@wienit.at linking the application to the smartmeter-portal
+  account (German template in the tschoerk README) → client ID/secret appear in
+  smartmeter-business.wienernetze.at/einstellungen.
+- **Data:** Wiener Netze publishes measurements with a **1–2 day delay**; the
+  15-min API data is bucketed into **hourly** long-term statistics
+  (`wiener_netze_smart_meter:<zaehlpunkt>_hourly_energy`) imported with correct
+  historical timestamps. First setup backfills 30 days; seed the full history
+  (~3 years) once with the service `wiener_netze_smart_meter.import_all_history`
+  (many API calls, takes a while). Energy dashboard: add the hourly-energy
+  statistic under Settings → Dashboards → Energy. Polling every 12 h.
+- **Cost tracking (optional, not configured):** the integration's Configure
+  dialog accepts an hourly price sensor (e.g. EPEX Spot total price) and produces
+  a `<zaehlpunkt>_hourly_cost` statistic (energy × that hour's price).
+- **Fallback:** wnsm v1.9.1 (portal login, password in HA, scraper-fragile)
+  exposes the same data — vendor it on demand if the official API ever dies.
+
 ### USB radios (future toggle)
 
 ZHA / Zigbee2MQTT via a USB dongle needs privileged mode + device passthrough —
