@@ -1,0 +1,37 @@
+{
+  "uid": "homebase-portal",
+  "title": "Homebase Portal",
+  "tags": ["homebase", "gitops"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "type": "link",
+      "title": "Homebase Overview",
+      "id": 1,
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "options": { "openInNewTab": true, "showTitle": true, "titleAlignment": "center", "underline": true },
+      "targets": [
+        { "refId": "A", "title": "Open dashboard", "url": "https://grafana.sseifried.link/public-dashboards/homebaseoverview", "targetBlank": true, "icon": "external-link-alt", "tooltip": "Read-only overview (no login)" },
+        { "refId": "B", "title": "TV / kiosk", "url": "https://grafana.sseifried.link/public-dashboards/homebaseoverview?kiosk", "targetBlank": true, "icon": "monitor", "tooltip": "Chrome-less kiosk view for a TV" }
+      ]
+    },
+    {
+      "type": "link",
+      "title": "Homebase Network",
+      "id": 2,
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "options": { "openInNewTab": true, "showTitle": true, "titleAlignment": "center", "underline": true },
+      "targets": [
+        { "refId": "A", "title": "Open dashboard", "url": "https://grafana.sseifried.link/public-dashboards/homebasenetwork", "targetBlank": true, "icon": "external-link-alt", "tooltip": "Read-only network view (no login)" },
+        { "refId": "B", "title": "TV / kiosk", "url": "https://grafana.sseifried.link/public-dashboards/homebasenetwork?kiosk", "targetBlank": true, "icon": "monitor", "tooltip": "Chrome-less kiosk view for a TV" }
+      ]
+    }
+  ]
+}
