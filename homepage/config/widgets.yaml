@@ -6,6 +6,12 @@
 # Grafana overview dashboard (the monitoring stack's node_exporter is the real
 # source) — the widget read the homepage container's cgroup, not the host.
 
+# Static text is the no-JS fallback; custom.js swaps it to a time-of-day
+# greeting (contract: .information-widget-greeting span, v2.8.0 DOM).
+- greeting:
+    text_size: xl
+    text: "Good day"
+
 - search:
     provider: duckduckgo
     target: _blank
