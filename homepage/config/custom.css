@@ -49,13 +49,23 @@ html.dark #information-widgets .widget-container {
   padding: 0.5rem 0.75rem;
 }
 
-/* Group headers: quiet uppercase section labels. */
-html.dark .service-group-name {
+/* Group headers (services + bookmarks): bare text on a photo wallpaper has
+ * no reliable contrast (bright snow vs slate-400), so each headline gets a
+ * small glass chip — same language as the cards/widgets — with off-white
+ * text (slate-200) that clears AA on the chip in every wallpaper region. */
+html.dark .service-group-name,
+html.dark .bookmark-group-name {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.75rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgb(148 163 184);
+  color: rgb(226 232 240);
 }
 
 /* Thin slate scrollbar over the wallpaper. */
