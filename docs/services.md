@@ -252,12 +252,13 @@ re-verify after any version bump):
 
 - `theme: dark` + `color: slate` — locked on purpose: the in-UI theme/palette
   switchers only render when these are unset (footer in `index.jsx`).
-- `background: /images/wallpaper.svg` — served from the
+- `background: /images/wallpaper.jpg` — served from the
   `./config/images:/app/public/images` mount. Homepage discovers local images
   **only at container start** → restart the unit after adding/replacing a
-  file. The committed asset is a generated dark-slate SVG fallback; policy for
-  swapping in a photo (16:9, ≥3840px, ≤2 MB, license-clean) lives in
-  `homepage/config/images/README.md`. Replace, never accumulate (binaries).
+  file. The committed asset is a CC0 night-mountain panorama (source + license
+  in `homepage/config/images/README.md`; `wallpaper.svg` is the generated
+  fallback). Policy for swaps (16:9, ≥3840px, ≤2 MB, license-clean) lives in
+  that README. Replace, never accumulate (binaries).
 - Frosted glass: `cardBlur: md` (backdrop-blur on `.service-card`) + the dark
   rgba tint in `custom.css` — the stock dark card is `bg-white/5`
   (near-transparent), which kills text contrast over a wallpaper. **Gotcha:**
@@ -280,7 +281,7 @@ change is a volume mount, and a unit restart recreates the container via the
 unit's `ExecStartPre=- podman-compose up --no-start` (observed 2026-11-28).
 Asset probe from inside the container (the public URL 302s to Authelia, so an
 unauthenticated curl never returns 200; compose sets no container_name):
-`podman exec homepage_homepage_1 node -e 'fetch("http://127.0.0.1:3000/images/wallpaper.svg").then(r=>console.log(r.status))'`
+`podman exec homepage_homepage_1 node -e 'fetch("http://127.0.0.1:3000/images/wallpaper.jpg").then(r=>console.log(r.status))'`
 
 ## AdGuard Home (DNS-Server)
 
