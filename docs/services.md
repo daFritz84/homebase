@@ -275,10 +275,12 @@ re-verify after any version bump):
   selectors are pinned to the v2.8.0 DOM.
 
 Auth: unchanged — the native OIDC gate (`HOMEPAGE_AUTH_*`/`HOMEPAGE_OIDC_*`,
-see `.env.example` + the Authelia section); the overhaul is config-only. Asset
-probe from inside the container (the public URL 302s to Authelia, so an
-unauthenticated curl never returns 200):
-`podman exec homepage node -e 'fetch("http://127.0.0.1:3000/images/wallpaper.svg").then(r=>console.log(r.status))'`
+see `.env.example` + the Authelia section); no auth/env changes — the compose
+change is a volume mount, and a unit restart recreates the container via the
+unit's `ExecStartPre=- podman-compose up --no-start` (observed 2026-11-28).
+Asset probe from inside the container (the public URL 302s to Authelia, so an
+unauthenticated curl never returns 200; compose sets no container_name):
+`podman exec homepage_homepage_1 node -e 'fetch("http://127.0.0.1:3000/images/wallpaper.svg").then(r=>console.log(r.status))'`
 
 ## AdGuard Home (DNS-Server)
 

@@ -37,9 +37,13 @@ html.dark .service-card:hover {
   transform: translateY(-2px);
 }
 
-/* Header info widgets (greeting/search/weather): the clean header has no card
+/* Header info widgets: greeting/weather render through container.jsx
+ * (.widget-container); the search widget renders through container_form.jsx,
+ * which adds .information-widget-search/.information-widget-form but NOT
+ * .widget-container — both selectors needed. The clean header has no card
  * background and cardBlur only applies to the boxed header — glass lives here. */
-html.dark #information-widgets .widget-container {
+html.dark #information-widgets .widget-container,
+html.dark #information-widgets .information-widget-search {
   background-color: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.1);
