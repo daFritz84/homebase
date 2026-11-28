@@ -1988,12 +1988,15 @@ portal outage, and stores the portal **password** in HA (user decision 2026-11-1
 official-API route; fallback below).
 
 - **Integration:** `homeassistant/config/custom_components/wiener_netze_smart_meter/`
-  — KrOnAsK/Wiener-Netze-Smart-Meter-Integration **v0.3.5**, vendored **in git,
-  pinned** (same ritual as auth_oidc, see "HA SSO": review the diff on every
-  version bump → commit → restart `podman-compose@homeassistant`). Thin HA layer
-  over tschoerk's `wiener-netze-smart-meter-api` PyPI package (manifest
-  `requirements` — HA pip-installs it into `config/deps/` at first setup,
-  gitignored; needs outbound HTTPS to pypi.org + the WSTW API gateway).
+  — KrOnAsK/Wiener-Netze-Smart-Meter-Integration **v0.3.5**, vendored **in git**
+  (same ritual as auth_oidc, see "HA SSO": review the diff on every version bump
+  → commit → restart `podman-compose@homeassistant`). Thin HA layer over
+  tschoerk's `wiener-netze-smart-meter-api` PyPI package — HA pip-installs it
+  into `config/deps/` (gitignored) at first setup, so it is NOT in the vendored
+  diff: it is **pinned exactly** in `manifest.json`
+  (`wiener-netze-smart-meter-api==0.1.4`) and its changelog is part of the bump
+  ritual (it is the code holding the API credentials). Needs outbound HTTPS to
+  pypi.org + the WSTW API gateway.
 - **Config:** UI config flow (Settings → Devices & Services → Add Integration →
   "Wiener Netze Smart Meter"): client ID, client secret, API key. The entry lives
   in `.storage/core.config_entries.json` (gitignored, covered by
@@ -2012,14 +2015,24 @@ official-API route; fallback below).
   smartmeter-business.wienernetze.at/einstellungen.
 - **Data:** Wiener Netze publishes measurements with a **1–2 day delay**; the
   15-min API data is bucketed into **hourly** long-term statistics
-  (`wiener_netze_smart_meter:<zaehlpunkt>_hourly_energy`) imported with correct
-  historical timestamps. First setup backfills 30 days; seed the full history
-  (~3 years) once with the service `wiener_netze_smart_meter.import_all_history`
-  (many API calls, takes a while). Energy dashboard: add the hourly-energy
-  statistic under Settings → Dashboards → Energy. Polling every 12 h.
+  (`wiener_netze_smart_meter:<zaehlpunkt lowercase>_hourly_energy` — the code
+  lowercases the Zählpunkt) imported with correct historical timestamps. First
+  setup backfills 30 days. Energy dashboard: add the hourly-energy statistic
+  under Settings → Dashboards → Energy. Polling every 12 h.
+- **Full-history seeding (v0.3.5 upstream bug):** the service
+  `wiener_netze_smart_meter.import_all_history` (~3 years) **fails as-is** once
+  the 30-day backfill exists — HA rejects external statistics that overlap the
+  last imported hour (`NewExternalStatisticsValidationError`), and the service
+  is not idempotent. Workaround: delete the statistic's rows first (recorder
+  `delete_statistics` for the `statistic_id`), then run the service; never
+  restart `podman-compose@homeassistant` mid-import. Upstream fix pending
+  (docstring's "overwriting existing statistics" is false).
 - **Cost tracking (optional, not configured):** the integration's Configure
   dialog accepts an hourly price sensor (e.g. EPEX Spot total price) and produces
-  a `<zaehlpunkt>_hourly_cost` statistic (energy × that hour's price).
+  a `wiener_netze_smart_meter:<zaehlpunkt lowercase>_hourly_cost` statistic
+  (energy × that hour's price). Caveats (v0.3.5): the price entity must report
+  **per-kWh** (a per-MWh sensor mixes units 1000× between statistic and
+  forecast sources), and only the first counting head of a meter is priced.
 - **Fallback:** wnsm v1.9.1 (portal login, password in HA, scraper-fragile)
   exposes the same data — vendor it on demand if the official API ever dies.
 
