@@ -54,10 +54,10 @@ html.dark #information-widgets .widget-container {
  * shadow) — near-white text (slate-100) + strong text-shadow, no chip. */
 html.dark .service-group-name,
 html.dark .bookmark-group-name {
-  font-size: 0.85rem;
+  font-size: 1.1rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: rgb(241 245 249);
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.9),
