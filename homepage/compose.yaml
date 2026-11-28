@@ -16,6 +16,9 @@ services:
       # Local custom icons: Homepage serves /app/public/icons at /icons/...
       # (the config mount is NOT served) — restart needed after adding files.
       - ./config/icons:/app/public/icons
+      # Wallpaper background: Homepage serves /app/public/images at /images/...
+      # (settings.yaml background.image) — same restart-after-adding rule.
+      - ./config/images:/app/public/images
     networks:
       caddy-proxy:
         aliases:

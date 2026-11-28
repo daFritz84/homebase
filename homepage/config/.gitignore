@@ -3,3 +3,7 @@ logs/
 # boilerplate). Homepage has no docker socket mount (compose.yaml) — the
 # docker provider is never configured, so this file carries no state.
 docker.yaml
+# Active wallpaper: server-resident runtime asset (server copy = source of
+# truth, like AdGuard drift). Offsite backup: homepage/backup-homepage.sh
+# (backup-all SERVICES). Provenance + license: config/images/README.md.
+images/wallpaper.jpg

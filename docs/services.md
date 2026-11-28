@@ -241,6 +241,55 @@ Home Assistant `:8123` use.
   in any form. LAN/VPN + PAM + TOTP unchanged — the 4-fold enforcement is
   documented under [Cloudflare Tunnel](#cloudflare-tunnel-cloudflared).
 
+## Homepage (Dashboard)
+
+Umbrel-style desktop dashboard: wallpaper background + dark frosted-glass cards.
+Compose file: `homepage/compose.yaml`. Unit: `podman-compose@homepage` (shared
+pattern above). Config: `homepage/config/` (GitOps source of truth).
+
+Visual model (all v2.8.0 features; selectors pinned to the v2.8.0 DOM —
+re-verify after any version bump):
+
+- `theme: dark` + `color: slate` — locked on purpose: the in-UI theme/palette
+  switchers only render when these are unset (footer in `index.jsx`).
+- `background: /images/wallpaper.jpg` — served from the
+  `./config/images:/app/public/images` mount. Homepage discovers local images
+  **only at container start** → restart the unit after adding/replacing a
+  file. The active jpg is a **gitignored runtime asset**: the server copy is
+  the source of truth (like AdGuard drift), backed up offsite by
+  `homepage/backup-homepage.sh` (backup-all SERVICES list); provenance +
+  license (Grossglockner, CC BY 3.0) in `homepage/config/images/README.md`.
+  `wallpaper.svg` is the committed fallback so a fresh checkout renders. Swap
+  policy (16:9, ≥3840px, ≤2 MB) lives in that README.
+- Frosted glass: `cardBlur: md` (backdrop-blur on `.service-card`) + the dark
+  rgba tint in `custom.css` — the stock dark card is `bg-white/5`
+  (near-transparent), which kills text contrast over a wallpaper. **Gotcha:**
+  `cardBlur` is incompatible with the background `blur`/`saturate`/`brightness`
+  filters (v2.8 docs) — wallpaper styling lives in `custom.css`
+  (`#background { filter: saturate(.75) }`, no brightness dimming — the card
+  tint carries text contrast), NOT in settings.
+- Layout: `headerStyle: clean` + `fullWidth: true`; services as app-grid rows
+  (`layout:` Homebase `style: row, columns: 5` / Network `columns: 3`);
+  `useEqualHeights: true`; borderless cards (no `cardStyle: hairline`
+  inset-ring, no CSS border — hover feedback is the tint lift);
+  `blockStyle: refined`, `font: plexData` (tabular numerals for widget
+  values).
+- Header widgets: openmeteo (current weather, right corner) + a `customapi`
+  3-day forecast from open-meteo (key-free, Vienna coords, hourly refresh).
+  Homepage right-aligns only its built-in widget types, so `custom.js` moves
+  the forecast card into the right corner. Contract:
+  `.information-widget-customapi` → `#information-widgets-right` (v2.8.0
+  `src/components/widgets/customapi/customapi.jsx` / `index.jsx`);
+  custom.css/custom.js selectors are pinned to the v2.8.0 DOM.
+
+Auth: unchanged — the native OIDC gate (`HOMEPAGE_AUTH_*`/`HOMEPAGE_OIDC_*`,
+see `.env.example` + the Authelia section); no auth/env changes — the compose
+change is a volume mount, and a unit restart recreates the container via the
+unit's `ExecStartPre=- podman-compose up --no-start` (observed 2026-11-28).
+Asset probe from inside the container (the public URL 302s to Authelia, so an
+unauthenticated curl never returns 200; compose sets no container_name):
+`podman exec homepage_homepage_1 node -e 'fetch("http://127.0.0.1:3000/images/wallpaper.jpg").then(r=>console.log(r.status))'`
+
 ## AdGuard Home (DNS-Server)
 
 DNS server with blocking & filtering. Compose file: `adguard-home/compose.yaml`. Unit: `podman-compose@adguard-home`.
