@@ -269,8 +269,10 @@ re-verify after any version bump):
   (`#background { filter: brightness(.55) saturate(.75) }`), NOT in settings.
 - Layout: `headerStyle: clean` + `fullWidth: true`; services as app-grid rows
   (`layout:` Homebase `style: row, columns: 5` / Network `columns: 3`);
-  `useEqualHeights: true`; `cardStyle: hairline`, `blockStyle: refined`,
-  `font: plexData` (tabular numerals for widget values).
+  `useEqualHeights: true`; borderless cards (no `cardStyle: hairline`
+  inset-ring, no CSS border — hover feedback is the tint lift);
+  `blockStyle: refined`, `font: plexData` (tabular numerals for widget
+  values).
 - Greeting: the `widgets.yaml` greeting widget is static text (the no-JS
   fallback); `custom.js` swaps it to a time-of-day greeting. Contract:
   `.information-widget-greeting span` (v2.8.0

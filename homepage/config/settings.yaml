@@ -17,7 +17,6 @@ color: slate
 headerStyle: clean
 fullWidth: true
 useEqualHeights: true
-cardStyle: hairline
 cardBlur: md
 blockStyle: refined
 font: plexData

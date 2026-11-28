@@ -18,22 +18,20 @@ html.dark #background {
   filter: brightness(0.55) saturate(0.75);
 }
 
-/* Service/bookmark cards: dark translucent tint; backdrop-blur-md comes from
- * cardBlur: md in settings.yaml. */
+/* Service/bookmark cards: dark translucent tint, borderless; backdrop-blur-md
+ * comes from cardBlur: md in settings.yaml. */
 html.dark .service-card {
   background-color: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 0;
   border-radius: 1rem;
   padding: 0.5rem;
   transition:
     transform 150ms ease,
-    border-color 150ms ease,
     background-color 150ms ease;
 }
 
 html.dark .service-card:hover {
   background-color: rgba(15, 23, 42, 0.75);
-  border-color: rgba(148, 163, 184, 0.35);
   transform: translateY(-2px);
 }
 
@@ -46,7 +44,7 @@ html.dark #information-widgets .widget-container,
 html.dark #information-widgets .information-widget-search {
   background-color: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border: 0;
   border-radius: 1rem;
   padding: 0.5rem 0.75rem;
 }
