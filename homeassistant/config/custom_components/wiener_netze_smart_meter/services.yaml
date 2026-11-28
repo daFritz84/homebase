@@ -1,0 +1,6 @@
+import_all_history:
+  name: Import all history
+  description: >-
+    Fetch the full available measurement history (the API default is about the
+    last 3 years) for all meters and rebuild the hourly energy (and cost)
+    statistics from scratch. This can take a while and makes many API requests.
