@@ -37,7 +37,7 @@ Three layers, each owned by exactly one mechanism:
 | --- | --- | --- |
 | Immutable config | **git** (this repo; server→workstation drift flow) | Caddyfile, AdGuardHome.yaml, monitoring/, compose.yaml |
 | Secrets (regenerable) | **Bitwarden** `provision-*-secrets.sh` | `.env*`, cloudflared credentials |
-| Irreplaceable data | **restic → rclone (WebDAV)** (Hetzner Storage Share) | the 9 `backup-*.sh` archives below |
+| Irreplaceable data | **restic → rclone (WebDAV)** (Hetzner Storage Share) | the 10 `backup-*.sh` archives below |
 
 Komodo (and its built-in scheduled backups) is gone — its database held only rebuildable
 state. The scripts below cover everything that cannot be rebuilt; the weekly timer runs
@@ -296,6 +296,23 @@ after setup (the API key + admin prefs) and **before every image bump**. Restore
 the service through the systemd unit (`systemctl --user stop/start
 podman-compose@monitoring`), so the unit keeps owning the pod and ends
 `active` after the run — no manual re-adopt needed.
+
+### Homepage wallpaper backup
+
+`homepage/config/images/wallpaper.jpg` (the active dashboard background) is a
+gitignored runtime asset — the server copy is the source of truth, so it needs
+offsite coverage like the archives above. Run from the service checkout:
+
+```bash
+cd homepage && ./backup-homepage.sh
+```
+
+The script archives `config/images/` (no service stop — static files, no
+quiesce needed) to `~/.local/share/homepage/backups/homepage-data-<date>.tar`;
+the weekly timer runs it via the `homepage:homepage-data` SERVICES entry.
+Restore: `tar xf <archive>` into `homepage/`, restart
+`podman-compose@homepage` (image discovery at container start). Provenance +
+license of the current wallpaper: `homepage/config/images/README.md`.
 
 ### RustDesk data backups
 

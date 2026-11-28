@@ -26,8 +26,9 @@ hideVersion: true
 disableUpdateCheck: true
 disableIndexing: true
 background:
-  # Dark night-mountain panorama (CC0 — source + license in
-  # config/images/README.md; wallpaper.svg is the generated fallback).
+  # Grossglockner (Austria) — gitignored runtime asset, the server copy is the
+  # source of truth (backup: homepage/backup-homepage.sh; provenance + license
+  # in config/images/README.md). wallpaper.svg is the committed fallback.
   # Homepage discovers local images only at container start → restart the
   # unit after swapping the file.
   image: /images/wallpaper.jpg

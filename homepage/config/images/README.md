@@ -3,16 +3,18 @@
 Served by Homepage at `/images/...` via the `./config/images:/app/public/images`
 mount (compose.yaml). Referenced from `settings.yaml` `background.image`.
 
-- `wallpaper.jpg` — active background: "Qwantani night – Panorama", a dark
-  night-mountain panorama (Kangchenjunga massif under the Milky Way) by Greg
-  Zaal and Jarod Guest via Poly Haven, CC0, hosted on Wikimedia Commons
-  (File:Qwantani night – Panorama (Greg Zaal and Jarod Guest via Poly Haven).jpg).
-  Re-encoded from the Commons 3840px render to 3840x1920 baseline JPEG, ~1.7 MB.
-  CC0 — no attribution required; source recorded here for provenance.
-- `wallpaper.svg` — generated dark-slate fallback (muted gradients, no
-  photography; resolution-independent).
-- To swap the photo: drop a 16:9, >=3840px, <=2 MB jpg here (license-clean:
-  Unsplash/Pexels/Pixabay, Wallhaven CC0, Wikimedia Commons PD/CC0), point
-  `background.image` at it, and restart `podman-compose@homepage` — Homepage
-  discovers local images only at container start.
-- Replace files, never accumulate variants (binaries in git history).
+- `wallpaper.jpg` — ACTIVE background. **Gitignored runtime asset**: the
+  server's copy is the source of truth (like AdGuard config drift); offsite
+  backup via `homepage/backup-homepage.sh` (backup-all SERVICES list). The
+  workstation keeps an untracked copy here for swaps.
+  Current: **Grossglockner** (Austria's highest peak, Pasterze glacier side),
+  photo by Pavel Špindler — Wikimedia Commons
+  `File:Grossglockner - Rakousko - panoramio.jpg`, **CC BY 3.0**
+  (attribution recorded here; not required in the UI). Re-encoded from the
+  Commons 3840px render to 3840x2543 baseline JPEG, ~1.6 MB.
+- `wallpaper.svg` — generated dark-slate fallback, committed: keeps the
+  directory tracked and a fresh checkout rendering without the jpg.
+- Swap: drop a 16:9, >=3840px, <=2 MB jpg here (any license — the file is not
+  committed), point `background.image` at it, restart `podman-compose@homepage`
+  (Homepage discovers local images only at container start), run
+  `backup-homepage.sh`, and record source + license here.
