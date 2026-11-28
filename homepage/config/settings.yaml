@@ -1,5 +1,40 @@
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/settings/
+#
+# Umbrel-style desktop: dark slate theme locked, wallpaper background,
+# frosted-glass cards (cardBlur + custom.css tint), app-grid rows.
+# NOTE: cardBlur is INCOMPATIBLE with the background blur/saturate/brightness
+# filters (v2.8 docs) — wallpaper dimming lives in custom.css (#background),
+# NOT in the background block. Only `opacity` is used here.
+#
+# theme/color are locked on purpose: the in-UI theme/palette switchers only
+# render when these are unset (footer in index.jsx) — deterministic look.
 
 title: "Homelab"
+theme: dark
+color: slate
+headerStyle: clean
+fullWidth: true
+useEqualHeights: true
+cardStyle: hairline
+cardBlur: md
+blockStyle: refined
+font: plexData
+target: _blank
+hideVersion: true
+disableUpdateCheck: true
+disableIndexing: true
+background:
+  # Generated dark-slate fallback (see config/images/README.md): swap to a
+  # user-supplied photo (wallpaper.jpg) by pointing this at it + restarting
+  # the unit — Homepage discovers local images only at container start.
+  image: /images/wallpaper.svg
+  opacity: 80
+layout:
+  Homebase:
+    style: row
+    columns: 5
+  Network:
+    style: row
+    columns: 3

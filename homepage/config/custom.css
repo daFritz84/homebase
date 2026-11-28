@@ -1,0 +1,80 @@
+/* Umbrel-style desktop: dark frosted-glass cards over a dimmed wallpaper.
+ *
+ * Selectors verified against gethomepage/homepage v2.8.0 source:
+ *   #background            src/pages/index.jsx (Wrapper) — fixed wallpaper div
+ *   .service-card          src/components/services/item.jsx — stock dark bg is
+ *                          bg-white/5 (near-transparent: kills contrast over a
+ *                          wallpaper, so the tint below is mandatory)
+ *   .widget-container      src/components/widgets/widget/container.jsx — the
+ *                          clean header renders info widgets transparent
+ *   .service-group-name    src/components/services/group.jsx
+ * Theme classes (dark, theme-slate) live on <html>.
+ * Re-verify all selectors after any Homepage version bump.
+ */
+
+/* Wallpaper: dim + desaturate so cards/text keep contrast. The settings-level
+ * brightness filter is unusable — cardBlur forbids background filters. */
+html.dark #background {
+  filter: brightness(0.55) saturate(0.75);
+}
+
+/* Service/bookmark cards: dark translucent tint; backdrop-blur-md comes from
+ * cardBlur: md in settings.yaml. */
+html.dark .service-card {
+  background-color: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 1rem;
+  padding: 0.5rem;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+html.dark .service-card:hover {
+  background-color: rgba(15, 23, 42, 0.75);
+  border-color: rgba(148, 163, 184, 0.35);
+  transform: translateY(-2px);
+}
+
+/* Header info widgets (greeting/search/weather): the clean header has no card
+ * background and cardBlur only applies to the boxed header — glass lives here. */
+html.dark #information-widgets .widget-container {
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 1rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Group headers: quiet uppercase section labels. */
+html.dark .service-group-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(148 163 184);
+}
+
+/* Thin slate scrollbar over the wallpaper. */
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background-color: rgb(71 85 105);
+  border-radius: 0.5rem;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dark .service-card,
+  html.dark .service-card:hover {
+    transform: none;
+    transition: none;
+  }
+}
