@@ -255,10 +255,12 @@ re-verify after any version bump):
 - `background: /images/wallpaper.jpg` — served from the
   `./config/images:/app/public/images` mount. Homepage discovers local images
   **only at container start** → restart the unit after adding/replacing a
-  file. The committed asset is a CC0 night-mountain panorama (source + license
-  in `homepage/config/images/README.md`; `wallpaper.svg` is the generated
-  fallback). Policy for swaps (16:9, ≥3840px, ≤2 MB, license-clean) lives in
-  that README. Replace, never accumulate (binaries).
+  file. The active jpg is a **gitignored runtime asset**: the server copy is
+  the source of truth (like AdGuard drift), backed up offsite by
+  `homepage/backup-homepage.sh` (backup-all SERVICES list); provenance +
+  license (Grossglockner, CC BY 3.0) in `homepage/config/images/README.md`.
+  `wallpaper.svg` is the committed fallback so a fresh checkout renders. Swap
+  policy (16:9, ≥3840px, ≤2 MB) lives in that README.
 - Frosted glass: `cardBlur: md` (backdrop-blur on `.service-card`) + the dark
   rgba tint in `custom.css` — the stock dark card is `bg-white/5`
   (near-transparent), which kills text contrast over a wallpaper. **Gotcha:**
