@@ -26,10 +26,11 @@ hideVersion: true
 disableUpdateCheck: true
 disableIndexing: true
 background:
-  # Generated dark-slate fallback (see config/images/README.md): swap to a
-  # user-supplied photo (wallpaper.jpg) by pointing this at it + restarting
-  # the unit — Homepage discovers local images only at container start.
-  image: /images/wallpaper.svg
+  # Dark night-mountain panorama (CC0 — source + license in
+  # config/images/README.md; wallpaper.svg is the generated fallback).
+  # Homepage discovers local images only at container start → restart the
+  # unit after swapping the file.
+  image: /images/wallpaper.jpg
   opacity: 80
 layout:
   Homebase:
