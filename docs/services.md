@@ -1435,6 +1435,25 @@ Alertmanager (`alerts.sseifried.link`) have **no OIDC** → `forward_auth` wall
 them** (admin-tool doctrine). `status.sseifried.link` (Kuma) is **removed** from
 Caddy and Authelia.
 
+**Public dashboards — read-only frontend (user decision 2026-11-28):**
+`GF_DASHBOARDS_PUBLIC_DASHBOARDS_ENABLED=true` (compose env — env change ⇒
+`podman-compose up -d --force-recreate grafana`, not a unit restart) enables
+per-dashboard **login-free read-only share links**
+`https://grafana.sseifried.link/public-dashboards/<token>`. Anonymous access
+stays **disabled** — the main instance remains Authelia-OIDC-only; the public
+route needs no Caddy/Authelia change (the grafana route has no forward_auth
+wall). Published: `homebaseoverview`, `homebasenetwork`, and the git-provisioned
+**portal** dashboard `homebase-portal` (`grafana/dashboards/portal.json`, link
+panels to the public URLs incl. `?kiosk` TV variants) as `homebaseportal` — the
+entry URL for household users. Tokens are **readable slugs, not secrets**
+(capability URLs, LAN/VPN-only: split DNS, `dig +short grafana.sseifried.link
+@1.1.1.1` → no answer). Created via the UI (Dashboard settings → Public: custom
+token, time range on, **JSON model exposure OFF**, dashboard-settings display
+OFF); the public-dashboards REST API (`POST
+/api/dashboards/uid/<uid>/public-dashboards`) is the rotation/automation path.
+The entries (tokens + settings) live in the **sqlite DB**, not git — covered by
+`backup-grafana-data.sh`; run it after (re-)creating them.
+
 **Healthchecks:** grafana (Alpine `wget`) / alertmanager + blackbox (busybox)
 ship a shell → in-container healthcheck OK. victoriametrics + vmalert ship
 **distroless** images (no `/bin/sh`) → **no** container healthcheck (the
@@ -1479,7 +1498,8 @@ key rotation needs no restart). New `.env.secret` keys
 need `podman-compose up -d --force-recreate`, not a unit restart.
 
 Data that cannot be rebuilt: `monitoring/data/grafana/` (sqlite: users, API keys,
-dashboard edits beyond the provisioned files) — covered by
+dashboard edits beyond the provisioned files, public-dashboard entries/tokens) —
+covered by
 `monitoring/backup-grafana-data.sh` (see [operations.md](operations.md),
 "Grafana data backups"); `monitoring/data/alertmanager/` (silences — ephemeral,
 not backed up); `monitoring/data/victoriametrics/` (the TSDB — the metric

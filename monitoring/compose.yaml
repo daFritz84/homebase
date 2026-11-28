@@ -164,6 +164,12 @@ services:
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Read-only public frontend (user decision 2026-11-28): per-dashboard share links
+      # /public-dashboards/<token>, no login, LAN/VPN-only (split DNS; grafana. stays out
+      # of the tunnel). Tokens are readable slugs (homebaseoverview/homebasenetwork/
+      # homebaseportal) — capability URLs, not secrets. Entries live in the sqlite DB
+      # (backup-grafana-data.sh); JSON model exposure stays OFF (UI per dashboard).
+      GF_DASHBOARDS_PUBLIC_DASHBOARDS_ENABLED: "true"
       # OIDC-only login (user decision 2026-11-19): hide the email/password form,
       # Authelia is the only login. Break-glass: flip to "false" +
       # `podman-compose up -d --force-recreate grafana`, log in with the Bitwarden
